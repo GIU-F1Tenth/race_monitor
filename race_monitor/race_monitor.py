@@ -64,6 +64,8 @@ class RaceMonitor(Node):
         self.race_start_time = None
         self.lap_start_time = None
         self.last_crossing_time = None
+        self.car_running = False
+        self.race_finished = False  # Add this flag
 
         # Position tracking
         self.current_position = np.array([0.0, 0.0])
@@ -106,10 +108,25 @@ class RaceMonitor(Node):
         orientation = msg.pose.pose.orientation
         self.current_heading = self.quaternion_to_yaw(orientation)
 
+        self.car_running = True
+
         if not self.position_initialized:
             self.position_initialized = True
             self.last_position = self.current_position.copy()
             return
+
+        # Check if car is stopped (velocity magnitude is zero)
+        linear = msg.twist.twist.linear
+        velocity_mag = math.sqrt(linear.x**2 + linear.y**2 + linear.z**2)
+        if velocity_mag == 0 and self.lap_count > 0:
+            import time
+            time.sleep(3)
+            linear = msg.twist.twist.linear
+            velocity_mag = math.sqrt(linear.x**2 + linear.y**2 + linear.z**2)
+
+            if velocity_mag == 0:
+                self.car_running = False
+                self.finish_race()
 
         self.check_lap_crossing()
 
@@ -165,7 +182,8 @@ class RaceMonitor(Node):
 
             # direction check
             if not self.heading_check(self.current_heading, self.start_line_p2 - self.start_line_p1):
-                return
+                # return
+                pass
 
             # record crossing
             self.last_crossing_time = now
@@ -196,14 +214,19 @@ class RaceMonitor(Node):
         best = float(min(self.lap_times))
         self.publish_value(self.best_lap_time_pub, best)
 
-        # If done
-        if self.lap_count >= self.required_laps:
+        self.lap_start_time = current_time
+
+        if self.lap_count == self.required_laps or not self.car_running:
             self.finish_race()
-        else:
-            self.lap_start_time = current_time
 
     def finish_race(self):
+        # Prevent running twice
+        if self.race_finished:
+            return
+        self.race_finished = True
         self.race_running = False
+        if self.lap_count > self.required_laps:
+            return
         total_time = 0.0
         if self.race_start_time is not None:
             total_time = (self.get_clock().now() - self.race_start_time).nanoseconds / 1e9
@@ -378,14 +401,13 @@ class RaceMonitor(Node):
 
         # Calculate line length for logging
         line_length = np.linalg.norm(self.start_line_p2 - self.start_line_p1)
-        self.get_logger().info(f"Published colored start line (length: {line_length:.2f}m) in frame '{self.frame_id}'")
+        self.get_logger().info(f"Published start line (length: {line_length:.2f}m) in frame '{self.frame_id}'")
 
     def save_results_to_csv(self, total_race_time):
         try:
-            data_dir = os.path.join(os.getcwd(), 'data', 'race_monitor')
+            data_dir = os.path.join(os.getcwd(), 'race_monitor', 'data')
             os.makedirs(data_dir, exist_ok=True)
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"{timestamp}_{self.output_file}"
+            filename = self.output_file
             filepath = os.path.join(data_dir, filename)
 
             with open(filepath, 'w', newline='') as csvfile:
