@@ -119,7 +119,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /odom
+        Value: /car_state/odom
       Value: true
     - Alpha: 1
       Class: rviz_default_plugins/RobotModel
@@ -145,7 +145,7 @@ Visualization Manager:
       Update Interval: 0
       Value: true
       Visual Enabled: true
-    - Class: rviz_default_plugins/Marker
+    - Class: rviz_default_pluginsMarker
       Enabled: true
       Marker Topic:
         Depth: 5

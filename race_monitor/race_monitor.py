@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Int32, Float32, Bool
+from std_msgs.msg import Int32, Float32, Bool, String
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped
 from visualization_msgs.msg import Marker
@@ -75,7 +75,7 @@ class RaceMonitor(Node):
         self.pending_point = None  # holds first clicked point until second is given
 
         # Subscribers
-        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 20)
+        self.odom_sub = self.create_subscription(Odometry, 'car_state/odom', self.odom_callback, 20)
         self.clicked_point_sub = self.create_subscription(
             PointStamped, '/clicked_point', self.clicked_point_callback, 10)
 
@@ -85,6 +85,7 @@ class RaceMonitor(Node):
         self.best_lap_time_pub = self.create_publisher(Float32, '/race_monitor/best_lap_time', 10)
         self.race_running_pub = self.create_publisher(Bool, '/race_monitor/race_running', 10)
         self.start_line_marker_pub = self.create_publisher(Marker, '/race_monitor/start_line_marker', 10)
+        self.race_state_pub = self.create_publisher(String, '/race_monitor/state', 10)
 
         # Timers
         self.status_timer = self.create_timer(0.1, self.publish_race_status)
@@ -249,6 +250,11 @@ class RaceMonitor(Node):
             best_msg = Float32()
             best_msg.data = float(min(self.lap_times))
             self.best_lap_time_pub.publish(best_msg)
+
+        # also publish string state
+        state = String()
+        state.data = 'running' if self.race_running else ('staged' if self.race_started else 'idle')
+        self.race_state_pub.publish(state)
 
     def line_intersection(self, p1, p2, q1, q2):
         """Return True if segment p1-p2 intersects q1-q2."""
