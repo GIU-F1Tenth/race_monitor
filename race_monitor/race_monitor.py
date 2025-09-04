@@ -1,27 +1,100 @@
 #!/usr/bin/env python3
 
+"""
+Race Monitor Node
+
+A comprehensive ROS2 node for autonomous racing trajectory analysis and performance evaluation.
+Integrates with the EVO library to provide advanced trajectory evaluation, real-time lap timing,
+and research-grade performance metrics calculation.
+
+Features:
+    - Real-time lap detection and timing
+    - Comprehensive trajectory recording and analysis
+    - Advanced metrics calculation using EVO library
+    - Multi-format data export (JSON, CSV, TUM, Pickle)
+    - Research-ready statistical analysis
+    - Support for trajectory filtering and smoothing
+
+Topics:
+    Subscribed:
+        /car_state/odom (nav_msgs/Odometry): Vehicle odometry data
+        /clicked_point (geometry_msgs/PointStamped): Manual start/finish line setup
+        
+    Published:
+        /race_monitor/lap_count (std_msgs/Int32): Current lap number
+        /race_monitor/lap_time (std_msgs/Float32): Last completed lap time
+        /race_monitor/race_status (std_msgs/String): Current race status
+        /race_monitor/race_running (std_msgs/Bool): Race active status
+        /visualization_marker (visualization_msgs/Marker): RViz visualization
+
+Parameters:
+    controller_name (string): Name of the controller being tested
+    experiment_id (string): Unique identifier for this experiment session
+    enable_trajectory_evaluation (bool): Enable/disable trajectory analysis
+    enable_advanced_metrics (bool): Enable comprehensive metric calculation
+    save_trajectories (bool): Save trajectory data to files
+    
+Author: Race Monitor Development Team
+License: MIT
+"""
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int32, Float32, Bool, String
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped
 from visualization_msgs.msg import Marker
+from giu_f1t_interfaces.msg import VehicleState, ConstrainedVehicleState, VehicleStateArray, ConstrainedVehicleStateArray
 
 import numpy as np
 import csv
 import os
 from datetime import datetime
 import math
+import json
+import sys
+
+# Add EVO library to Python path
+evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
+if os.path.exists(evo_path) and evo_path not in sys.path:
+    sys.path.insert(0, evo_path)
+
+# Import evo modules
+try:
+    from evo.core import trajectory, metrics, sync, transformations, filters, geometry, lie_algebra, result
+    from evo.tools import file_interface, pandas_bridge, settings
+    from evo.core.units import Unit, METER_SCALE_FACTORS, ANGLE_UNITS
+    EVO_AVAILABLE = True
+    print("EVO library loaded with full functionality for research analysis")
+except ImportError:
+    EVO_AVAILABLE = False
+    print("Warning: evo not available. Trajectory evaluation features will be disabled.")
+
+# Import our enhanced EVO plotter and research evaluator
+try:
+    from .evo_plotter import EVOPlotter
+    EVO_PLOTTER_AVAILABLE = True
+except ImportError:
+    EVO_PLOTTER_AVAILABLE = False
+
+try:
+    from .research_evaluator import ResearchTrajectoryEvaluator, create_research_evaluator
+    RESEARCH_EVALUATOR_AVAILABLE = True
+except ImportError:
+    RESEARCH_EVALUATOR_AVAILABLE = False
+    print("Warning: EVO plotter not available. Graph generation will be disabled.")
 
 
 class RaceMonitor(Node):
-    """Race Monitor node
+    """Enhanced Race Monitor node with integrated trajectory evaluation
 
     - Counts laps using a start/finish line set in parameters or by clicking two points in RViz
     - Tracks lap times, best/worst/average, total race time
     - Publishes live lap count and race_running flag
     - Saves results to CSV when race completes (or on shutdown)
     - Publishes a nicer visualization of the start/finish line (checkered pattern + center line)
+    - INTEGRATED: Trajectory evaluation using evo library (APE, RPE, smoothness, consistency)
+    - INTEGRATED: Trajectory export in TUM format for further analysis
     """
 
     def __init__(self):
@@ -29,7 +102,7 @@ class RaceMonitor(Node):
                          allow_undeclared_parameters=True,
                          automatically_declare_parameters_from_overrides=True)
 
-        self.get_logger().info('Race Monitor node started')
+        self.get_logger().info('Enhanced Race Monitor node started')
 
         # Declare parameters with defaults (only if not already declared)
         if not self.has_parameter('start_line_p1'):
@@ -45,6 +118,61 @@ class RaceMonitor(Node):
         if not self.has_parameter('frame_id'):
             self.declare_parameter('frame_id', 'map')
 
+        # EVO integration parameters
+        if not self.has_parameter('enable_trajectory_evaluation'):
+            self.declare_parameter('enable_trajectory_evaluation', True)
+
+        # Evaluation timing options (choose one):
+        # Option 1: Time-based evaluation (evaluate every X seconds)
+        if not self.has_parameter('evaluation_interval_seconds'):
+            self.declare_parameter('evaluation_interval_seconds', 1.0)
+
+        # Option 2: Lap-based evaluation (evaluate every X laps)
+        if not self.has_parameter('evaluation_interval_laps'):
+            self.declare_parameter('evaluation_interval_laps', 0)  # 0 = disable
+
+        # Option 3: Distance-based evaluation (evaluate every X meters)
+        if not self.has_parameter('evaluation_interval_meters'):
+            self.declare_parameter('evaluation_interval_meters', 0.0)  # 0 = disable
+
+        # Reference trajectory configuration
+        if not self.has_parameter('reference_trajectory_file'):
+            self.declare_parameter('reference_trajectory_file', 'horizon_mapper/horizon_mapper/ref_trajectory.csv')
+        if not self.has_parameter('reference_trajectory_format'):
+            self.declare_parameter('reference_trajectory_format', 'csv')
+
+        # Trajectory analysis settings
+        if not self.has_parameter('save_trajectories'):
+            self.declare_parameter('save_trajectories', True)
+        if not self.has_parameter('trajectory_output_directory'):
+            self.declare_parameter('trajectory_output_directory', 'trajectory_evaluation')
+        if not self.has_parameter('evaluate_smoothness'):
+            self.declare_parameter('evaluate_smoothness', True)
+        if not self.has_parameter('evaluate_consistency'):
+            self.declare_parameter('evaluate_consistency', True)
+
+        # Graph generation settings
+        if not self.has_parameter('auto_generate_graphs'):
+            self.declare_parameter('auto_generate_graphs', True)
+        if not self.has_parameter('graph_output_directory'):
+            self.declare_parameter('graph_output_directory', 'trajectory_evaluation/graphs')
+        if not self.has_parameter('graph_formats'):
+            self.declare_parameter('graph_formats', ['png', 'pdf'])
+
+        # Graph types to generate
+        if not self.has_parameter('generate_trajectory_plots'):
+            self.declare_parameter('generate_trajectory_plots', True)
+        if not self.has_parameter('generate_xyz_plots'):
+            self.declare_parameter('generate_xyz_plots', True)
+        if not self.has_parameter('generate_rpy_plots'):
+            self.declare_parameter('generate_rpy_plots', True)
+        if not self.has_parameter('generate_speed_plots'):
+            self.declare_parameter('generate_speed_plots', True)
+        if not self.has_parameter('generate_error_plots'):
+            self.declare_parameter('generate_error_plots', True)
+        if not self.has_parameter('generate_metrics_plots'):
+            self.declare_parameter('generate_metrics_plots', True)
+
         # Read parameters
         self.start_line_p1 = np.array(self.get_parameter('start_line_p1').value, dtype=float)
         self.start_line_p2 = np.array(self.get_parameter('start_line_p2').value, dtype=float)
@@ -53,8 +181,49 @@ class RaceMonitor(Node):
         self.output_file = str(self.get_parameter('output_file').value)
         self.frame_id = str(self.get_parameter('frame_id').value)
 
+        # EVO parameters
+        self.enable_trajectory_evaluation = self.get_parameter('enable_trajectory_evaluation').value
+
+        # Evaluation timing options
+        self.evaluation_interval_seconds = float(self.get_parameter('evaluation_interval_seconds').value)
+        self.evaluation_interval_laps = int(self.get_parameter('evaluation_interval_laps').value)
+        self.evaluation_interval_meters = float(self.get_parameter('evaluation_interval_meters').value)
+
+        # Reference trajectory configuration
+        self.reference_trajectory_file = str(self.get_parameter('reference_trajectory_file').value)
+        self.reference_trajectory_format = str(self.get_parameter('reference_trajectory_format').value)
+
+        # Trajectory analysis settings
+        self.save_trajectories = self.get_parameter('save_trajectories').value
+        self.trajectory_output_directory = str(self.get_parameter('trajectory_output_directory').value)
+        self.evaluate_smoothness = self.get_parameter('evaluate_smoothness').value
+        self.evaluate_consistency = self.get_parameter('evaluate_consistency').value
+
+        # Graph generation settings
+        self.auto_generate_graphs = self.get_parameter('auto_generate_graphs').value
+        self.graph_output_directory = str(self.get_parameter('graph_output_directory').value)
+        self.graph_formats = self.get_parameter('graph_formats').value
+
+        # Graph types to generate
+        self.generate_trajectory_plots = self.get_parameter('generate_trajectory_plots').value
+        self.generate_xyz_plots = self.get_parameter('generate_xyz_plots').value
+        self.generate_rpy_plots = self.get_parameter('generate_rpy_plots').value
+        self.generate_speed_plots = self.get_parameter('generate_speed_plots').value
+        self.generate_error_plots = self.get_parameter('generate_error_plots').value
+        self.generate_metrics_plots = self.get_parameter('generate_metrics_plots').value
+
         self.get_logger().info(f"Initial start line: P1={self.start_line_p1}, P2={self.start_line_p2}")
         self.get_logger().info(f"Required laps: {self.required_laps}, Debounce: {self.debounce_time}s")
+
+        if self.enable_trajectory_evaluation:
+            self.get_logger().info("Trajectory evaluation ENABLED with evo integration")
+            if EVO_AVAILABLE:
+                self.get_logger().info("EVO library loaded successfully")
+            else:
+                self.get_logger().warn("EVO library not available - trajectory evaluation disabled")
+                self.enable_trajectory_evaluation = False
+        else:
+            self.get_logger().info("Trajectory evaluation DISABLED")
 
         # Race state
         self.lap_count = 0
@@ -65,13 +234,99 @@ class RaceMonitor(Node):
         self.lap_start_time = None
         self.last_crossing_time = None
         self.car_running = False
-        self.race_finished = False  # Add this flag
+        self.race_finished = False
 
         # Position tracking
         self.current_position = np.array([0.0, 0.0])
         self.last_position = np.array([0.0, 0.0])
         self.current_heading = 0.0
         self.position_initialized = False
+
+        # EVO trajectory tracking (only if enabled)
+        if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+            # Create trajectory output directory
+            os.makedirs(self.trajectory_output_directory, exist_ok=True)
+
+            # Trajectory storage
+            self.current_lap_trajectory = []
+            self.lap_trajectories = {}  # lap_number -> trajectory
+            self.reference_trajectory = None
+            self.lap_metrics = {}  # lap_number -> metrics
+            self.last_lap_number = 0  # Initialize last lap number
+            self.evo_plots_generated = False  # Flag to prevent re-generating EVO plots
+
+            # Initialize EVO plotter if available
+            if EVO_PLOTTER_AVAILABLE and self.auto_generate_graphs:
+                self.get_logger().info("Initializing EVO plotter...")
+                # Create configuration dict for plotter
+                plotter_config = {
+                    'auto_generate_graphs': self.auto_generate_graphs,
+                    'graph_output_directory': self.graph_output_directory,
+                    'graph_formats': self.graph_formats,
+                    'generate_trajectory_plots': self.generate_trajectory_plots,
+                    'generate_xyz_plots': self.generate_xyz_plots,
+                    'generate_rpy_plots': self.generate_rpy_plots,
+                    'generate_speed_plots': self.generate_speed_plots,
+                    'generate_error_plots': self.generate_error_plots,
+                    'generate_metrics_plots': self.generate_metrics_plots,
+                    'plot_figsize': [12.0, 8.0],
+                    'plot_dpi': 300,
+                    'plot_style': 'seaborn',
+                    'plot_color_scheme': 'viridis'
+                }
+                self.evo_plotter = EVOPlotter(plotter_config)
+                self.get_logger().info("EVO plotter initialized successfully")
+            else:
+                self.get_logger().warn(
+                    f"EVO plotter not available: EVO_PLOTTER_AVAILABLE={EVO_PLOTTER_AVAILABLE}, auto_generate_graphs={self.auto_generate_graphs}")
+                self.evo_plotter = None
+
+            # Load reference trajectory if provided (regardless of plotter availability)
+            if self.reference_trajectory_file and os.path.exists(self.reference_trajectory_file):
+                if self.evo_plotter:
+                    self.evo_plotter.load_reference_trajectory(
+                        self.reference_trajectory_file,
+                        self.reference_trajectory_format
+                    )
+                # Also load for legacy compatibility
+                self.load_reference_trajectory()
+
+            # Initialize Research Evaluator for comprehensive analysis
+            if RESEARCH_EVALUATOR_AVAILABLE:
+                self.get_logger().info("Initializing Research Trajectory Evaluator...")
+                research_config = {
+                    'controller_name': self.get_parameter('controller_name').get_parameter_value().string_value if self.has_parameter('controller_name') else 'unknown_controller',
+                    'experiment_id': self.get_parameter('experiment_id').get_parameter_value().string_value if self.has_parameter('experiment_id') else 'exp_001',
+                    'test_description': self.get_parameter('test_description').get_parameter_value().string_value if self.has_parameter('test_description') else 'Research experiment',
+                    'trajectory_output_directory': self.trajectory_output_directory,
+                    'enable_advanced_metrics': self.get_parameter('enable_advanced_metrics').get_parameter_value().bool_value if self.has_parameter('enable_advanced_metrics') else True,
+                    'enable_geometric_analysis': self.get_parameter('enable_geometric_analysis').get_parameter_value().bool_value if self.has_parameter('enable_geometric_analysis') else True,
+                    'calculate_all_statistics': self.get_parameter('calculate_all_statistics').get_parameter_value().bool_value if self.has_parameter('calculate_all_statistics') else True,
+                    'apply_trajectory_filtering': self.get_parameter('apply_trajectory_filtering').get_parameter_value().bool_value if self.has_parameter('apply_trajectory_filtering') else True,
+                    'save_intermediate_results': self.get_parameter('save_intermediate_results').get_parameter_value().bool_value if self.has_parameter('save_intermediate_results') else True,
+                    'pose_relations': ['translation_part', 'rotation_part', 'full_transformation'],
+                    'statistics_types': ['rmse', 'mean', 'median', 'std', 'min', 'max', 'sse'],
+                    'filter_types': ['motion', 'distance'],
+                    'filter_parameters': {'motion_threshold': 0.1, 'distance_threshold': 0.05},
+                    'output_formats': ['json', 'csv', 'pickle']
+                }
+                
+                try:
+                    self.research_evaluator = create_research_evaluator(research_config)
+                    self.get_logger().info("Research Trajectory Evaluator initialized successfully")
+                    
+                    # Set reference trajectory if available
+                    if self.reference_trajectory_file and os.path.exists(self.reference_trajectory_file):
+                        self.research_evaluator.set_reference_trajectory(
+                            self.reference_trajectory_file, 
+                            self.reference_trajectory_format
+                        )
+                except Exception as e:
+                    self.get_logger().error(f"Failed to initialize Research Evaluator: {e}")
+                    self.research_evaluator = None
+            else:
+                self.get_logger().warn("Research Evaluator not available")
+                self.research_evaluator = None
 
         # Clicked point handling
         self.pending_point = None  # holds first clicked point until second is given
@@ -81,6 +336,21 @@ class RaceMonitor(Node):
         self.clicked_point_sub = self.create_subscription(
             PointStamped, '/clicked_point', self.clicked_point_callback, 10)
 
+        # Horizon mapper reference trajectory subscriber (for EVO analysis)
+        if not self.has_parameter('enable_horizon_mapper_reference'):
+            self.declare_parameter('enable_horizon_mapper_reference', False)
+        if not self.has_parameter('horizon_mapper_reference_topic'):
+            self.declare_parameter('horizon_mapper_reference_topic', '/horizon_mapper/reference_trajectory')
+
+        self.enable_horizon_mapper_reference = self.get_parameter('enable_horizon_mapper_reference').value
+        self.horizon_mapper_reference_topic = str(self.get_parameter('horizon_mapper_reference_topic').value)
+
+        if self.enable_horizon_mapper_reference:
+            self.reference_trajectory_sub = self.create_subscription(
+                VehicleStateArray, self.horizon_mapper_reference_topic, self.reference_trajectory_callback, 20)
+            self.get_logger().info(
+                f"Horizon mapper reference enabled - subscribing to {self.horizon_mapper_reference_topic}")
+
         # Publishers
         self.lap_count_pub = self.create_publisher(Int32, '/race_monitor/lap_count', 10)
         self.lap_time_pub = self.create_publisher(Float32, '/race_monitor/lap_time', 10)
@@ -89,47 +359,571 @@ class RaceMonitor(Node):
         self.start_line_marker_pub = self.create_publisher(Marker, '/race_monitor/start_line_marker', 10)
         self.race_state_pub = self.create_publisher(String, '/race_monitor/state', 10)
 
+        # EVO publishers (only if enabled)
+        if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+            self.trajectory_metrics_pub = self.create_publisher(
+                String, '/race_monitor/trajectory_metrics', 10)
+            self.smoothness_score_pub = self.create_publisher(
+                Float32, '/race_monitor/smoothness', 10)
+            self.consistency_score_pub = self.create_publisher(
+                Float32, '/race_monitor/consistency', 10)
+
         # Timers
         self.status_timer = self.create_timer(0.1, self.publish_race_status)
         self.marker_timer = self.create_timer(1.0, self.publish_start_line_marker)
 
+        # EVO evaluation timer (only if enabled)
+        if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+            # Determine evaluation interval based on configuration
+            if self.evaluation_interval_seconds > 0:
+                # Time-based evaluation
+                self.evaluation_timer = self.create_timer(
+                    self.evaluation_interval_seconds, self.evaluate_current_trajectory)
+                self.get_logger().info(f"Time-based evaluation every {self.evaluation_interval_seconds} seconds")
+            elif self.evaluation_interval_laps > 0:
+                # Lap-based evaluation (will be triggered in lap completion)
+                self.evaluation_timer = None
+                self.get_logger().info(f"Lap-based evaluation every {self.evaluation_interval_laps} laps")
+            elif self.evaluation_interval_meters > 0:
+                # Distance-based evaluation (will be triggered in odom callback)
+                self.evaluation_timer = None
+                self.get_logger().info(f"Distance-based evaluation every {self.evaluation_interval_meters} meters")
+            else:
+                # No real-time evaluation, only on lap completion
+                self.evaluation_timer = None
+                self.get_logger().info("Evaluation only on lap completion")
+
         # Remember last published line to avoid re-publishing identical markers unnecessarily
         self._last_line = (None, None)
 
-        self.get_logger().info('Race Monitor initialized. Use RViz Publish Point to set start/finish line (click two points).')
+        self.get_logger().info('Enhanced Race Monitor initialized. Use RViz Publish Point to set start/finish line (click two points).')
 
-    # --------------------------- Callbacks ---------------------------------
-    def odom_callback(self, msg: Odometry):
-        """Handle odometry; update position and heading, then check for crossings."""
-        pos = msg.pose.pose.position
-        self.last_position = self.current_position.copy()
-        self.current_position = np.array([pos.x, pos.y], dtype=float)
-
-        orientation = msg.pose.pose.orientation
-        self.current_heading = self.quaternion_to_yaw(orientation)
-
-        self.car_running = True
-
-        if not self.position_initialized:
-            self.position_initialized = True
-            self.last_position = self.current_position.copy()
+    def load_reference_trajectory(self):
+        """Load reference trajectory from file using evo"""
+        if not self.enable_trajectory_evaluation or not EVO_AVAILABLE:
             return
 
-        # Check if car is stopped (velocity magnitude is zero)
-        linear = msg.twist.twist.linear
-        velocity_mag = math.sqrt(linear.x**2 + linear.y**2 + linear.z**2)
-        if velocity_mag == 0 and self.lap_count > 0:
-            import time
-            time.sleep(3)
-            linear = msg.twist.twist.linear
-            velocity_mag = math.sqrt(linear.x**2 + linear.y**2 + linear.z**2)
+        try:
+            if self.reference_trajectory_file.endswith('.txt'):
+                # Assume TUM format
+                self.reference_trajectory = file_interface.read_tum_trajectory_file(
+                    self.reference_trajectory_file)
+            elif self.reference_trajectory_file.endswith('.csv'):
+                # Assume KITTI format
+                self.reference_trajectory = file_interface.read_kitti_poses_file(
+                    self.reference_trajectory_file)
+            else:
+                self.get_logger().warn(f"Unsupported reference trajectory format: {self.reference_trajectory_file}")
+                return
 
-            if velocity_mag == 0:
-                self.car_running = False
-                self.finish_race()
+            self.get_logger().info(f"Loaded reference trajectory with {len(self.reference_trajectory.poses)} poses")
+        except Exception as e:
+            self.get_logger().error(f"Failed to load reference trajectory: {e}")
 
-        self.check_lap_crossing()
+    def reference_trajectory_callback(self, msg):
+        """Callback for horizon mapper reference trajectory messages"""
+        if not self.enable_horizon_mapper_reference:
+            return
 
+        # Store the latest reference trajectory for EVO comparison
+        if hasattr(self, 'evo_plotter') and self.evo_plotter:
+            # Convert VehicleStateArray to EVO format
+            reference_trajectory_data = []
+            for vehicle_state in msg.vehicle_states:
+                reference_trajectory_data.append({
+                    'x': vehicle_state.x,
+                    'y': vehicle_state.y,
+                    'theta': vehicle_state.theta,
+                    'v': vehicle_state.v
+                })
+
+            # Update the reference trajectory in EVO plotter
+            self.evo_plotter.update_reference_trajectory_from_horizon_mapper(reference_trajectory_data)
+            self.get_logger().debug(f"Updated reference trajectory with {len(reference_trajectory_data)} points")
+
+    def odom_callback(self, msg):
+        """Callback for odometry messages"""
+        # Update position tracking for lap detection
+        self.current_position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+
+        if not self.position_initialized:
+            self.last_position = self.current_position.copy()
+            self.position_initialized = True
+            return
+
+        # Calculate heading
+        dx = self.current_position[0] - self.last_position[0]
+        dy = self.current_position[1] - self.last_position[1]
+        if abs(dx) > 0.01 or abs(dy) > 0.01:  # Only update if there's significant movement
+            self.current_heading = math.atan2(dy, dx)
+            self.last_position = self.current_position.copy()
+
+        # EVO trajectory tracking (only if enabled)
+        if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+            # Add to current lap trajectory
+            self.current_lap_trajectory.append({
+                'header': msg.header,
+                'pose': msg.pose.pose
+            })
+
+            # Check for distance-based evaluation
+            if self.evaluation_interval_meters > 0:
+                distance_traveled = np.linalg.norm(self.current_position - self.last_position)
+                if distance_traveled >= self.evaluation_interval_meters:
+                    self.get_logger().info(f"Distance-based evaluation triggered after {distance_traveled:.2f}m")
+                    self.evaluate_current_trajectory()
+
+        # Lap detection logic
+        if self.detect_lap_crossing():
+            self.handle_lap_crossing()
+
+    def detect_lap_crossing(self):
+        """Detect if the vehicle has crossed the start/finish line"""
+        if not self.position_initialized:
+            return False
+
+        # Calculate distance to start line
+        line_vector = self.start_line_p2 - self.start_line_p1
+        line_length = np.linalg.norm(line_vector)
+
+        if line_length < 0.01:  # Line too short
+            return False
+
+        # Normalize line vector
+        line_unit = line_vector / line_length
+
+        # Vector from start line point 1 to current position
+        to_position = self.current_position - self.start_line_p1
+
+        # Project current position onto the line
+        projection_length = np.dot(to_position, line_unit)
+
+        # Check if projection is within line bounds
+        if projection_length < 0 or projection_length > line_length:
+            return False
+
+        # Calculate perpendicular distance to line
+        projected_point = self.start_line_p1 + projection_length * line_unit
+        perpendicular_distance = np.linalg.norm(self.current_position - projected_point)
+
+        # Check if we're close enough to the line (within 1 meter)
+        if perpendicular_distance > 1.0:
+            return False
+
+        # Check if we're moving in the right direction (crossing from one side to the other)
+        # We need to determine which side of the line we were on before
+        if not hasattr(self, 'last_side_of_line'):
+            self.last_side_of_line = self.get_side_of_line(self.last_position)
+            return False
+
+        current_side = self.get_side_of_line(self.current_position)
+
+        # Check if we crossed from one side to the other
+        if current_side != self.last_side_of_line and current_side != 0:
+            self.last_side_of_line = current_side
+            return True
+
+        self.last_side_of_line = current_side
+        return False
+
+    def get_side_of_line(self, position):
+        """Determine which side of the line a position is on"""
+        # Vector from start line point 1 to position
+        to_position = position - self.start_line_p1
+
+        # Vector from start line point 1 to end line point 2
+        line_vector = self.start_line_p2 - self.start_line_p1
+
+        # Cross product to determine side
+        cross_product = np.cross(line_vector, to_position)
+
+        if abs(cross_product) < 0.01:  # On the line
+            return 0
+        elif cross_product > 0:  # Right side
+            return 1
+        else:  # Left side
+            return -1
+
+    def handle_lap_crossing(self):
+        """Handle when a lap crossing is detected"""
+        current_time = self.get_clock().now()
+
+        # Debounce check
+        if (self.last_crossing_time is not None and
+                (current_time - self.last_crossing_time).nanoseconds / 1e9 < self.debounce_time):
+            return
+
+        self.last_crossing_time = current_time
+
+        if not self.race_started:
+            # First crossing - start the race
+            self.race_started = True
+            self.race_start_time = current_time
+            self.lap_start_time = current_time
+            self.race_running = True
+            self.lap_count = 1
+            self.get_logger().info(f"Race started! Lap {self.lap_count}")
+
+            # EVO: Start new lap trajectory
+            if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+                self.start_new_lap_trajectory(1)
+
+        else:
+            # Subsequent crossings - complete lap
+            if self.lap_start_time is not None:
+                lap_time = (current_time - self.lap_start_time).nanoseconds / 1e9
+                self.lap_times.append(lap_time)
+
+                # EVO: Complete and evaluate lap trajectory
+                if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+                    self.complete_lap_trajectory(self.lap_count, lap_time)
+
+                    # Check if we should evaluate based on lap interval
+                    if (self.evaluation_interval_laps > 0 and
+                            self.lap_count % self.evaluation_interval_laps == 0):
+                        self.get_logger().info(f"Lap-based evaluation triggered for lap {self.lap_count}")
+                        self.evaluate_current_trajectory()
+
+                self.get_logger().info(f"Lap {self.lap_count} completed in {lap_time:.2f}s")
+
+                # Check if race is finished (only if not already finished)
+                if self.lap_count >= self.required_laps and not self.race_finished:
+                    self.race_finished = True
+                    self.race_running = False
+                    total_time = (current_time - self.race_start_time).nanoseconds / 1e9
+                    self.get_logger().info(f"Race finished! Total time: {total_time:.2f}s")
+
+                    # EVO: Save final evaluation summary and generate plots
+                    if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+                        self.save_trajectory_evaluation_summary()
+
+                        # Export comprehensive research data
+                        if hasattr(self, 'research_evaluator') and self.research_evaluator:
+                            self.get_logger().info("Exporting comprehensive research data...")
+                            try:
+                                self.research_evaluator.export_research_data()
+                                summary = self.research_evaluator.generate_research_summary()
+                                self.get_logger().info(f"Research analysis complete - analyzed {summary['experiment_info']['total_laps']} laps")
+                                self.get_logger().info(f"Controller: {summary['experiment_info']['controller_name']}")
+                            except Exception as e:
+                                self.get_logger().error(f"Error exporting research data: {e}")
+
+                        # Generate all EVO plots if plotter is available (only once when race finishes)
+                        if self.evo_plotter and not self.evo_plots_generated:
+                            self.get_logger().info("Generating comprehensive EVO analysis plots...")
+                            self.evo_plotter.generate_all_plots()
+                            self.evo_plots_generated = True  # Mark as generated to prevent re-generation
+                else:
+                    # Start next lap
+                    self.lap_count += 1
+                    self.lap_start_time = current_time
+                    self.get_logger().info(f"Starting lap {self.lap_count}")
+
+                    # EVO: Start new lap trajectory
+                    if self.enable_trajectory_evaluation and EVO_AVAILABLE:
+                        self.start_new_lap_trajectory(self.lap_count)
+
+    def start_new_lap_trajectory(self, lap_number):
+        """Start tracking trajectory for a new lap"""
+        if not self.enable_trajectory_evaluation or not EVO_AVAILABLE:
+            return
+
+        if self.current_lap_trajectory:
+            # Save previous lap trajectory if it exists
+            if hasattr(self, 'last_lap_number') and self.last_lap_number in self.lap_trajectories:
+                self.lap_trajectories[self.last_lap_number].extend(self.current_lap_trajectory)
+            else:
+                self.lap_trajectories[lap_number] = self.current_lap_trajectory.copy()
+
+            # Evaluate the completed lap
+            self.evaluate_lap_trajectory(self.last_lap_number)
+
+        # Start new trajectory
+        self.current_lap_trajectory = []
+        self.last_lap_number = lap_number
+
+        self.get_logger().info(f"Started tracking trajectory for lap {lap_number}")
+
+    def complete_lap_trajectory(self, lap_number, lap_time):
+        """Complete trajectory tracking for a lap"""
+        if not self.enable_trajectory_evaluation or not EVO_AVAILABLE:
+            return
+
+        # Store the completed lap trajectory
+        self.lap_trajectories[lap_number] = self.current_lap_trajectory.copy()
+
+        # Add to Research Evaluator for comprehensive analysis
+        if hasattr(self, 'research_evaluator') and self.research_evaluator:
+            self.get_logger().info(
+                f"Adding lap {lap_number} to Research Evaluator for comprehensive analysis (data points: {len(self.current_lap_trajectory)})")
+            try:
+                self.research_evaluator.add_trajectory(lap_number, self.current_lap_trajectory.copy(), lap_time)
+                self.get_logger().info(f"Research analysis completed for lap {lap_number}")
+            except Exception as e:
+                self.get_logger().error(f"Error in research evaluation for lap {lap_number}: {e}")
+
+        # Add to EVO plotter if available
+        if self.evo_plotter:
+            self.get_logger().info(
+                f"Adding lap {lap_number} trajectory to EVO plotter (data points: {len(self.current_lap_trajectory)})")
+            self.evo_plotter.add_lap_trajectory(lap_number, self.current_lap_trajectory.copy())
+
+        # Evaluate the completed lap
+        self.evaluate_lap_trajectory(lap_number)
+
+        # Reset for next lap
+        self.current_lap_trajectory = []
+
+    def evaluate_lap_trajectory(self, lap_number):
+        """Evaluate trajectory for a specific lap using evo"""
+        if not self.enable_trajectory_evaluation or not EVO_AVAILABLE or lap_number not in self.lap_trajectories:
+            return
+
+        try:
+            # Convert to evo trajectory format
+            poses = self.lap_trajectories[lap_number]
+            if len(poses) < 2:
+                return
+
+            # Create trajectory object
+            traj = trajectory.PoseTrajectory3D(
+                positions_xyz=np.array([[pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z]
+                                        for pose in poses]),
+                orientations_quat_wxyz=np.array([[pose['pose'].orientation.w, pose['pose'].orientation.x,
+                                                pose['pose'].orientation.y, pose['pose'].orientation.z]
+                                                 for pose in poses]),
+                timestamps=np.array([pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
+                                     for pose in poses])
+            )
+
+            # Calculate metrics
+            metrics_dict = {}
+
+            # Path length
+            path_length = self.calculate_path_length(traj)
+            metrics_dict['path_length'] = path_length
+
+            # Smoothness (if enabled)
+            if self.evaluate_smoothness:
+                smoothness = self.calculate_smoothness(traj)
+                metrics_dict['smoothness'] = smoothness
+                self.smoothness_score_pub.publish(Float32(data=float(smoothness)))
+
+            # Consistency (if enabled)
+            if self.evaluate_consistency:
+                consistency = self.calculate_consistency(traj)
+                metrics_dict['consistency'] = consistency
+                self.consistency_score_pub.publish(Float32(data=float(consistency)))
+
+            # Compare with reference if available
+            if self.reference_trajectory is not None:
+                ref_metrics = self.compare_with_reference(traj)
+                metrics_dict.update(ref_metrics)
+
+                # Store metrics
+            self.lap_metrics[lap_number] = metrics_dict
+
+            # Add metrics to EVO plotter if available
+            if self.evo_plotter:
+                self.evo_plotter.add_lap_metrics(lap_number, metrics_dict)
+
+            # Publish metrics
+            metrics_msg = String()
+            metrics_msg.data = json.dumps(metrics_dict)
+            self.trajectory_metrics_pub.publish(metrics_msg)
+
+            # Save trajectory if enabled
+            if self.save_trajectories:
+                self.save_trajectory_to_file(traj, lap_number)
+
+            self.get_logger().info(f"Evaluated lap {lap_number} trajectory: {metrics_dict}")
+
+        except Exception as e:
+            self.get_logger().error(f"Error evaluating lap {lap_number} trajectory: {e}")
+
+    def calculate_path_length(self, traj):
+        """Calculate total path length of trajectory"""
+        if len(traj.positions_xyz) < 2:
+            return 0.0
+
+        total_length = 0.0
+        for i in range(1, len(traj.positions_xyz)):
+            p1 = traj.positions_xyz[i - 1]
+            p2 = traj.positions_xyz[i]
+
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            dz = p2[2] - p1[2]
+
+            segment_length = np.sqrt(dx * dx + dy * dy + dz * dz)
+            total_length += segment_length
+
+        return total_length
+
+    def calculate_smoothness(self, traj):
+        """Calculate trajectory smoothness based on curvature"""
+        if len(traj.positions_xyz) < 3:
+            return 0.0
+
+        curvatures = []
+        for i in range(1, len(traj.positions_xyz) - 1):
+            p1 = traj.positions_xyz[i - 1]
+            p2 = traj.positions_xyz[i]
+            p3 = traj.positions_xyz[i + 1]
+
+            # Calculate curvature using three points
+            v1 = np.array([p2[0] - p1[0], p2[1] - p1[1]])
+            v2 = np.array([p3[0] - p2[0], p3[1] - p2[1]])
+
+            # Cross product for curvature
+            cross_product = np.cross(v1, v2)
+            if np.linalg.norm(v1) > 0 and np.linalg.norm(v2) > 0:
+                curvature = abs(cross_product) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+                curvatures.append(curvature)
+
+        if not curvatures:
+            return 0.0
+
+        # Lower values indicate smoother trajectories
+        return np.mean(curvatures)
+
+    def calculate_consistency(self, traj):
+        """Calculate trajectory consistency based on velocity variations"""
+        if len(traj.positions_xyz) < 2:
+            return 0.0
+
+        velocities = []
+        for i in range(1, len(traj.positions_xyz)):
+            p1 = traj.positions_xyz[i - 1]
+            p2 = traj.positions_xyz[i]
+
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            dz = p2[2] - p1[2]
+
+            velocity = np.sqrt(dx * dx + dy * dy + dz * dz)
+            velocities.append(velocity)
+
+        if not velocities:
+            return 0.0
+
+        # Calculate coefficient of variation (lower is more consistent)
+        mean_vel = np.mean(velocities)
+        std_vel = np.std(velocities)
+
+        if mean_vel > 0:
+            return std_vel / mean_vel
+        return 0.0
+
+    def compare_with_reference(self, traj):
+        """Compare trajectory with reference trajectory using evo metrics"""
+        if self.reference_trajectory is None:
+            return {}
+
+        try:
+            # Synchronize trajectories
+            traj_ref, traj_est = sync.associate_trajectories(
+                self.reference_trajectory, traj, max_diff=0.01)
+
+            # Calculate APE (Absolute Pose Error)
+            pose_relation = metrics.PoseRelation.translation_part
+            ape_metric = metrics.APE(pose_relation)
+            ape_metric.process_data((traj_ref, traj_est))
+            ape_stats = ape_metric.get_statistic(metrics.StatisticsType.rmse)
+
+            # Calculate RPE (Relative Pose Error)
+            rpe_metric = metrics.RPE(pose_relation)
+            rpe_metric.process_data((traj_ref, traj_est))
+            rpe_stats = rpe_metric.get_statistic(metrics.StatisticsType.rmse)
+
+            return {
+                'ape_rmse': ape_stats,
+                'rpe_rmse': rpe_stats
+            }
+
+        except Exception as e:
+            self.get_logger().warn(f"Could not compare with reference: {e}")
+            return {}
+
+    def save_trajectory_to_file(self, traj, lap_number):
+        """Save trajectory to file in TUM format"""
+        try:
+            filename = f"lap_{lap_number:03d}_trajectory.txt"
+            filepath = os.path.join(self.trajectory_output_directory, filename)
+
+            with open(filepath, 'w') as f:
+                for i in range(len(traj.positions_xyz)):
+                    timestamp = traj.timestamps[i]
+                    x, y, z = traj.positions_xyz[i]
+                    qw, qx, qy, qz = traj.orientations_quat_wxyz[i]
+
+                    f.write(f"{timestamp:.6f} {x:.6f} {y:.6f} {z:.6f} {qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f}\n")
+
+            self.get_logger().info(f"Saved trajectory for lap {lap_number} to {filepath}")
+
+        except Exception as e:
+            self.get_logger().error(f"Error saving trajectory for lap {lap_number}: {e}")
+
+    def evaluate_current_trajectory(self):
+        """Periodic evaluation of current trajectory"""
+        if not self.enable_trajectory_evaluation or not EVO_AVAILABLE or not self.current_lap_trajectory:
+            return
+
+        # Calculate current trajectory metrics
+        if len(self.current_lap_trajectory) >= 2:
+            # Create temporary trajectory for current lap
+            poses = self.current_lap_trajectory
+            traj = trajectory.PoseTrajectory3D(
+                positions_xyz=np.array([[pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z]
+                                        for pose in poses]),
+                orientations_quat_wxyz=np.array([[pose['pose'].orientation.w, pose['pose'].orientation.x,
+                                                pose['pose'].orientation.y, pose['pose'].orientation.z]
+                                                 for pose in poses]),
+                timestamps=np.array([pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
+                                     for pose in poses])
+            )
+
+            # Calculate and publish current metrics
+            if self.evaluate_smoothness:
+                smoothness = self.calculate_smoothness(traj)
+                self.smoothness_score_pub.publish(Float32(data=float(smoothness)))
+
+    def save_trajectory_evaluation_summary(self):
+        """Save summary of all lap trajectory evaluations"""
+        if not self.enable_trajectory_evaluation or not EVO_AVAILABLE:
+            return
+
+        try:
+            summary_file = os.path.join(self.trajectory_output_directory, 'evaluation_summary.csv')
+
+            with open(summary_file, 'w', newline='') as csvfile:
+                if not self.lap_metrics:
+                    return
+
+                # Get all metric keys
+                all_keys = set()
+                for metrics in self.lap_metrics.values():
+                    all_keys.update(metrics.keys())
+
+                # Write header
+                writer = csv.writer(csvfile)
+                header = ['lap_number'] + sorted(all_keys)
+                writer.writerow(header)
+
+                # Write data
+                for lap_num in sorted(self.lap_metrics.keys()):
+                    row = [lap_num]
+                    for key in sorted(all_keys):
+                        value = self.lap_metrics[lap_num].get(key, '')
+                        row.append(value)
+                    writer.writerow(row)
+
+            self.get_logger().info(f"Saved trajectory evaluation summary to {summary_file}")
+
+        except Exception as e:
+            self.get_logger().error(f"Error saving trajectory evaluation summary: {e}")
+
+    # --------------------------- Callbacks ---------------------------------
     def clicked_point_callback(self, msg: PointStamped):
         """Receive points from RViz Publish Point tool and set start/finish line.
 
@@ -148,198 +942,64 @@ class RaceMonitor(Node):
             # Use previous P2 if pending_point is only update for P1 -- but here we set both
             new_p1 = self.pending_point
             new_p2 = point
+
+            # Update the start line
             self.start_line_p1 = new_p1
             self.start_line_p2 = new_p2
+
+            # Clear pending point
             self.pending_point = None
+
+            # Log the new line
+            line_length = np.linalg.norm(new_p2 - new_p1)
             self.get_logger().info(
-                f"Start/finish line updated to P1=({new_p1[0]:.3f},{new_p1[1]:.3f}) P2=({new_p2[0]:.3f},{new_p2[1]:.3f})")
-
-            # reset race start if user wants (optional): here we keep state but you can re-zero lap_count if desired
-            # self.lap_count = 0
-            # self.lap_times = []
-
-            # Immediately publish updated marker
-            self.publish_start_line_marker()
-
-    # --------------------------- Lap detection ------------------------------
-    def check_lap_crossing(self):
-        if not self.position_initialized:
-            return
-
-        # If line is degenerate, skip
-        if np.allclose(self.start_line_p1, self.start_line_p2):
-            return
-
-        # Check intersection between the segment traveled since last odom and the start line
-        if self.line_intersection(self.last_position, self.current_position, self.start_line_p1, self.start_line_p2):
-            now = self.get_clock().now()
-
-            # debounce
-            if self.last_crossing_time is not None:
-                elapsed = (now - self.last_crossing_time).nanoseconds / 1e9
-                if elapsed < self.debounce_time:
-                    return
-
-            # direction check
-            if not self.heading_check(self.current_heading, self.start_line_p2 - self.start_line_p1):
-                # return
-                pass
-
-            # record crossing
-            self.last_crossing_time = now
-
-            if not self.race_started:
-                # Start race on first valid crossing
-                self.race_started = True
-                self.race_running = True
-                self.race_start_time = now
-                self.lap_start_time = now
-                self.get_logger().info('Race started')
-            else:
-                # complete lap
-                self.complete_lap(now)
-
-    def complete_lap(self, current_time):
-        if self.lap_start_time is None:
-            return
-
-        lap_time = (current_time - self.lap_start_time).nanoseconds / 1e9
-        self.lap_times.append(lap_time)
-        self.lap_count += 1
-
-        self.get_logger().info(f'Lap {self.lap_count} completed in {lap_time:.3f}s')
-
-        # Publish lap time and best lap
-        self.publish_value(self.lap_time_pub, float(lap_time))
-        best = float(min(self.lap_times))
-        self.publish_value(self.best_lap_time_pub, best)
-
-        self.lap_start_time = current_time
-
-        if self.lap_count == self.required_laps or not self.car_running:
-            self.finish_race()
-
-    def finish_race(self):
-        # Prevent running twice
-        if self.race_finished:
-            return
-        self.race_finished = True
-        self.race_running = False
-        if self.lap_count > self.required_laps:
-            return
-        total_time = 0.0
-        if self.race_start_time is not None:
-            total_time = (self.get_clock().now() - self.race_start_time).nanoseconds / 1e9
-
-        if len(self.lap_times) > 0:
-            best = min(self.lap_times)
-            worst = max(self.lap_times)
-            avg = float(np.mean(self.lap_times))
-        else:
-            best = worst = avg = 0.0
-
-        self.get_logger().info(f'Race finished. Total time: {total_time:.3f}s')
-        self.get_logger().info(f'Best: {best:.3f}s Worst: {worst:.3f}s Avg: {avg:.3f}s')
-
-        # save results
-        self.save_results_to_csv(total_time)
-
-    # --------------------------- Utilities ---------------------------------
-    def publish_value(self, pub, value):
-        msg_type = pub.msg_type if hasattr(pub, 'msg_type') else None
-        # Workaround: create Float32 or Int32 depending on publisher
-        if pub is self.best_lap_time_pub or pub is self.lap_time_pub:
-            m = Float32()
-            m.data = float(value)
-            pub.publish(m)
-        elif pub is self.lap_count_pub:
-            m = Int32()
-            m.data = int(value)
-            pub.publish(m)
+                f"Start/finish line updated: P1=({new_p1[0]:.3f}, {new_p1[1]:.3f}), "
+                f"P2=({new_p2[0]:.3f}, {new_p2[1]:.3f}), length={line_length:.3f}m")
 
     def publish_race_status(self):
-        # lap count
+        """Publish current race status"""
+        # Publish lap count
         lap_msg = Int32()
-        lap_msg.data = int(self.lap_count)
+        lap_msg.data = self.lap_count
         self.lap_count_pub.publish(lap_msg)
 
-        # race running
-        rmsg = Bool()
-        rmsg.data = bool(self.race_running)
-        self.race_running_pub.publish(rmsg)
+        # Publish race running status
+        running_msg = Bool()
+        running_msg.data = self.race_running
+        self.race_running_pub.publish(running_msg)
 
-        # best lap publish even if not set
+        # Publish race state
+        state_msg = String()
+        if not self.race_started:
+            state_msg.data = "waiting"
+        elif self.race_finished:
+            state_msg.data = "finished"
+        else:
+            state_msg.data = "racing"
+        self.race_state_pub.publish(state_msg)
+
+        # Publish best lap time if available
         if len(self.lap_times) > 0:
-            best_msg = Float32()
-            best_msg.data = float(min(self.lap_times))
-            self.best_lap_time_pub.publish(best_msg)
+            best_time_msg = Float32()
+            best_time_msg.data = min(self.lap_times)
+            self.best_lap_time_pub.publish(best_time_msg)
 
-        # also publish string state
-        state = String()
-        state.data = 'running' if self.race_running else ('staged' if self.race_started else 'idle')
-        self.race_state_pub.publish(state)
+        # Publish last lap time if available
+        if len(self.lap_times) > 0:
+            last_time_msg = Float32()
+            last_time_msg.data = self.lap_times[-1]
+            self.lap_time_pub.publish(last_time_msg)
 
-    def line_intersection(self, p1, p2, q1, q2):
-        """Return True if segment p1-p2 intersects q1-q2."""
-        def ccw(A, B, C):
-            return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
-
-        A = p1
-        B = p2
-        C = q1
-        D = q2
-        return (ccw(A, C, D) != ccw(B, C, D)) and (ccw(A, B, C) != ccw(A, B, D))
-
-    def heading_check(self, heading, line_vector):
-        """Check that vehicle heading points roughly in the same direction as the line's normal.
-
-        We define the "forward" direction of the line as the normal (perpendicular) pointing from P1->P2 rotated +90deg.
-        Crossing is valid if the dot(heading_vector, line_normal) > 0.
-        """
-        lv = np.array(line_vector, dtype=float)
-        if np.linalg.norm(lv) == 0.0:
-            return False
-        line_normal = np.array([-lv[1], lv[0]])
-        norm = np.linalg.norm(line_normal)
-        if norm == 0.0:
-            return False
-        line_normal = line_normal / norm
-
-        heading_vector = np.array([math.cos(heading), math.sin(heading)])
-        dot = float(np.dot(heading_vector, line_normal))
-        return dot > 0.0
-
-    def quaternion_to_yaw(self, q):
-        # yaw (z) from quaternion
-        x, y, z, w = q.x, q.y, q.z, q.w
-        siny = 2.0 * (w * z + x * y)
-        cosy = 1.0 - 2.0 * (y * y + z * z)
-        return math.atan2(siny, cosy)
-
-    # --------------------------- Visualization ------------------------------
     def publish_start_line_marker(self):
-        """Publish a simple colored line visualization for the start/finish line.
+        """Publish start/finish line visualization marker"""
+        # Check if line has changed
+        current_line = (tuple(self.start_line_p1), tuple(self.start_line_p2))
+        if current_line == self._last_line:
+            return  # No change, don't republish
 
-        Markers are published in frame self.frame_id (default 'map').
-        """
-        # Avoid republishing if identical
-        if self._last_line[0] is not None and np.allclose(
-                self._last_line[0], self.start_line_p1) and np.allclose(
-                self._last_line[1], self.start_line_p2):
-            return
+        self._last_line = current_line
 
-        # store
-        self._last_line = (self.start_line_p1.copy(), self.start_line_p2.copy())
-
-        # Delete existing markers first
-        clear = Marker()
-        clear.header.stamp = self.get_clock().now().to_msg()
-        clear.header.frame_id = self.frame_id
-        clear.ns = 'race_monitor'
-        clear.action = Marker.DELETEALL
-        self.start_line_marker_pub.publish(clear)
-
-        # Create a sleek green line (LINE_STRIP)
+        # Create line strip marker
         line_marker = Marker()
         line_marker.header.stamp = self.get_clock().now().to_msg()
         line_marker.header.frame_id = self.frame_id
@@ -347,7 +1007,11 @@ class RaceMonitor(Node):
         line_marker.id = 0
         line_marker.type = Marker.LINE_STRIP
         line_marker.action = Marker.ADD
-        line_marker.scale.x = 0.15  # Reduced thickness (15cm) for cleaner look
+
+        # Line properties
+        line_marker.scale.x = 0.1  # Line width
+        line_marker.scale.y = 0.1
+        line_marker.scale.z = 0.1
 
         # Bright green color for start/finish line with reduced opacity
         line_marker.color.r = 0.0
@@ -430,6 +1094,7 @@ class RaceMonitor(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = RaceMonitor()
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -440,6 +1105,10 @@ def main(args=None):
             if node.race_start_time is not None:
                 total = (node.get_clock().now() - node.race_start_time).nanoseconds / 1e9
             node.save_results_to_csv(total)
+
+            # Save trajectory evaluation summary if enabled
+            if node.enable_trajectory_evaluation and EVO_AVAILABLE:
+                node.save_trajectory_evaluation_summary()
     finally:
         node.destroy_node()
         rclpy.shutdown()
