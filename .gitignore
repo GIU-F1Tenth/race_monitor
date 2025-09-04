@@ -75,9 +75,6 @@ trajectory_evaluation/
 demonstration_outputs/
 single_controller_demo/
 
-# External dependencies
-evo/
-
 # Test and demo files
 test_*.py
 demo_*.py
