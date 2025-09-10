@@ -185,17 +185,13 @@ class RaceMonitor(Node):
         
         # Multiple odometry topics support
         if not self.has_parameter('odometry_topics'):
-            self.declare_parameter('odometry_topics', [
-                {'topic': 'car_state/odom', 'type': 'nav_msgs/Odometry', 'enabled': True},
-                {'topic': '/ekf/odometry', 'type': 'nav_msgs/Odometry', 'enabled': False}
-            ])
+            # Use string list instead of dict list for ROS 2 compatibility
+            self.declare_parameter('odometry_topics', ['car_state/odom'])
         
         # Multiple control command topics support  
         if not self.has_parameter('control_command_topics'):
-            self.declare_parameter('control_command_topics', [
-                {'topic': '/drive', 'type': 'ackermann', 'enabled': True},
-                {'topic': '/cmd_vel', 'type': 'twist', 'enabled': False}
-            ])
+            # Use string list instead of dict list for ROS 2 compatibility
+            self.declare_parameter('control_command_topics', ['/drive'])
             
         # Legacy single topic parameters (for backward compatibility)
         if not self.has_parameter('control_command_topic'):
@@ -253,9 +249,94 @@ class RaceMonitor(Node):
         # Computational Performance Monitoring parameters
         self.enable_computational_monitoring = self.get_parameter('enable_computational_monitoring').value
         
-        # Get multiple topics configuration
-        self.odometry_topics_config = self.get_parameter('odometry_topics').value
-        self.control_command_topics_config = self.get_parameter('control_command_topics').value
+        # Get multiple topics configuration with simplified string-based approach
+        try:
+            odometry_topics_param = self.get_parameter('odometry_topics').value
+            if isinstance(odometry_topics_param, list):
+                # Simple string list approach
+                self.odometry_topics_config = []
+                for topic in odometry_topics_param:
+                    if isinstance(topic, str):
+                        # Determine message type based on topic name
+                        if 'pose' in topic.lower() and 'cov' in topic.lower():
+                            msg_type = 'geometry_msgs/PoseWithCovarianceStamped'
+                        else:
+                            msg_type = 'nav_msgs/Odometry'
+                        
+                        self.odometry_topics_config.append({
+                            'topic': topic,
+                            'type': msg_type,
+                            'enabled': True
+                        })
+                    elif isinstance(topic, dict):
+                        # Handle dict format if provided
+                        topic_name = topic.get('name', topic.get('topic', ''))
+                        msg_type = topic.get('message_type', topic.get('type', 'nav_msgs/Odometry'))
+                        enabled = topic.get('enabled', True)
+                        
+                        self.odometry_topics_config.append({
+                            'topic': topic_name,
+                            'type': msg_type,
+                            'enabled': enabled
+                        })
+            else:
+                # Use default configuration
+                self.odometry_topics_config = [
+                    {'topic': 'car_state/odom', 'type': 'nav_msgs/Odometry', 'enabled': True}
+                ]
+        except Exception as e:
+            self.get_logger().error(f"Error parsing odometry_topics parameter: {e}")
+            self.odometry_topics_config = [
+                {'topic': 'car_state/odom', 'type': 'nav_msgs/Odometry', 'enabled': True}
+            ]
+        
+        try:
+            control_topics_param = self.get_parameter('control_command_topics').value
+            if isinstance(control_topics_param, list):
+                # Simple string list approach
+                self.control_command_topics_config = []
+                for topic in control_topics_param:
+                    if isinstance(topic, str):
+                        # Determine message type based on topic name
+                        if 'cmd_vel' in topic.lower() or 'twist' in topic.lower():
+                            msg_type = 'twist'
+                        else:
+                            msg_type = 'ackermann'
+                        
+                        self.control_command_topics_config.append({
+                            'topic': topic,
+                            'type': msg_type,
+                            'enabled': True
+                        })
+                    elif isinstance(topic, dict):
+                        # Handle dict format if provided
+                        topic_name = topic.get('name', topic.get('topic', ''))
+                        msg_type = topic.get('message_type', topic.get('type', 'ackermann'))
+                        enabled = topic.get('enabled', True)
+                        
+                        # Convert message type to simple format
+                        if 'AckermannDriveStamped' in msg_type:
+                            simple_type = 'ackermann'
+                        elif 'Twist' in msg_type:
+                            simple_type = 'twist'
+                        else:
+                            simple_type = msg_type
+                        
+                        self.control_command_topics_config.append({
+                            'topic': topic_name,
+                            'type': simple_type,
+                            'enabled': enabled
+                        })
+            else:
+                # Use default configuration
+                self.control_command_topics_config = [
+                    {'topic': '/drive', 'type': 'ackermann', 'enabled': True}
+                ]
+        except Exception as e:
+            self.get_logger().error(f"Error parsing control_command_topics parameter: {e}")
+            self.control_command_topics_config = [
+                {'topic': '/drive', 'type': 'ackermann', 'enabled': True}
+            ]
         
         # Legacy single topic support (for backward compatibility)
         self.control_command_topic = str(self.get_parameter('control_command_topic').value)
