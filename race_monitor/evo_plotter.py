@@ -15,6 +15,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for saving plots
 
+# Please ensure the 'evo' library is installed and available in your PYTHONPATH.
 # Add EVO library to Python path
 evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
 if os.path.exists(evo_path) and evo_path not in sys.path:
