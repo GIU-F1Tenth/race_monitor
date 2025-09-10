@@ -127,12 +127,12 @@ race_monitor:
     generate_error_plots: true         # APE/RPE error analysis
     generate_metrics_plots: true       # Smoothness/consistency over time
     
-    # ========================================
-    # F1TENTH INTERFACE SETTINGS
-    # ========================================
-    
-    # Enable/disable F1Tenth vehicle state interface
-    enable_f1tenth_interface: true
+  # ========================================
+  # F1TENTH INTERFACE SETTINGS
+  # ========================================
+  
+  # Enable/disable F1Tenth vehicle state interface
+  enable_f1tenth_interface: true
   f1tenth_vehicle_state_topic: '/vehicle_state'
   f1tenth_constrained_state_topic: '/constrained_vehicle_state'
 
