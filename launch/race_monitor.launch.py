@@ -28,8 +28,8 @@ Output:
     The system generates comprehensive analysis data in:
     trajectory_evaluation/research_data/{controller_name}/{experiment_id}/
     
-Author: Race Monitor Development Team
-License: MIT
+Author: Mohammed Abdelazim (mohammed@azab.io)
+License: MIT License 
 """
 
 from launch import LaunchDescription
