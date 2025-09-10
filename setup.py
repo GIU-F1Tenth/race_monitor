@@ -14,7 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
     ],
-    install_requires=['setuptools', 'evo'],
+    install_requires=['setuptools', 'evo', 'psutil', 'ackermann_msgs'],
     zip_safe=True,
     maintainer='Mohammed Azab',
     maintainer_email='mohammed@azab.io',
