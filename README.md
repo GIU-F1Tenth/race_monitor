@@ -25,6 +25,46 @@ The Race Monitor provides comprehensive trajectory analysis capabilities for aut
 - matplotlib
 - EVO trajectory evaluation library
 
+### Important: EVO Library Setup
+
+**⚠️ Critical Requirement:** The EVO trajectory evaluation library must be available in your workspace. This package includes EVO as a submodule, but you need to ensure it's properly initialized.
+
+#### Option 1: Initialize the EVO Submodule (Recommended)
+
+If you cloned this repository, initialize the EVO submodule:
+
+```bash
+# From the race_monitor package directory
+cd /path/to/your/workspace/src/race_monitor
+git submodule init
+git submodule update
+```
+
+#### Option 2: Clone EVO Separately
+
+If the submodule approach doesn't work, clone EVO directly:
+
+```bash
+# From your workspace src directory
+cd /path/to/your/workspace/src
+git clone https://github.com/MichaelGrupp/evo.git
+```
+
+#### Verify EVO Installation
+
+Ensure EVO is properly available:
+
+```bash
+# Check if EVO directory exists
+ls -la /path/to/your/workspace/src/race_monitor/evo
+# OR (if cloned separately)
+ls -la /path/to/your/workspace/src/evo
+
+# Install EVO dependencies
+cd /path/to/evo/directory
+pip install -e .
+```
+
 ### Build
 
 ```bash
