@@ -5,14 +5,14 @@ Race Monitor Node
 
 A comprehensive ROS2 node for autonomous racing trajectory analysis and performance evaluation.
 Integrates with the EVO library to provide advanced trajectory evaluation, real-time lap timing,
-and research-grade performance metrics calculation.
+and performance metrics calculation for individual controller assessment.
 
 Features:
     - Real-time lap detection and timing
     - Comprehensive trajectory recording and analysis
     - Advanced metrics calculation using EVO library
     - Multi-format data export (JSON, CSV, TUM, Pickle)
-    - Research-ready statistical analysis
+    - Performance analysis and statistical metrics
     - Support for trajectory filtering and smoothing
 
 Topics:
@@ -94,15 +94,15 @@ except ImportError:
 
 
 class RaceMonitor(Node):
-    """Enhanced Race Monitor node with integrated trajectory evaluation
+    """Race Monitor node with integrated trajectory evaluation
 
     - Counts laps using a start/finish line set in parameters or by clicking two points in RViz
     - Tracks lap times, best/worst/average, total race time
     - Publishes live lap count and race_running flag
     - Saves results to CSV when race completes (or on shutdown)
     - Publishes a nicer visualization of the start/finish line (checkered pattern + center line)
-    - INTEGRATED: Trajectory evaluation using evo library (APE, RPE, smoothness, consistency)
-    - INTEGRATED: Trajectory export in TUM format for further analysis
+    - INTEGRATED: Trajectory evaluation using evo library (performance metrics, smoothness, consistency)
+    - INTEGRATED: Trajectory export in TUM format for EVO analysis
     """
 
     def __init__(self):
