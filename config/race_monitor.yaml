@@ -19,18 +19,18 @@ race_monitor:
     # Controller identification for research comparison
     controller_name: "custom_controller" # Name of the controller being tested
     experiment_id: "exp_001" # Experiment identifier for this run
-    test_description: "Custom controller vs MPC/LQR comparison"
+    test_description: "Controller performance evaluation and analysis"
 
-    # Advanced metrics for research analysis
+    # Advanced metrics for current controller analysis
     enable_advanced_metrics: true # Enable comprehensive metric calculations
     calculate_all_statistics: true # Calculate mean, median, std, min, max (not just RMSE)
     analyze_rotation_errors: true # Include orientation analysis
     enable_geometric_analysis: true # Arc length, curvature analysis
     enable_filtering_analysis: true # Apply and analyze trajectory filtering
 
-    # Research-specific evaluation modes
+    # Analysis evaluation modes
     detailed_lap_analysis: true # Detailed per-lap breakdown
-    comparative_analysis: true # Enable comparison with reference controllers
+    comparative_analysis: true # Enable comparison 
     statistical_significance: true # Calculate statistical significance tests
 
     # ========================================
