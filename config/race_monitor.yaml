@@ -3,122 +3,126 @@ race_monitor:
     # ========================================
     # RACE MONITORING PARAMETERS
     # ========================================
-    
+
     # Start/finish line configuration
-    start_line_p1: [0.0, -1.0]      # Bottom point of start line [x, y]
-    start_line_p2: [0.0, 1.0]       # Top point of start line [x, y]
-    required_laps: 5                 # Number of laps to complete race
-    debounce_time: 2.0               # Debounce time for lap detection (seconds)
-    output_file: "race_results.csv"  # CSV file for race results
-    frame_id: "map"                  # Frame ID for visualization
-    
+    start_line_p1: [0.0, -1.0] # Bottom point of start line [x, y]
+    start_line_p2: [0.0, 1.0] # Top point of start line [x, y]
+    required_laps: 5 # Number of laps to complete race
+    debounce_time: 2.0 # Debounce time for lap detection (seconds)
+    output_file: "race_results.csv" # CSV file for race results
+    frame_id: "map" # Frame ID for visualization
+
     # ========================================
     # RESEARCH & ANALYSIS PARAMETERS
     # ========================================
-    
+
     # Controller identification for research comparison
-    controller_name: "custom_controller"     # Name of the controller being tested
-    experiment_id: "exp_001"                # Experiment identifier for this run
+    controller_name: "custom_controller" # Name of the controller being tested
+    experiment_id: "exp_001" # Experiment identifier for this run
     test_description: "Custom controller vs MPC/LQR comparison"
-    
+
     # Advanced metrics for research analysis
-    enable_advanced_metrics: true           # Enable comprehensive metric calculations
-    calculate_all_statistics: true          # Calculate mean, median, std, min, max (not just RMSE)
-    analyze_rotation_errors: true           # Include orientation analysis
-    enable_geometric_analysis: true         # Arc length, curvature analysis
-    enable_filtering_analysis: true         # Apply and analyze trajectory filtering
-    
+    enable_advanced_metrics: true # Enable comprehensive metric calculations
+    calculate_all_statistics: true # Calculate mean, median, std, min, max (not just RMSE)
+    analyze_rotation_errors: true # Include orientation analysis
+    enable_geometric_analysis: true # Arc length, curvature analysis
+    enable_filtering_analysis: true # Apply and analyze trajectory filtering
+
     # Research-specific evaluation modes
-    detailed_lap_analysis: true             # Detailed per-lap breakdown
-    comparative_analysis: true              # Enable comparison with reference controllers
-    statistical_significance: true          # Calculate statistical significance tests
-    
+    detailed_lap_analysis: true # Detailed per-lap breakdown
+    comparative_analysis: true # Enable comparison with reference controllers
+    statistical_significance: true # Calculate statistical significance tests
+
     # ========================================
     # EVO INTEGRATION PARAMETERS
     # ========================================
-    
+
     # Enable/disable trajectory evaluation
     enable_trajectory_evaluation: true
-    
+
     # Evaluation timing options (choose one):
     # Option 1: Time-based evaluation (evaluate every X seconds)
     evaluation_interval_seconds: 0
-    
+
     # Option 2: Lap-based evaluation (evaluate every X laps)
-    evaluation_interval_laps: 1      # 0 = disable lap-based evaluation
-    
+    evaluation_interval_laps: 1 # 0 = disable lap-based evaluation
+
     # Option 3: Distance-based evaluation (evaluate every X meters)
-    evaluation_interval_meters: 0.0  # 0 = disable distance-based evaluation
-    
+    evaluation_interval_meters: 0.0 # 0 = disable distance-based evaluation
+
     # ========================================
     # REFERENCE TRAJECTORY CONFIGURATION
     # ========================================
-    
+
     # File-based reference trajectory
     reference_trajectory_file: "horizon_mapper/horizon_mapper/ref_trajectory.csv"
-    reference_trajectory_format: "csv"  # csv, tum, kitti
-    
+    reference_trajectory_format: "csv" # csv, tum, kitti
+
     # Horizon mapper interface (real-time reference trajectory)
     enable_horizon_mapper_reference: true
     horizon_mapper_reference_topic: "/horizon_mapper/reference_trajectory"
-    
+
+    # Use complete reference path instead of reference trajectory points
+    use_complete_reference_path: true
+    horizon_mapper_path_topic: "/horizon_mapper/reference_path"
+
     # ========================================
     # ADVANCED FILE OUTPUT FOR RESEARCH
     # ========================================
-    
+
     # Enhanced data export
-    export_to_pandas: true                  # Export data to pandas DataFrame
-    save_detailed_statistics: true          # Save comprehensive statistics
-    save_filtered_trajectories: true       # Save both raw and filtered trajectories
-    export_research_summary: true          # Generate research-ready summary
-    
+    export_to_pandas: true # Export data to pandas DataFrame
+    save_detailed_statistics: true # Save comprehensive statistics
+    save_filtered_trajectories: true # Save both raw and filtered trajectories
+    export_research_summary: true # Generate research-ready summary
+
     # Research file formats
-    output_formats: ["csv", "json", "pickle", "mat"]  # Multiple formats for analysis tools
-    include_timestamps: true                # Include detailed timestamp information
-    save_intermediate_results: true        # Save results after each lap
-    
+    output_formats: ["csv", "json", "pickle", "mat"] # Multiple formats for analysis tools
+    include_timestamps: true # Include detailed timestamp information
+    save_intermediate_results: true # Save results after each lap
+
     # ========================================
     # TRAJECTORY ANALYSIS SETTINGS
     # ========================================
-    
+
     # Data storage
     save_trajectories: true
     trajectory_output_directory: "trajectory_evaluation"
-    
+
     # Metrics to calculate
-    evaluate_smoothness: true              # Calculate trajectory smoothness
-    evaluate_consistency: true             # Calculate trajectory consistency
-    evaluate_efficiency: true              # Calculate path efficiency metrics
-    evaluate_aggressiveness: true          # Calculate driving aggressiveness
-    evaluate_stability: true               # Calculate control stability metrics
-    
+    evaluate_smoothness: true # Calculate trajectory smoothness
+    evaluate_consistency: true # Calculate trajectory consistency
+    evaluate_efficiency: true # Calculate path efficiency metrics
+    evaluate_aggressiveness: true # Calculate driving aggressiveness
+    evaluate_stability: true # Calculate control stability metrics
+
     # Advanced EVO metrics
     pose_relations: ["translation_part", "rotation_part", "full_transformation"]
     statistics_types: ["rmse", "mean", "median", "std", "min", "max", "sse"]
-    
+
     # Filtering options for noise reduction
     apply_trajectory_filtering: true
     filter_types: ["motion", "distance", "angle"]
     filter_parameters:
-      motion_threshold: 0.1               # Minimum motion for filtering
-      distance_threshold: 0.05            # Distance threshold for filtering
-      angle_threshold: 0.1                # Angle threshold for filtering
-    
+      motion_threshold: 0.1 # Minimum motion for filtering
+      distance_threshold: 0.05 # Distance threshold for filtering
+      angle_threshold: 0.1 # Angle threshold for filtering
+
     # ========================================
     # GRAPH GENERATION SETTINGS
     # ========================================
-    
+
     # Enable/disable automatic graph generation
     auto_generate_graphs: true
     graph_output_directory: "trajectory_evaluation/graphs"
-    graph_formats: ["png", "pdf"]   # png, pdf, svg, html
-    
+    graph_formats: ["png", "pdf"] # png, pdf, svg, html
+
     # Plot appearance settings
-    plot_figsize: [12.0, 8.0]      # Figure size [width, height]
-    plot_dpi: 300                   # DPI for saved images
-    plot_style: "seaborn"           # matplotlib style
-    plot_color_scheme: "viridis"    # Color scheme for multiple trajectories
-    
+    plot_figsize: [12.0, 8.0] # Figure size [width, height]
+    plot_dpi: 300 # DPI for saved images
+    plot_style: "seaborn" # matplotlib style
+    plot_color_scheme: "viridis" # Color scheme for multiple trajectories
+
     # Types of graphs to generate
     generate_trajectory_plots: true     # 2D/3D trajectory visualization
     generate_xyz_plots: true           # X, Y, Z position over time
@@ -126,6 +130,16 @@ race_monitor:
     generate_speed_plots: true         # Velocity analysis
     generate_error_plots: true         # APE/RPE error analysis
     generate_metrics_plots: true       # Smoothness/consistency over time
+
+    # ========================================
+    # F1TENTH INTERFACE SETTINGS
+    # ========================================
+
+    # Enable/disable F1Tenth vehicle state interface
+    enable_f1tenth_interface: true
+    f1tenth_vehicle_state_topic: "/vehicle_state"
+    f1tenth_constrained_state_topic: "/constrained_vehicle_state"
+
     
   # ========================================
   # F1TENTH INTERFACE SETTINGS
@@ -135,6 +149,8 @@ race_monitor:
   enable_f1tenth_interface: true
   f1tenth_vehicle_state_topic: '/vehicle_state'
   f1tenth_constrained_state_topic: '/constrained_vehicle_state'
+
+
 
   # ========================================
   # COMPUTATIONAL PERFORMANCE MONITORING

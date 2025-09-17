@@ -19,7 +19,7 @@ Topics:
     Subscribed:
         /car_state/odom (nav_msgs/Odometry): Vehicle odometry data
         /clicked_point (geometry_msgs/PointStamped): Manual start/finish line setup
-        
+
     Published:
         /race_monitor/lap_count (std_msgs/Int32): Current lap number
         /race_monitor/lap_time (std_msgs/Float32): Last completed lap time
@@ -33,9 +33,9 @@ Parameters:
     enable_trajectory_evaluation (bool): Enable/disable trajectory analysis
     enable_advanced_metrics (bool): Enable comprehensive metric calculation
     save_trajectories (bool): Save trajectory data to files
-    
+
 Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License 
+License: MIT License
 """
 
 import rclpy
@@ -48,8 +48,10 @@ from ackermann_msgs.msg import AckermannDriveStamped
 from giu_f1t_interfaces.msg import VehicleState, ConstrainedVehicleState, VehicleStateArray, ConstrainedVehicleStateArray
 
 import numpy as np
+import tf_transformations
 import csv
 import os
+import time
 from datetime import datetime
 import math
 import json
@@ -152,6 +154,8 @@ class RaceMonitor(Node):
             self.declare_parameter('save_trajectories', True)
         if not self.has_parameter('trajectory_output_directory'):
             self.declare_parameter('trajectory_output_directory', 'trajectory_evaluation')
+        if not self.has_parameter('save_horizon_reference'):
+            self.declare_parameter('save_horizon_reference', True)
         if not self.has_parameter('evaluate_smoothness'):
             self.declare_parameter('evaluate_smoothness', True)
         if not self.has_parameter('evaluate_consistency'):
@@ -230,6 +234,7 @@ class RaceMonitor(Node):
         # Trajectory analysis settings
         self.save_trajectories = self.get_parameter('save_trajectories').value
         self.trajectory_output_directory = str(self.get_parameter('trajectory_output_directory').value)
+        self.save_horizon_reference = self.get_parameter('save_horizon_reference').value
         self.evaluate_smoothness = self.get_parameter('evaluate_smoothness').value
         self.evaluate_consistency = self.get_parameter('evaluate_consistency').value
 
@@ -433,6 +438,7 @@ class RaceMonitor(Node):
             self.lap_metrics = {}  # lap_number -> metrics
             self.last_lap_number = 0  # Initialize last lap number
             self.evo_plots_generated = False  # Flag to prevent re-generating EVO plots
+            self.horizon_reference_saved = False  # Flag to track if horizon reference has been saved
 
             # Initialize EVO plotter if available
             if EVO_PLOTTER_AVAILABLE and self.auto_generate_graphs:
@@ -489,15 +495,15 @@ class RaceMonitor(Node):
                     'filter_parameters': {'motion_threshold': 0.1, 'distance_threshold': 0.05},
                     'output_formats': ['json', 'csv', 'pickle']
                 }
-                
+
                 try:
                     self.research_evaluator = create_research_evaluator(research_config)
                     self.get_logger().info("Research Trajectory Evaluator initialized successfully")
-                    
+
                     # Set reference trajectory if available
                     if self.reference_trajectory_file and os.path.exists(self.reference_trajectory_file):
                         self.research_evaluator.set_reference_trajectory(
-                            self.reference_trajectory_file, 
+                            self.reference_trajectory_file,
                             self.reference_trajectory_format
                         )
                 except Exception as e:
@@ -590,18 +596,33 @@ class RaceMonitor(Node):
 
         # Horizon mapper reference trajectory subscriber (for EVO analysis)
         if not self.has_parameter('enable_horizon_mapper_reference'):
-            self.declare_parameter('enable_horizon_mapper_reference', False)
+            self.declare_parameter('enable_horizon_mapper_reference', True)
         if not self.has_parameter('horizon_mapper_reference_topic'):
             self.declare_parameter('horizon_mapper_reference_topic', '/horizon_mapper/reference_trajectory')
+        if not self.has_parameter('use_complete_reference_path'):
+            self.declare_parameter('use_complete_reference_path', True)
+        if not self.has_parameter('horizon_mapper_path_topic'):
+            self.declare_parameter('horizon_mapper_path_topic', '/horizon_mapper/reference_path')
 
         self.enable_horizon_mapper_reference = self.get_parameter('enable_horizon_mapper_reference').value
         self.horizon_mapper_reference_topic = str(self.get_parameter('horizon_mapper_reference_topic').value)
+        self.use_complete_reference_path = self.get_parameter('use_complete_reference_path').value
+        self.horizon_mapper_path_topic = str(self.get_parameter('horizon_mapper_path_topic').value)
 
         if self.enable_horizon_mapper_reference:
-            self.reference_trajectory_sub = self.create_subscription(
-                VehicleStateArray, self.horizon_mapper_reference_topic, self.reference_trajectory_callback, 20)
-            self.get_logger().info(
-                f"Horizon mapper reference enabled - subscribing to {self.horizon_mapper_reference_topic}")
+            if self.use_complete_reference_path:
+                # Subscribe to complete reference path (nav_msgs/Path)
+                from nav_msgs.msg import Path
+                self.reference_path_sub = self.create_subscription(
+                    Path, self.horizon_mapper_path_topic, self.reference_path_callback, 20)
+                self.get_logger().info(
+                    f"Horizon mapper reference enabled - subscribing to complete path: {self.horizon_mapper_path_topic}")
+            else:
+                # Subscribe to reference trajectory points (VehicleStateArray)
+                self.reference_trajectory_sub = self.create_subscription(
+                    VehicleStateArray, self.horizon_mapper_reference_topic, self.reference_trajectory_callback, 20)
+                self.get_logger().info(
+                    f"Horizon mapper reference enabled - subscribing to trajectory points: {self.horizon_mapper_reference_topic}")
 
         # Publishers
         self.lap_count_pub = self.create_publisher(Int32, '/race_monitor/lap_count', 10)
@@ -702,7 +723,7 @@ class RaceMonitor(Node):
         if hasattr(self, 'evo_plotter') and self.evo_plotter:
             # Convert VehicleStateArray to EVO format
             reference_trajectory_data = []
-            for vehicle_state in msg.vehicle_states:
+            for vehicle_state in msg.states:
                 reference_trajectory_data.append({
                     'x': vehicle_state.x,
                     'y': vehicle_state.y,
@@ -712,7 +733,48 @@ class RaceMonitor(Node):
 
             # Update the reference trajectory in EVO plotter
             self.evo_plotter.update_reference_trajectory_from_horizon_mapper(reference_trajectory_data)
-            self.get_logger().debug(f"Updated reference trajectory with {len(reference_trajectory_data)} points")
+            print(f"Updated reference trajectory from horizon mapper with {len(reference_trajectory_data)} points")
+
+            # Save horizon mapper reference trajectory as TUM file for EVO analysis
+            if (self.save_horizon_reference and not self.horizon_reference_saved and
+                    len(reference_trajectory_data) > 0):
+                self._save_horizon_reference_trajectory(reference_trajectory_data)
+                self.horizon_reference_saved = True
+
+    def reference_path_callback(self, msg):
+        """Callback for horizon mapper complete reference path messages (nav_msgs/Path)"""
+        if not self.enable_horizon_mapper_reference:
+            return
+
+        # Store the latest reference path for EVO comparison
+        if hasattr(self, 'evo_plotter') and self.evo_plotter:
+            # Convert nav_msgs/Path to EVO format
+            reference_trajectory_data = []
+            for pose_stamped in msg.poses:
+                pose = pose_stamped.pose
+                # Extract orientation (convert quaternion to yaw angle)
+                orientation_q = pose.orientation
+                import tf_transformations
+                euler = tf_transformations.euler_from_quaternion([
+                    orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
+                theta = euler[2]  # yaw angle
+
+                reference_trajectory_data.append({
+                    'x': pose.position.x,
+                    'y': pose.position.y,
+                    'theta': theta,
+                    'v': 0.0  # Velocity not available in Path message
+                })
+
+            # Update the reference trajectory in EVO plotter
+            self.evo_plotter.update_reference_trajectory_from_horizon_mapper(reference_trajectory_data)
+            print(f"Updated complete reference path from horizon mapper with {len(reference_trajectory_data)} points")
+
+            # Save horizon mapper reference path as TUM file for EVO analysis
+            if (self.save_horizon_reference and not self.horizon_reference_saved and
+                    len(reference_trajectory_data) > 0):
+                self._save_horizon_reference_trajectory(reference_trajectory_data)
+                self.horizon_reference_saved = True
 
     def odom_callback(self, msg, topic_name='car_state/odom'):
         """Callback for odometry messages"""
@@ -894,7 +956,8 @@ class RaceMonitor(Node):
                             try:
                                 self.research_evaluator.export_research_data()
                                 summary = self.research_evaluator.generate_research_summary()
-                                self.get_logger().info(f"Research analysis complete - analyzed {summary['experiment_info']['total_laps']} laps")
+                                self.get_logger().info(
+                                    f"Research analysis complete - analyzed {summary['experiment_info']['total_laps']} laps")
                                 self.get_logger().info(f"Controller: {summary['experiment_info']['controller_name']}")
                             except Exception as e:
                                 self.get_logger().error(f"Error exporting research data: {e}")
@@ -976,15 +1039,41 @@ class RaceMonitor(Node):
             if len(poses) < 2:
                 return
 
-            # Create trajectory object
+            # Extract raw data
+            positions = []
+            orientations = []
+            timestamps = []
+            
+            for pose in poses:
+                timestamp = pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
+                timestamps.append(timestamp)
+                positions.append([pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z])
+                orientations.append([pose['pose'].orientation.w, pose['pose'].orientation.x,
+                                   pose['pose'].orientation.y, pose['pose'].orientation.z])
+            
+            # Remove duplicate timestamps by keeping only unique consecutive timestamps
+            filtered_positions = []
+            filtered_orientations = []
+            filtered_timestamps = []
+            
+            for i in range(len(timestamps)):
+                # Keep first point or points with different timestamps
+                if i == 0 or timestamps[i] != timestamps[i-1]:
+                    filtered_timestamps.append(timestamps[i])
+                    filtered_positions.append(positions[i])
+                    filtered_orientations.append(orientations[i])
+            
+            if len(filtered_timestamps) < 2:
+                self.get_logger().warn(f"Insufficient unique timestamps for lap {lap_number} trajectory evaluation")
+                return
+                
+            self.get_logger().info(f"Filtered trajectory: {len(poses)} -> {len(filtered_timestamps)} poses (removed {len(poses) - len(filtered_timestamps)} duplicates)")
+
+            # Create trajectory object with filtered data
             traj = trajectory.PoseTrajectory3D(
-                positions_xyz=np.array([[pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z]
-                                        for pose in poses]),
-                orientations_quat_wxyz=np.array([[pose['pose'].orientation.w, pose['pose'].orientation.x,
-                                                pose['pose'].orientation.y, pose['pose'].orientation.z]
-                                                 for pose in poses]),
-                timestamps=np.array([pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
-                                     for pose in poses])
+                positions_xyz=np.array(filtered_positions),
+                orientations_quat_wxyz=np.array(filtered_orientations),
+                timestamps=np.array(filtered_timestamps)
             )
 
             # Calculate metrics
@@ -1155,6 +1244,48 @@ class RaceMonitor(Node):
         except Exception as e:
             self.get_logger().error(f"Error saving trajectory for lap {lap_number}: {e}")
 
+    def _save_horizon_reference_trajectory(self, reference_data):
+        """Save horizon mapper reference trajectory as TUM file for EVO analysis"""
+        try:
+            # Create reference trajectory filename
+            reference_filename = "horizon_reference_trajectory.txt"
+            reference_filepath = os.path.join(self.trajectory_output_directory, reference_filename)
+
+            # Ensure directory exists
+            os.makedirs(self.trajectory_output_directory, exist_ok=True)
+
+            # Convert horizon mapper data to TUM format
+            with open(reference_filepath, 'w') as f:
+                # Create synthetic timestamps (assuming 10Hz)
+                base_timestamp = time.time()
+
+                for i, point in enumerate(reference_data):
+                    # Generate timestamp
+                    timestamp = base_timestamp + (i * 0.1)
+
+                    # Extract position
+                    x = point['x']
+                    y = point['y']
+                    z = 0.0  # Assume 2D trajectory
+
+                    # Convert theta to quaternion (2D rotation around z-axis)
+                    theta = point['theta']
+                    qx = 0.0
+                    qy = 0.0
+                    qz = np.sin(theta / 2.0)
+                    qw = np.cos(theta / 2.0)
+
+                    # Write TUM format: timestamp x y z qx qy qz qw
+                    f.write(f"{timestamp:.6f} {x:.6f} {y:.6f} {z:.6f} {qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f}\n")
+
+            self.get_logger().info(
+                f"Saved horizon mapper reference trajectory to {reference_filepath} with {len(reference_data)} points")
+            self.get_logger().info(
+                f"Use this file for EVO comparisons: evo_ape tum {reference_filename} lap_001_trajectory.txt --plot")
+
+        except Exception as e:
+            self.get_logger().error(f"Error saving horizon reference trajectory: {e}")
+
     def evaluate_current_trajectory(self):
         """Periodic evaluation of current trajectory"""
         if not self.enable_trajectory_evaluation or not EVO_AVAILABLE or not self.current_lap_trajectory:
@@ -1162,22 +1293,43 @@ class RaceMonitor(Node):
 
         # Calculate current trajectory metrics
         if len(self.current_lap_trajectory) >= 2:
-            # Create temporary trajectory for current lap
+            # Create temporary trajectory for current lap with timestamp deduplication
             poses = self.current_lap_trajectory
-            traj = trajectory.PoseTrajectory3D(
-                positions_xyz=np.array([[pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z]
-                                        for pose in poses]),
-                orientations_quat_wxyz=np.array([[pose['pose'].orientation.w, pose['pose'].orientation.x,
-                                                pose['pose'].orientation.y, pose['pose'].orientation.z]
-                                                 for pose in poses]),
-                timestamps=np.array([pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
-                                     for pose in poses])
-            )
+            
+            # Extract raw data
+            positions = []
+            orientations = []
+            timestamps = []
+            
+            for pose in poses:
+                timestamp = pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
+                timestamps.append(timestamp)
+                positions.append([pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z])
+                orientations.append([pose['pose'].orientation.w, pose['pose'].orientation.x,
+                                   pose['pose'].orientation.y, pose['pose'].orientation.z])
+            
+            # Remove duplicate timestamps
+            filtered_positions = []
+            filtered_orientations = []
+            filtered_timestamps = []
+            
+            for i in range(len(timestamps)):
+                if i == 0 or timestamps[i] != timestamps[i-1]:
+                    filtered_timestamps.append(timestamps[i])
+                    filtered_positions.append(positions[i])
+                    filtered_orientations.append(orientations[i])
+            
+            if len(filtered_timestamps) >= 2:
+                traj = trajectory.PoseTrajectory3D(
+                    positions_xyz=np.array(filtered_positions),
+                    orientations_quat_wxyz=np.array(filtered_orientations),
+                    timestamps=np.array(filtered_timestamps)
+                )
 
-            # Calculate and publish current metrics
-            if self.evaluate_smoothness:
-                smoothness = self.calculate_smoothness(traj)
-                self.smoothness_score_pub.publish(Float32(data=float(smoothness)))
+                # Calculate and publish current metrics
+                if self.evaluate_smoothness:
+                    smoothness = self.calculate_smoothness(traj)
+                    self.smoothness_score_pub.publish(Float32(data=float(smoothness)))
 
     def save_trajectory_evaluation_summary(self):
         """Save summary of all lap trajectory evaluations"""
