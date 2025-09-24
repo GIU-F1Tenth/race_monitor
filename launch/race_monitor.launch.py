@@ -3,8 +3,10 @@
 """
 Race Monitor Launch File
 
-Launches the race monitor node with comprehensive trajectory analysis capabilities.
-This launch file provides configurable parameters for autonomous racing performance evaluation.
+Launches the race monitor node with comprehensive trajectory analysis and computational 
+performance monitoring capabilities. This unified launch file provides configurable 
+parameters for autonomous racing performance evaluation including real-time computational 
+efficiency monitoring.
 
 Usage:
     ros2 launch race_monitor race_monitor.launch.py
@@ -13,7 +15,14 @@ Usage:
     ros2 launch race_monitor race_monitor.launch.py \
         controller_name:=my_controller \
         experiment_id:=session_001 \
-        enable_trajectory_evaluation:=true
+        enable_trajectory_evaluation:=true \
+        enable_computational_monitoring:=true
+
+    # With multiple odometry sources:
+    ros2 launch race_monitor race_monitor.launch.py \
+        odometry_topics:='["car_state/odom", "ekf/odometry"]' \
+        control_command_topics:='["drive", "cmd_vel"]' \
+        enable_computational_monitoring:=true
 
 Available Parameters:
     controller_name (string): Name of the controller being tested
@@ -22,11 +31,27 @@ Available Parameters:
     start_line_p2 (list): Second point of start/finish line [x, y]
     required_laps (int): Number of laps required to complete race
     enable_trajectory_evaluation (bool): Enable advanced trajectory analysis
-    enable_advanced_metrics (bool): Enable comprehensive metric calculation
+    enable_computational_monitoring (bool): Enable performance monitoring
+    odometry_topics (list): Array of odometry topic names to monitor
+    control_command_topics (list): Array of control command topics to monitor
+    
+Computational Monitoring Features:
+    - Real-time control loop latency measurement
+    - CPU and memory usage tracking
+    - Processing efficiency calculation
+    - Multi-topic support for complex systems
+    - Performance statistics logging
+    - Control frequency analysis
     
 Output:
     The system generates comprehensive analysis data in:
     trajectory_evaluation/research_data/{controller_name}/{experiment_id}/
+    
+    Performance monitoring topics:
+    /race_monitor/control_loop_latency - Control loop latency in milliseconds
+    /race_monitor/cpu_usage - Current CPU usage percentage
+    /race_monitor/memory_usage - Current memory usage in MB
+    /race_monitor/processing_efficiency - Processing efficiency score (0-1)
     
 Author: Mohammed Abdelazim (mohammed@azab.io)
 License: MIT License 
@@ -260,6 +285,49 @@ def generate_launch_description():
         description='Topic for F1Tenth constrained vehicle state messages'
     )
 
+    # Computational performance monitoring parameters
+    enable_computational_monitoring_arg = DeclareLaunchArgument(
+        'enable_computational_monitoring',
+        default_value='false',
+        description='Enable computational performance monitoring'
+    )
+
+    odometry_topics_arg = DeclareLaunchArgument(
+        'odometry_topics',
+        default_value='["car_state/odom"]',
+        description='Array of odometry topic names to monitor'
+    )
+
+    control_command_topics_arg = DeclareLaunchArgument(
+        'control_command_topics',
+        default_value='["drive"]',
+        description='Array of control command topic names to monitor'
+    )
+
+    monitoring_window_size_arg = DeclareLaunchArgument(
+        'monitoring_window_size',
+        default_value='100',
+        description='Number of performance samples to keep in memory'
+    )
+
+    cpu_monitoring_interval_arg = DeclareLaunchArgument(
+        'cpu_monitoring_interval',
+        default_value='0.1',
+        description='CPU monitoring interval in seconds'
+    )
+
+    enable_performance_logging_arg = DeclareLaunchArgument(
+        'enable_performance_logging',
+        default_value='true',
+        description='Enable periodic performance logging'
+    )
+
+    performance_log_interval_arg = DeclareLaunchArgument(
+        'performance_log_interval',
+        default_value='5.0',
+        description='Performance logging interval in seconds'
+    )
+
     # Single integrated Race Monitor Node
     race_monitor_node = Node(
         package='race_monitor',
@@ -316,6 +384,15 @@ def generate_launch_description():
             'enable_f1tenth_interface': LaunchConfiguration('enable_f1tenth_interface'),
             'f1tenth_vehicle_state_topic': LaunchConfiguration('f1tenth_vehicle_state_topic'),
             'f1tenth_constrained_state_topic': LaunchConfiguration('f1tenth_constrained_state_topic'),
+
+            # Computational performance monitoring settings
+            'enable_computational_monitoring': LaunchConfiguration('enable_computational_monitoring'),
+            'odometry_topics': LaunchConfiguration('odometry_topics'),
+            'control_command_topics': LaunchConfiguration('control_command_topics'),
+            'monitoring_window_size': LaunchConfiguration('monitoring_window_size'),
+            'cpu_monitoring_interval': LaunchConfiguration('cpu_monitoring_interval'),
+            'enable_performance_logging': LaunchConfiguration('enable_performance_logging'),
+            'performance_log_interval': LaunchConfiguration('performance_log_interval'),
         }]
     )
 
@@ -356,6 +433,13 @@ def generate_launch_description():
         enable_f1tenth_interface_arg,
         f1tenth_vehicle_state_topic_arg,
         f1tenth_constrained_state_topic_arg,
+        enable_computational_monitoring_arg,
+        odometry_topics_arg,
+        control_command_topics_arg,
+        monitoring_window_size_arg,
+        cpu_monitoring_interval_arg,
+        enable_performance_logging_arg,
+        performance_log_interval_arg,
 
         # Single integrated node
         race_monitor_node,
