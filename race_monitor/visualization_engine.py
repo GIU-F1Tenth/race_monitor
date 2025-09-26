@@ -102,7 +102,14 @@ class EVOPlotter:
                 print(f"Unsupported reference trajectory format: {format_type}")
                 return False
 
-            print(f"Loaded reference trajectory with {len(self.reference_trajectory.poses)} poses")
+            # Check the actual attribute name for EVO trajectory
+            if hasattr(self.reference_trajectory, 'poses'):
+                num_poses = len(self.reference_trajectory.poses)
+            elif hasattr(self.reference_trajectory, 'positions_xyz'):
+                num_poses = len(self.reference_trajectory.positions_xyz)
+            else:
+                num_poses = 'unknown'
+            print(f"Loaded reference trajectory with {num_poses} poses")
             return True
 
         except Exception as e:
