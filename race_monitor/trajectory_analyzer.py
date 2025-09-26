@@ -93,12 +93,12 @@ class ResearchTrajectoryEvaluator:
 
     def setup_output_directories(self):
         """Setup directory structure for research outputs"""
-        # Get base directory - if relative, make it relative to the package
+        # Get base directory - save relative to the race_monitor package directory
         base_dir_config = self.config.get('trajectory_output_directory', 'evaluation_results')
         if not os.path.isabs(base_dir_config):
-            # Make path relative to the race_monitor package directory
-            package_dir = os.path.dirname(os.path.dirname(__file__))  # Go up to race_monitor package root
-            base_dir = os.path.join(package_dir, base_dir_config)
+            # Go up from race_monitor/race_monitor/ to race_monitor/ (the repo root)
+            repo_root = os.path.dirname(os.path.dirname(__file__))
+            base_dir = os.path.join(repo_root, base_dir_config)
         else:
             base_dir = base_dir_config
 
@@ -210,8 +210,13 @@ class ResearchTrajectoryEvaluator:
             # Apply motion filtering
             if 'motion' in self.config.get('filter_types', []):
                 motion_threshold = self.config.get('filter_parameters', {}).get('motion_threshold', 0.1)
-                filtered_poses = filters.filter_by_motion(poses_se3, motion_threshold)
-                poses_se3 = filtered_poses
+                angle_threshold = self.config.get('filter_parameters', {}).get('angle_threshold', 0.1)  # radians
+                try:
+                    filtered_indices = filters.filter_by_motion(poses_se3, motion_threshold, angle_threshold)
+                    poses_se3 = [poses_se3[i] for i in filtered_indices]
+                except Exception as e:
+                    self.logger.error(f"Error applying motion filtering: {e}")
+                    # Continue without filtering if there's an error
 
             # Apply distance filtering
             if 'distance' in self.config.get('filter_types', []):
@@ -511,37 +516,51 @@ class ResearchTrajectoryEvaluator:
     def _save_lap_results(self, lap_number: int):
         """Save intermediate results for a single lap"""
         if lap_number not in self.detailed_metrics:
+            self.logger.warning(f"No metrics found for lap {lap_number}")
             return
 
-        # Save metrics as JSON
-        metrics_file = os.path.join(self.experiment_dir, 'metrics', f'lap_{lap_number:03d}_metrics.json')
-        with open(metrics_file, 'w') as f:
-            json.dump(self.detailed_metrics[lap_number], f, indent=2)
+        try:
+            # Save metrics as JSON
+            metrics_file = os.path.join(self.experiment_dir, 'metrics', f'lap_{lap_number:03d}_metrics.json')
+            self.logger.info(f"Saving metrics to: {metrics_file}")
+            with open(metrics_file, 'w') as f:
+                json.dump(self.detailed_metrics[lap_number], f, indent=2)
+            self.logger.info(f"Successfully saved metrics for lap {lap_number}")
+        except Exception as e:
+            self.logger.error(f"Failed to save metrics for lap {lap_number}: {e}")
 
         # Save trajectory as TUM format using EVO
         if lap_number in self.lap_trajectories:
             traj_file = os.path.join(self.experiment_dir, 'trajectories', f'lap_{lap_number:03d}_trajectory.tum')
+            self.logger.info(f"Saving trajectory to: {traj_file}")
             try:
                 file_interface.write_tum_trajectory_file(traj_file, self.lap_trajectories[lap_number]['trajectory'])
-            except BaseException:
+                self.logger.info(f"Successfully saved trajectory for lap {lap_number} using EVO interface")
+            except Exception as e:
+                self.logger.warning(f"EVO trajectory writing failed: {e}, using fallback method")
                 # Fallback to manual writing
-                with open(traj_file, 'w') as f:
-                    traj = self.lap_trajectories[lap_number]['trajectory']
-                    for i in range(len(traj.positions_xyz)):
-                        timestamp = traj.timestamps[i]
-                        pos = traj.positions_xyz[i]
-                        quat = traj.orientations_quat_wxyz[i]
-                        f.write(f"{timestamp:.6f} {pos[0]:.6f} {pos[1]:.6f} {pos[2]:.6f} "
-                                f"{quat[1]:.6f} {quat[2]:.6f} {quat[3]:.6f} {quat[0]:.6f}\n")
+                try:
+                    with open(traj_file, 'w') as f:
+                        traj = self.lap_trajectories[lap_number]['trajectory']
+                        for i in range(len(traj.positions_xyz)):
+                            timestamp = traj.timestamps[i]
+                            pos = traj.positions_xyz[i]
+                            quat = traj.orientations_quat_wxyz[i]
+                            f.write(f"{timestamp:.6f} {pos[0]:.6f} {pos[1]:.6f} {pos[2]:.6f} "
+                                    f"{quat[1]:.6f} {quat[2]:.6f} {quat[3]:.6f} {quat[0]:.6f}\n")
+                    self.logger.info(f"Successfully saved trajectory for lap {lap_number} using fallback method")
+                except Exception as fallback_e:
+                    self.logger.error(f"Failed to save trajectory for lap {lap_number}: {fallback_e}")
 
         # Save filtered trajectory if available
         if lap_number in self.filtered_trajectories:
             filtered_file = os.path.join(self.experiment_dir, 'filtered', f'lap_{lap_number:03d}_filtered.tum')
+            self.logger.info(f"Saving filtered trajectory to: {filtered_file}")
             try:
                 file_interface.write_tum_trajectory_file(filtered_file, self.filtered_trajectories[lap_number])
-            except BaseException:
-                # Fallback implementation
-                pass
+                self.logger.info(f"Successfully saved filtered trajectory for lap {lap_number}")
+            except Exception as e:
+                self.logger.error(f"Failed to save filtered trajectory for lap {lap_number}: {e}")
 
     def generate_research_summary(self) -> Dict[str, Any]:
         """Generate comprehensive research summary for paper writing"""
@@ -597,49 +616,62 @@ class ResearchTrajectoryEvaluator:
     def export_research_data(self):
         """Export all data in research-friendly formats"""
         if not EVO_AVAILABLE:
+            self.logger.warning("EVO not available, skipping research data export")
             return
 
-        # Generate comprehensive summary
-        summary = self.generate_research_summary()
+        try:
+            # Generate comprehensive summary
+            summary = self.generate_research_summary()
+            self.logger.info(f"Generated research summary with {len(self.detailed_metrics)} laps")
 
-        # Save summary in multiple formats
-        output_formats = self.config.get('output_formats', ['json', 'csv'])
+            # Save summary in multiple formats
+            output_formats = self.config.get('output_formats', ['json', 'csv'])
+            self.logger.info(f"Exporting research data in formats: {output_formats}")
 
-        for fmt in output_formats:
-            if fmt == 'json':
-                summary_file = os.path.join(
-                    self.experiment_dir,
-                    'exports',
-                    f'{self.controller_name}_{self.experiment_id}_summary.json')
-                with open(summary_file, 'w') as f:
-                    json.dump(summary, f, indent=2)
-
-            elif fmt == 'csv':
-                # Export lap-by-lap metrics as CSV
-                csv_file = os.path.join(
-                    self.experiment_dir,
-                    'exports',
-                    f'{self.controller_name}_{self.experiment_id}_metrics.csv')
-                self._export_metrics_csv(csv_file)
-
-            elif fmt == 'pickle' and EVO_AVAILABLE:
-                # Export using pandas bridge
-                try:
-                    import pickle
-                    pickle_file = os.path.join(
+            for fmt in output_formats:
+                if fmt == 'json':
+                    summary_file = os.path.join(
                         self.experiment_dir,
                         'exports',
-                        f'{self.controller_name}_{self.experiment_id}_data.pkl')
-                    with open(pickle_file, 'wb') as f:
-                        pickle.dump({
-                            'trajectories': self.lap_trajectories,
-                            'metrics': self.detailed_metrics,
-                            'summary': summary
-                        }, f)
-                except BaseException:
-                    pass
+                        f'{self.controller_name}_{self.experiment_id}_summary.json')
+                    self.logger.info(f"Saving JSON summary to: {summary_file}")
+                    with open(summary_file, 'w') as f:
+                        json.dump(summary, f, indent=2)
+                    self.logger.info(f"Successfully saved JSON summary")
 
-        self.logger.info(f"Research data exported to {self.experiment_dir}/exports/")
+                elif fmt == 'csv':
+                    # Export lap-by-lap metrics as CSV
+                    csv_file = os.path.join(
+                        self.experiment_dir,
+                        'exports',
+                        f'{self.controller_name}_{self.experiment_id}_metrics.csv')
+                    self.logger.info(f"Saving CSV metrics to: {csv_file}")
+                    self._export_metrics_csv(csv_file)
+                    self.logger.info(f"Successfully saved CSV metrics")
+
+                elif fmt == 'pickle' and EVO_AVAILABLE:
+                    # Export using pandas bridge
+                    try:
+                        import pickle
+                        pickle_file = os.path.join(
+                            self.experiment_dir,
+                            'exports',
+                            f'{self.controller_name}_{self.experiment_id}_data.pkl')
+                        self.logger.info(f"Saving pickle data to: {pickle_file}")
+                        with open(pickle_file, 'wb') as f:
+                            pickle.dump({
+                                'trajectories': self.lap_trajectories,
+                                'metrics': self.detailed_metrics,
+                                'summary': summary
+                            }, f)
+                        self.logger.info(f"Successfully saved pickle data")
+                    except Exception as pickle_e:
+                        self.logger.error(f"Failed to save pickle data: {pickle_e}")
+
+            self.logger.info(f"Research data exported to {self.experiment_dir}/exports/")
+        
+        except Exception as e:
+            self.logger.error(f"Failed to export research data: {e}")
 
     def _export_metrics_csv(self, csv_file: str):
         """Export metrics to CSV format for analysis"""
