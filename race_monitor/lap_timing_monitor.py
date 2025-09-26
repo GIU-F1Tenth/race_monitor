@@ -1692,12 +1692,23 @@ class RaceMonitor(Node):
 
     def publish_start_line_marker(self):
         """Publish start/finish line visualization marker"""
-        # Check if line has changed
+        # Check if line has changed or if it's time to republish
         current_line = (tuple(self.start_line_p1), tuple(self.start_line_p2))
-        if current_line == self._last_line:
-            return  # No change, don't republish
+        
+        # Republish every 10 seconds even if unchanged (for new subscribers)
+        should_republish = False
+        if not hasattr(self, '_last_marker_publish_time'):
+            self._last_marker_publish_time = 0
+        
+        current_time = self.get_clock().now().nanoseconds / 1e9
+        if current_time - self._last_marker_publish_time > 10.0:  # 10 seconds
+            should_republish = True
+            
+        if current_line == self._last_line and not should_republish:
+            return  # No change and not time to republish
 
         self._last_line = current_line
+        self._last_marker_publish_time = current_time
 
         # Create line strip marker
         line_marker = Marker()
