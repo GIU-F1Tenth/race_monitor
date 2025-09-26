@@ -234,11 +234,16 @@ class RaceMonitor(Node):
         # Trajectory analysis settings
         self.save_trajectories = self.get_parameter('save_trajectories').value
         trajectory_output_raw = str(self.get_parameter('trajectory_output_directory').value)
-        # Save relative to the race_monitor package directory (one level up from this Python file)
+        # Save relative to the workspace directory instead of package directory
         if not os.path.isabs(trajectory_output_raw):
-            # Go up from race_monitor/race_monitor/ to race_monitor/ (the repo root)
-            repo_root = os.path.dirname(os.path.dirname(__file__))
-            self.trajectory_output_directory = os.path.join(repo_root, trajectory_output_raw)
+            # Use workspace root directory
+            workspace_root = os.environ.get('PWD', os.getcwd())
+            if 'ws' in workspace_root:
+                # Find the workspace root (directory containing 'ws')
+                ws_index = workspace_root.find('/ws')
+                if ws_index != -1:
+                    workspace_root = workspace_root[:ws_index + 3]  # Include '/ws'
+            self.trajectory_output_directory = os.path.join(workspace_root, trajectory_output_raw)
         else:
             self.trajectory_output_directory = trajectory_output_raw
 
@@ -249,11 +254,16 @@ class RaceMonitor(Node):
         # Graph generation settings
         self.auto_generate_graphs = self.get_parameter('auto_generate_graphs').value
         graph_output_raw = str(self.get_parameter('graph_output_directory').value)
-        # Save relative to the race_monitor package directory (same as trajectory output)
+        # Save relative to the workspace directory instead of package directory
         if not os.path.isabs(graph_output_raw):
-            # Go up from race_monitor/race_monitor/ to race_monitor/ (the repo root)
-            repo_root = os.path.dirname(os.path.dirname(__file__))
-            self.graph_output_directory = os.path.join(repo_root, graph_output_raw)
+            # Use workspace root directory
+            workspace_root = os.environ.get('PWD', os.getcwd())
+            if 'ws' in workspace_root:
+                # Find the workspace root (directory containing 'ws')
+                ws_index = workspace_root.find('/ws')
+                if ws_index != -1:
+                    workspace_root = workspace_root[:ws_index + 3]  # Include '/ws'
+            self.graph_output_directory = os.path.join(workspace_root, graph_output_raw)
         else:
             self.graph_output_directory = graph_output_raw
         self.graph_formats = self.get_parameter('graph_formats').value
@@ -648,6 +658,10 @@ class RaceMonitor(Node):
         self.race_running_pub = self.create_publisher(Bool, '/race_monitor/race_running', 10)
         self.start_line_marker_pub = self.create_publisher(Marker, '/race_monitor/start_line_marker', 10)
         self.race_state_pub = self.create_publisher(String, '/race_monitor/state', 10)
+        
+        # Add raceline visualization publisher
+        from visualization_msgs.msg import MarkerArray
+        self.raceline_marker_pub = self.create_publisher(MarkerArray, '/race_monitor/raceline_markers', 10)
 
         # EVO publishers (only if enabled)
         if self.enable_trajectory_evaluation and EVO_AVAILABLE:
@@ -674,6 +688,7 @@ class RaceMonitor(Node):
         # Timers
         self.status_timer = self.create_timer(0.1, self.publish_race_status)
         self.marker_timer = self.create_timer(1.0, self.publish_start_line_marker)
+        self.raceline_marker_timer = self.create_timer(2.0, self.publish_raceline_markers)
 
         # EVO evaluation timer (only if enabled)
         if self.enable_trajectory_evaluation and EVO_AVAILABLE:
@@ -715,19 +730,48 @@ class RaceMonitor(Node):
             return
 
         try:
-            if self.reference_trajectory_file.endswith('.txt'):
-                # Assume TUM format
+            if self.reference_trajectory_format == 'tum':
                 self.reference_trajectory = file_interface.read_tum_trajectory_file(
                     self.reference_trajectory_file)
-            elif self.reference_trajectory_file.endswith('.csv'):
-                # Assume KITTI format
+            elif self.reference_trajectory_format == 'kitti':
                 self.reference_trajectory = file_interface.read_kitti_poses_file(
                     self.reference_trajectory_file)
+            elif self.reference_trajectory_format == 'csv':
+                # Load CSV format (x, y, v, theta) and convert to EVO format
+                data = np.loadtxt(self.reference_trajectory_file, delimiter=',', skiprows=1)
+                x = data[:, 0]
+                y = data[:, 1] 
+                v = data[:, 2] if data.shape[1] > 2 else np.zeros_like(x)
+                theta = data[:, 3] if data.shape[1] > 3 else np.zeros_like(x)
+
+                # Convert to EVO trajectory format
+                timestamps = np.arange(len(x)) * 0.1  # Assuming 10Hz sampling
+
+                # Convert to quaternions (assuming 2D motion)
+                z = np.zeros_like(x)
+                qx = np.zeros_like(x)
+                qy = np.zeros_like(x)
+                qz = np.sin(theta / 2)
+                qw = np.cos(theta / 2)
+
+                # Create EVO trajectory
+                self.reference_trajectory = trajectory.PoseTrajectory3D(
+                    positions_xyz=np.column_stack([x, y, z]),
+                    orientations_quat_wxyz=np.column_stack([qw, qx, qy, qz]),
+                    timestamps=timestamps
+                )
             else:
-                self.get_logger().warn(f"Unsupported reference trajectory format: {self.reference_trajectory_file}")
+                self.get_logger().warn(f"Unsupported reference trajectory format: {self.reference_trajectory_format}")
                 return
 
-            self.get_logger().info(f"Loaded reference trajectory with {len(self.reference_trajectory.poses)} poses")
+            # Check the actual attribute name for EVO trajectory
+            if hasattr(self.reference_trajectory, 'poses'):
+                num_poses = len(self.reference_trajectory.poses)
+            elif hasattr(self.reference_trajectory, 'positions_xyz'):
+                num_poses = len(self.reference_trajectory.positions_xyz)
+            else:
+                num_poses = 'unknown'
+            self.get_logger().info(f"Loaded reference trajectory with {num_poses} poses")
         except Exception as e:
             self.get_logger().error(f"Failed to load reference trajectory: {e}")
 
@@ -1722,6 +1766,190 @@ class RaceMonitor(Node):
         # Calculate line length for logging
         line_length = np.linalg.norm(self.start_line_p2 - self.start_line_p1)
         self.get_logger().info(f"Published start line (length: {line_length:.2f}m) in frame '{self.frame_id}'")
+
+    def publish_raceline_markers(self):
+        """Publish raceline visualization markers from reference trajectory"""
+        if not hasattr(self, 'raceline_marker_pub'):
+            return
+            
+        # Try to get reference trajectory from different sources
+        ref_trajectory = None
+        
+        # First, try to get from evo_plotter
+        if hasattr(self, 'evo_plotter') and self.evo_plotter and hasattr(self.evo_plotter, 'reference_trajectory'):
+            ref_trajectory = self.evo_plotter.reference_trajectory
+        
+        # If not available, try to load from file
+        elif hasattr(self, 'reference_trajectory_file') and self.reference_trajectory_file:
+            if os.path.exists(self.reference_trajectory_file):
+                try:
+                    # Load reference trajectory directly
+                    if self.reference_trajectory_file.endswith('.csv'):
+                        # Load CSV format (x, y, v, theta)
+                        data = np.loadtxt(self.reference_trajectory_file, delimiter=',', skiprows=1)
+                        if data.size > 0 and len(data.shape) == 2 and data.shape[1] >= 2:
+                            self._publish_raceline_from_csv_data(data)
+                            return
+                    elif EVO_AVAILABLE:
+                        # Try EVO loading
+                        if self.reference_trajectory_file.endswith('.txt'):
+                            ref_trajectory = file_interface.read_tum_trajectory_file(self.reference_trajectory_file)
+                        elif self.reference_trajectory_file.endswith('.csv'):
+                            ref_trajectory = file_interface.read_kitti_poses_file(self.reference_trajectory_file)
+                except Exception as e:
+                    # Don't log error too frequently
+                    if not hasattr(self, '_last_raceline_error_time') or time.time() - self._last_raceline_error_time > 10.0:
+                        self.get_logger().warn(f"Could not load reference trajectory for visualization: {e}")
+                        self._last_raceline_error_time = time.time()
+                    return
+        
+        # Publish markers from EVO trajectory
+        if ref_trajectory and hasattr(ref_trajectory, 'positions_xyz'):
+            self._publish_raceline_from_evo_trajectory(ref_trajectory)
+
+    def _publish_raceline_from_csv_data(self, data):
+        """Publish raceline markers from CSV data (x, y, v, theta)"""
+        from visualization_msgs.msg import MarkerArray
+        from geometry_msgs.msg import Point
+        
+        marker_array = MarkerArray()
+        
+        # Create line strip marker for the raceline
+        line_marker = Marker()
+        line_marker.header.stamp = self.get_clock().now().to_msg()
+        line_marker.header.frame_id = self.frame_id
+        line_marker.ns = 'raceline'
+        line_marker.id = 0
+        line_marker.type = Marker.LINE_STRIP
+        line_marker.action = Marker.ADD
+        
+        # Line properties
+        line_marker.scale.x = 0.05  # Line width
+        line_marker.scale.y = 0.05
+        line_marker.scale.z = 0.05
+        
+        # Blue color for raceline
+        line_marker.color.r = 0.0
+        line_marker.color.g = 0.0
+        line_marker.color.b = 1.0
+        line_marker.color.a = 0.8
+        
+        # Add points to the line strip
+        for i in range(len(data)):
+            if len(data[i]) >= 2:  # Ensure we have at least x, y
+                pt = Point()
+                pt.x = float(data[i][0])
+                pt.y = float(data[i][1])
+                pt.z = 0.01  # Slightly above ground
+                line_marker.points.append(pt)
+        
+        marker_array.markers.append(line_marker)
+        
+        # Add start point marker
+        if len(data) > 0:
+            start_marker = Marker()
+            start_marker.header.stamp = self.get_clock().now().to_msg()
+            start_marker.header.frame_id = self.frame_id
+            start_marker.ns = 'raceline'
+            start_marker.id = 1
+            start_marker.type = Marker.SPHERE
+            start_marker.action = Marker.ADD
+            
+            start_marker.pose.position.x = float(data[0][0])
+            start_marker.pose.position.y = float(data[0][1])
+            start_marker.pose.position.z = 0.05
+            start_marker.pose.orientation.w = 1.0
+            
+            start_marker.scale.x = 0.2
+            start_marker.scale.y = 0.2
+            start_marker.scale.z = 0.2
+            
+            # Green color for start
+            start_marker.color.r = 0.0
+            start_marker.color.g = 1.0
+            start_marker.color.b = 0.0
+            start_marker.color.a = 0.8
+            
+            marker_array.markers.append(start_marker)
+        
+        self.raceline_marker_pub.publish(marker_array)
+        
+        # Log only once or every 30 seconds
+        if not hasattr(self, '_last_raceline_log_time') or time.time() - self._last_raceline_log_time > 30.0:
+            self.get_logger().info(f"Published raceline with {len(data)} points")
+            self._last_raceline_log_time = time.time()
+
+    def _publish_raceline_from_evo_trajectory(self, trajectory):
+        """Publish raceline markers from EVO trajectory"""
+        from visualization_msgs.msg import MarkerArray
+        from geometry_msgs.msg import Point
+        
+        marker_array = MarkerArray()
+        
+        # Create line strip marker for the raceline
+        line_marker = Marker()
+        line_marker.header.stamp = self.get_clock().now().to_msg()
+        line_marker.header.frame_id = self.frame_id
+        line_marker.ns = 'raceline'
+        line_marker.id = 0
+        line_marker.type = Marker.LINE_STRIP
+        line_marker.action = Marker.ADD
+        
+        # Line properties
+        line_marker.scale.x = 0.05  # Line width
+        line_marker.scale.y = 0.05
+        line_marker.scale.z = 0.05
+        
+        # Blue color for raceline
+        line_marker.color.r = 0.0
+        line_marker.color.g = 0.0
+        line_marker.color.b = 1.0
+        line_marker.color.a = 0.8
+        
+        # Add points to the line strip
+        positions = trajectory.positions_xyz
+        for pos in positions:
+            pt = Point()
+            pt.x = float(pos[0])
+            pt.y = float(pos[1])
+            pt.z = 0.01  # Slightly above ground
+            line_marker.points.append(pt)
+        
+        marker_array.markers.append(line_marker)
+        
+        # Add start point marker
+        if len(positions) > 0:
+            start_marker = Marker()
+            start_marker.header.stamp = self.get_clock().now().to_msg()
+            start_marker.header.frame_id = self.frame_id
+            start_marker.ns = 'raceline'
+            start_marker.id = 1
+            start_marker.type = Marker.SPHERE
+            start_marker.action = Marker.ADD
+            
+            start_marker.pose.position.x = float(positions[0][0])
+            start_marker.pose.position.y = float(positions[0][1])
+            start_marker.pose.position.z = 0.05
+            start_marker.pose.orientation.w = 1.0
+            
+            start_marker.scale.x = 0.2
+            start_marker.scale.y = 0.2
+            start_marker.scale.z = 0.2
+            
+            # Green color for start
+            start_marker.color.r = 0.0
+            start_marker.color.g = 1.0
+            start_marker.color.b = 0.0
+            start_marker.color.a = 0.8
+            
+            marker_array.markers.append(start_marker)
+        
+        self.raceline_marker_pub.publish(marker_array)
+        
+        # Log only once or every 30 seconds
+        if not hasattr(self, '_last_raceline_log_time') or time.time() - self._last_raceline_log_time > 30.0:
+            self.get_logger().info(f"Published raceline with {len(positions)} points")
+            self._last_raceline_log_time = time.time()
 
     def save_results_to_csv(self, total_race_time):
         try:

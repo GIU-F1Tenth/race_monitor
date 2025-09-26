@@ -218,15 +218,27 @@ class ResearchTrajectoryEvaluator:
                     self.logger.error(f"Error applying motion filtering: {e}")
                     # Continue without filtering if there's an error
 
-            # Apply distance filtering
+            # Apply distance filtering (using alternative approach since filter_pairs_by_distance is not available)
             if 'distance' in self.config.get('filter_types', []):
                 distance_threshold = self.config.get('filter_parameters', {}).get('distance_threshold', 0.05)
-                # Create pairs for distance filtering
-                id_pairs = filters.filter_pairs_by_distance(poses_se3, distance_threshold)
-                # Extract filtered poses
-                filtered_indices = list(set([pair[0] for pair in id_pairs] + [pair[1] for pair in id_pairs]))
-                filtered_indices.sort()
-                poses_se3 = [poses_se3[i] for i in filtered_indices]
+                try:
+                    # Alternative distance filtering approach
+                    filtered_poses = []
+                    if poses_se3:
+                        filtered_poses.append(poses_se3[0])  # Always keep first pose
+                        last_pos = poses_se3[0][:3, 3]
+                        
+                        for pose in poses_se3[1:]:
+                            current_pos = pose[:3, 3]
+                            distance = np.linalg.norm(current_pos - last_pos)
+                            if distance >= distance_threshold:
+                                filtered_poses.append(pose)
+                                last_pos = current_pos
+                        
+                        poses_se3 = filtered_poses
+                except Exception as e:
+                    self.logger.error(f"Error applying distance filtering: {e}")
+                    # Continue without filtering if there's an error
 
             # Convert back to trajectory format
             filtered_positions = []
