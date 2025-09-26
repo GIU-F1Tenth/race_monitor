@@ -20,6 +20,8 @@ Usage:
 
     # With multiple odometry sources:
     ros2 launch race_monitor race_monitor.launch.py \
+        controller_name:=my_controller \
+        experiment_id:=session_001 \
         odometry_topics:='["car_state/odom", "ekf/odometry"]' \
         control_command_topics:='["drive", "cmd_vel"]' \
         enable_computational_monitoring:=true
@@ -32,6 +34,7 @@ Available Parameters:
     required_laps (int): Number of laps required to complete race
     enable_trajectory_evaluation (bool): Enable advanced trajectory analysis
     enable_computational_monitoring (bool): Enable performance monitoring
+    enable_horizon_mapper_reference (bool): Enable horizon mapper reference trajectory
     odometry_topics (list): Array of odometry topic names to monitor
     control_command_topics (list): Array of control command topics to monitor
     
@@ -45,7 +48,7 @@ Computational Monitoring Features:
     
 Output:
     The system generates comprehensive analysis data in:
-    trajectory_evaluation/research_data/{controller_name}/{experiment_id}/
+    evaluation_results/research_data/{controller_name}/{experiment_id}/
     
     Performance monitoring topics:
     /race_monitor/control_loop_latency - Control loop latency in milliseconds
@@ -147,6 +150,19 @@ def generate_launch_description():
         description='Reference trajectory format (csv, tum, kitti)'
     )
 
+    # Controller and experiment identification
+    controller_name_arg = DeclareLaunchArgument(
+        'controller_name',
+        default_value='unknown_controller',
+        description='Name of the controller being tested'
+    )
+
+    experiment_id_arg = DeclareLaunchArgument(
+        'experiment_id',
+        default_value='exp_001',
+        description='Unique identifier for this experiment session'
+    )
+
     # Trajectory analysis settings
     save_trajectories_arg = DeclareLaunchArgument(
         'save_trajectories',
@@ -156,7 +172,7 @@ def generate_launch_description():
 
     trajectory_output_directory_arg = DeclareLaunchArgument(
         'trajectory_output_directory',
-        default_value='trajectory_evaluation',
+        default_value='evaluation_results',
         description='Directory for trajectory evaluation output'
     )
 
@@ -181,7 +197,7 @@ def generate_launch_description():
 
     graph_output_directory_arg = DeclareLaunchArgument(
         'graph_output_directory',
-        default_value='trajectory_evaluation/graphs',
+        default_value='evaluation_results/graphs',
         description='Directory for graph output'
     )
 
@@ -256,7 +272,7 @@ def generate_launch_description():
     # Horizon mapper reference trajectory settings
     enable_horizon_mapper_reference_arg = DeclareLaunchArgument(
         'enable_horizon_mapper_reference',
-        default_value='false',
+        default_value='true',
         description='Whether to enable horizon mapper reference trajectory interface'
     )
 
@@ -266,24 +282,7 @@ def generate_launch_description():
         description='Topic for horizon mapper reference trajectory messages'
     )
 
-    # F1Tenth interface settings
-    enable_f1tenth_interface_arg = DeclareLaunchArgument(
-        'enable_f1tenth_interface',
-        default_value='false',
-        description='Whether to enable F1Tenth vehicle state interface'
-    )
 
-    f1tenth_vehicle_state_topic_arg = DeclareLaunchArgument(
-        'f1tenth_vehicle_state_topic',
-        default_value='/vehicle_state',
-        description='Topic for F1Tenth vehicle state messages'
-    )
-
-    f1tenth_constrained_state_topic_arg = DeclareLaunchArgument(
-        'f1tenth_constrained_state_topic',
-        default_value='/constrained_vehicle_state',
-        description='Topic for F1Tenth constrained vehicle state messages'
-    )
 
     # Computational performance monitoring parameters
     enable_computational_monitoring_arg = DeclareLaunchArgument(
@@ -380,10 +379,9 @@ def generate_launch_description():
             'enable_horizon_mapper_reference': LaunchConfiguration('enable_horizon_mapper_reference'),
             'horizon_mapper_reference_topic': LaunchConfiguration('horizon_mapper_reference_topic'),
 
-            # F1Tenth interface settings
-            'enable_f1tenth_interface': LaunchConfiguration('enable_f1tenth_interface'),
-            'f1tenth_vehicle_state_topic': LaunchConfiguration('f1tenth_vehicle_state_topic'),
-            'f1tenth_constrained_state_topic': LaunchConfiguration('f1tenth_constrained_state_topic'),
+            # Controller and experiment identification
+            'controller_name': LaunchConfiguration('controller_name'),
+            'experiment_id': LaunchConfiguration('experiment_id'),
 
             # Computational performance monitoring settings
             'enable_computational_monitoring': LaunchConfiguration('enable_computational_monitoring'),
@@ -430,9 +428,8 @@ def generate_launch_description():
         generate_metrics_plots_arg,
         enable_horizon_mapper_reference_arg,
         horizon_mapper_reference_topic_arg,
-        enable_f1tenth_interface_arg,
-        f1tenth_vehicle_state_topic_arg,
-        f1tenth_constrained_state_topic_arg,
+        controller_name_arg,
+        experiment_id_arg,
         enable_computational_monitoring_arg,
         odometry_topics_arg,
         control_command_topics_arg,
