@@ -1610,6 +1610,18 @@ class RaceMonitor(Node):
             self.start_line_p1 = new_p1
             self.start_line_p2 = new_p2
 
+            # Reset lap detection state when start line changes
+            if hasattr(self, 'last_side_of_line'):
+                delattr(self, 'last_side_of_line')
+            
+            # Optionally reset race state for a fresh start with new line
+            # Uncomment the following lines if you want to reset the race when line changes
+            # self.race_started = False
+            # self.race_running = False
+            # self.lap_count = 0
+            # self.lap_times = []
+            # self.last_crossing_time = None
+
             # Clear pending point
             self.pending_point = None
 
@@ -1618,6 +1630,7 @@ class RaceMonitor(Node):
             self.get_logger().info(
                 f"Start/finish line updated: P1=({new_p1[0]:.3f}, {new_p1[1]:.3f}), "
                 f"P2=({new_p2[0]:.3f}, {new_p2[1]:.3f}), length={line_length:.3f}m")
+            self.get_logger().info("Lap detection state reset for new start line")
 
     def control_command_callback(self, msg, topic_name='drive'):
         """Callback for control command messages (computational monitoring)"""
