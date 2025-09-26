@@ -126,6 +126,12 @@ class RaceMonitor(Node):
         if not self.has_parameter('frame_id'):
             self.declare_parameter('frame_id', 'map')
 
+        # Controller and experiment identification parameters
+        if not self.has_parameter('controller_name'):
+            self.declare_parameter('controller_name', 'unknown_controller')
+        if not self.has_parameter('experiment_id'):
+            self.declare_parameter('experiment_id', 'exp_001')
+
         # EVO integration parameters
         if not self.has_parameter('enable_trajectory_evaluation'):
             self.declare_parameter('enable_trajectory_evaluation', True)
@@ -183,6 +189,16 @@ class RaceMonitor(Node):
         if not self.has_parameter('generate_metrics_plots'):
             self.declare_parameter('generate_metrics_plots', True)
 
+        # Plot configuration settings
+        if not self.has_parameter('plot_figsize'):
+            self.declare_parameter('plot_figsize', [12.0, 8.0])
+        if not self.has_parameter('plot_dpi'):
+            self.declare_parameter('plot_dpi', 300)
+        if not self.has_parameter('plot_style'):
+            self.declare_parameter('plot_style', 'seaborn')
+        if not self.has_parameter('plot_color_scheme'):
+            self.declare_parameter('plot_color_scheme', 'viridis')
+
         # Computational Performance Monitoring parameters
         if not self.has_parameter('enable_computational_monitoring'):
             self.declare_parameter('enable_computational_monitoring', True)
@@ -218,6 +234,10 @@ class RaceMonitor(Node):
         self.debounce_time = float(self.get_parameter('debounce_time').value)
         self.output_file = str(self.get_parameter('output_file').value)
         self.frame_id = str(self.get_parameter('frame_id').value)
+
+        # Controller and experiment identification
+        self.controller_name = str(self.get_parameter('controller_name').value)
+        self.experiment_id = str(self.get_parameter('experiment_id').value)
 
         # EVO parameters
         self.enable_trajectory_evaluation = self.get_parameter('enable_trajectory_evaluation').value
@@ -275,6 +295,12 @@ class RaceMonitor(Node):
         self.generate_speed_plots = self.get_parameter('generate_speed_plots').value
         self.generate_error_plots = self.get_parameter('generate_error_plots').value
         self.generate_metrics_plots = self.get_parameter('generate_metrics_plots').value
+
+        # Plot configuration settings
+        self.plot_figsize = self.get_parameter('plot_figsize').value
+        self.plot_dpi = self.get_parameter('plot_dpi').value
+        self.plot_style = str(self.get_parameter('plot_style').value)
+        self.plot_color_scheme = str(self.get_parameter('plot_color_scheme').value)
 
         # Computational Performance Monitoring parameters
         self.enable_computational_monitoring = self.get_parameter('enable_computational_monitoring').value
@@ -480,10 +506,10 @@ class RaceMonitor(Node):
                     'generate_speed_plots': self.generate_speed_plots,
                     'generate_error_plots': self.generate_error_plots,
                     'generate_metrics_plots': self.generate_metrics_plots,
-                    'plot_figsize': [12.0, 8.0],
-                    'plot_dpi': 300,
-                    'plot_style': 'seaborn',
-                    'plot_color_scheme': 'viridis'
+                    'plot_figsize': self.plot_figsize,
+                    'plot_dpi': self.plot_dpi,
+                    'plot_style': self.plot_style,
+                    'plot_color_scheme': self.plot_color_scheme
                 }
                 self.evo_plotter = EVOPlotter(plotter_config)
                 self.get_logger().info("EVO plotter initialized successfully")
@@ -1869,32 +1895,7 @@ class RaceMonitor(Node):
         
         marker_array.markers.append(line_marker)
         
-        # Add start point marker
-        if len(data) > 0:
-            start_marker = Marker()
-            start_marker.header.stamp = self.get_clock().now().to_msg()
-            start_marker.header.frame_id = self.frame_id
-            start_marker.ns = 'raceline'
-            start_marker.id = 1
-            start_marker.type = Marker.SPHERE
-            start_marker.action = Marker.ADD
-            
-            start_marker.pose.position.x = float(data[0][0])
-            start_marker.pose.position.y = float(data[0][1])
-            start_marker.pose.position.z = 0.05
-            start_marker.pose.orientation.w = 1.0
-            
-            start_marker.scale.x = 0.2
-            start_marker.scale.y = 0.2
-            start_marker.scale.z = 0.2
-            
-            # Green color for start
-            start_marker.color.r = 0.0
-            start_marker.color.g = 1.0
-            start_marker.color.b = 0.0
-            start_marker.color.a = 0.8
-            
-            marker_array.markers.append(start_marker)
+        # Note: Start point marker removed to avoid visualization confusion
         
         self.raceline_marker_pub.publish(marker_array)
         
@@ -1941,32 +1942,7 @@ class RaceMonitor(Node):
         
         marker_array.markers.append(line_marker)
         
-        # Add start point marker
-        if len(positions) > 0:
-            start_marker = Marker()
-            start_marker.header.stamp = self.get_clock().now().to_msg()
-            start_marker.header.frame_id = self.frame_id
-            start_marker.ns = 'raceline'
-            start_marker.id = 1
-            start_marker.type = Marker.SPHERE
-            start_marker.action = Marker.ADD
-            
-            start_marker.pose.position.x = float(positions[0][0])
-            start_marker.pose.position.y = float(positions[0][1])
-            start_marker.pose.position.z = 0.05
-            start_marker.pose.orientation.w = 1.0
-            
-            start_marker.scale.x = 0.2
-            start_marker.scale.y = 0.2
-            start_marker.scale.z = 0.2
-            
-            # Green color for start
-            start_marker.color.r = 0.0
-            start_marker.color.g = 1.0
-            start_marker.color.b = 0.0
-            start_marker.color.a = 0.8
-            
-            marker_array.markers.append(start_marker)
+        # Note: Start point marker removed to avoid visualization confusion
         
         self.raceline_marker_pub.publish(marker_array)
         
