@@ -253,3 +253,5 @@ __marimo__/
 log/
 .vscode/
 data/
+trajectory_evaluation/
+evaluation_results/
