@@ -23,7 +23,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'race_monitor = race_monitor.race_monitor:main',
+            'race_monitor = race_monitor.lap_timing_monitor:main',
         ],
     },
 )
