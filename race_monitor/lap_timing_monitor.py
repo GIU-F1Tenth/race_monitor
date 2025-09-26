@@ -90,7 +90,14 @@ try:
     RESEARCH_EVALUATOR_AVAILABLE = True
 except ImportError:
     RESEARCH_EVALUATOR_AVAILABLE = False
-    print("Warning: EVO plotter not available. Graph generation will be disabled.")
+    print("Warning: Research evaluator not available. Advanced analysis will be disabled.")
+
+try:
+    from .race_evaluator import RaceEvaluator, create_race_evaluator
+    RACE_EVALUATOR_AVAILABLE = True
+except ImportError:
+    RACE_EVALUATOR_AVAILABLE = False
+    print("Warning: Race evaluator not available. Custom race evaluation will be disabled.")
 
 
 class RaceMonitor(Node):
@@ -227,6 +234,18 @@ class RaceMonitor(Node):
         if not self.has_parameter('performance_log_interval'):
             self.declare_parameter('performance_log_interval', 1.0)  # seconds
 
+        # Race Evaluation System parameters
+        if not self.has_parameter('enable_race_evaluation'):
+            self.declare_parameter('enable_race_evaluation', True)
+        if not self.has_parameter('grading_strictness'):
+            self.declare_parameter('grading_strictness', 'normal')  # strict, normal, lenient
+        if not self.has_parameter('enable_recommendations'):
+            self.declare_parameter('enable_recommendations', True)
+        if not self.has_parameter('enable_comparison'):
+            self.declare_parameter('enable_comparison', True)
+        if not self.has_parameter('auto_increment_experiment'):
+            self.declare_parameter('auto_increment_experiment', True)
+
         # Read parameters
         self.start_line_p1 = np.array(self.get_parameter('start_line_p1').value, dtype=float)
         self.start_line_p2 = np.array(self.get_parameter('start_line_p2').value, dtype=float)
@@ -282,6 +301,13 @@ class RaceMonitor(Node):
 
         # Computational Performance Monitoring parameters
         self.enable_computational_monitoring = self.get_parameter('enable_computational_monitoring').value
+
+        # Race Evaluation System parameters
+        self.enable_race_evaluation = self.get_parameter('enable_race_evaluation').value
+        self.grading_strictness = str(self.get_parameter('grading_strictness').value)
+        self.enable_recommendations = self.get_parameter('enable_recommendations').value
+        self.enable_comparison = self.get_parameter('enable_comparison').value
+        self.auto_increment_experiment = self.get_parameter('auto_increment_experiment').value
 
         # Get multiple topics configuration with simplified string-based approach
         try:
@@ -542,6 +568,31 @@ class RaceMonitor(Node):
             else:
                 self.get_logger().warn("Research Evaluator not available")
                 self.research_evaluator = None
+
+        # Initialize Race Evaluator (only if enabled)
+        self.race_evaluator = None
+        if self.enable_race_evaluation and RACE_EVALUATOR_AVAILABLE:
+            self.get_logger().info("Initializing Custom Race Evaluator...")
+            race_eval_config = {
+                'controller_name': self.controller_name,
+                'trajectory_output_directory': self.trajectory_output_directory,
+                'grading_strictness': self.grading_strictness,
+                'enable_recommendations': self.enable_recommendations,
+                'enable_comparison': self.enable_comparison,
+                'auto_increment_experiment': self.auto_increment_experiment
+            }
+            
+            try:
+                self.race_evaluator = create_race_evaluator(race_eval_config)
+                self.get_logger().info(f"Race Evaluator initialized with {self.grading_strictness} grading")
+            except Exception as e:
+                self.get_logger().error(f"Failed to initialize Race Evaluator: {e}")
+                self.race_evaluator = None
+        else:
+            if not self.enable_race_evaluation:
+                self.get_logger().info("Race Evaluation DISABLED")
+            else:
+                self.get_logger().warn("Race Evaluator not available")
 
         # Clicked point handling
         self.pending_point = None  # holds first clicked point until second is given
@@ -1025,6 +1076,57 @@ class RaceMonitor(Node):
                                 self.get_logger().info(f"Controller: {summary['experiment_info']['controller_name']}")
                             except Exception as e:
                                 self.get_logger().error(f"Error exporting research data: {e}")
+
+                        # Generate custom race evaluation
+                        if hasattr(self, 'race_evaluator') and self.race_evaluator:
+                            self.get_logger().info("Generating custom race evaluation...")
+                            try:
+                                # Get research data if available
+                                research_data = {}
+                                if hasattr(self, 'research_evaluator') and self.research_evaluator:
+                                    research_data = self.research_evaluator.generate_research_summary()
+
+                                # Get EVO metrics if available
+                                evo_metrics = {}
+                                if hasattr(self, 'lap_metrics') and self.lap_metrics:
+                                    # Combine all lap metrics for overall evaluation
+                                    for lap_num, lap_data in self.lap_metrics.items():
+                                        for key, value in lap_data.items():
+                                            if key not in evo_metrics:
+                                                evo_metrics[key] = []
+                                            evo_metrics[key].append(value)
+                                    
+                                    # Calculate averages for EVO metrics
+                                    for key, values in evo_metrics.items():
+                                        if values and isinstance(values[0], (int, float)):
+                                            evo_metrics[f'{key}_mean'] = sum(values) / len(values)
+                                            evo_metrics[f'{key}_std'] = (sum((x - evo_metrics[f'{key}_mean'])**2 for x in values) / len(values)) ** 0.5
+                                            evo_metrics[f'{key}_max'] = max(values)
+                                            evo_metrics[f'{key}_min'] = min(values)
+
+                                # Create and save race evaluation
+                                race_evaluation = self.race_evaluator.create_race_evaluation(research_data, evo_metrics)
+                                evaluation_filepath = self.race_evaluator.save_race_evaluation(race_evaluation)
+                                
+                                # Log summary
+                                eval_data = race_evaluation['race_evaluation']
+                                overall_grade = eval_data['performance_summary']['overall_grade']
+                                score = eval_data['performance_summary']['numerical_score']
+                                experiment_id = eval_data['metadata']['experiment_id']
+                                
+                                self.get_logger().info(f"Race evaluation saved: {evaluation_filepath}")
+                                self.get_logger().info(f"Overall Grade: {overall_grade} (Score: {score:.1f}/100)")
+                                self.get_logger().info(f"Experiment ID: {experiment_id}")
+                                
+                                # Log top recommendations
+                                recommendations = eval_data.get('recommendations', [])
+                                if recommendations:
+                                    self.get_logger().info("Top recommendations:")
+                                    for i, rec in enumerate(recommendations[:3], 1):
+                                        self.get_logger().info(f"  {i}. {rec}")
+
+                            except Exception as e:
+                                self.get_logger().error(f"Error generating race evaluation: {e}")
 
                         # Generate all EVO plots if plotter is available (only once when race finishes)
                         if self.evo_plotter and not self.evo_plots_generated:
