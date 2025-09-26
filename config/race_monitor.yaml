@@ -59,7 +59,7 @@ race_monitor:
     reference_trajectory_format: "csv" # csv, tum, kitti
 
     # Horizon mapper interface (real-time reference trajectory)
-    enable_horizon_mapper_reference: true
+    enable_horizon_mapper_reference: false
     horizon_mapper_reference_topic: "/horizon_mapper/reference_trajectory"
 
     # Use complete reference path instead of reference trajectory points
