@@ -234,10 +234,11 @@ class RaceMonitor(Node):
         # Trajectory analysis settings
         self.save_trajectories = self.get_parameter('save_trajectories').value
         trajectory_output_raw = str(self.get_parameter('trajectory_output_directory').value)
-        # Resolve relative paths to be relative to the package directory
+        # Save relative to the race_monitor package directory (one level up from this Python file)
         if not os.path.isabs(trajectory_output_raw):
-            package_dir = os.path.dirname(os.path.dirname(__file__))  # Go up to race_monitor package root
-            self.trajectory_output_directory = os.path.join(package_dir, trajectory_output_raw)
+            # Go up from race_monitor/race_monitor/ to race_monitor/ (the repo root)
+            repo_root = os.path.dirname(os.path.dirname(__file__))
+            self.trajectory_output_directory = os.path.join(repo_root, trajectory_output_raw)
         else:
             self.trajectory_output_directory = trajectory_output_raw
 
@@ -248,10 +249,11 @@ class RaceMonitor(Node):
         # Graph generation settings
         self.auto_generate_graphs = self.get_parameter('auto_generate_graphs').value
         graph_output_raw = str(self.get_parameter('graph_output_directory').value)
-        # Resolve relative paths to be relative to the package directory
+        # Save relative to the race_monitor package directory (same as trajectory output)
         if not os.path.isabs(graph_output_raw):
-            package_dir = os.path.dirname(os.path.dirname(__file__))  # Go up to race_monitor package root
-            self.graph_output_directory = os.path.join(package_dir, graph_output_raw)
+            # Go up from race_monitor/race_monitor/ to race_monitor/ (the repo root)
+            repo_root = os.path.dirname(os.path.dirname(__file__))
+            self.graph_output_directory = os.path.join(repo_root, graph_output_raw)
         else:
             self.graph_output_directory = graph_output_raw
         self.graph_formats = self.get_parameter('graph_formats').value
@@ -506,7 +508,7 @@ class RaceMonitor(Node):
                     'pose_relations': ['translation_part', 'rotation_part', 'full_transformation'],
                     'statistics_types': ['rmse', 'mean', 'median', 'std', 'min', 'max', 'sse'],
                     'filter_types': ['motion', 'distance'],
-                    'filter_parameters': {'motion_threshold': 0.1, 'distance_threshold': 0.05},
+                    'filter_parameters': {'motion_threshold': 0.1, 'angle_threshold': 0.1, 'distance_threshold': 0.05},
                     'output_formats': ['json', 'csv', 'pickle']
                 }
 
