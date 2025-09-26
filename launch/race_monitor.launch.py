@@ -62,8 +62,10 @@ License: MIT License
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+import os
 
 
 def generate_launch_description():
@@ -327,116 +329,41 @@ def generate_launch_description():
         description='Performance logging interval in seconds'
     )
 
+    # Configuration file path
+    config_file_arg = DeclareLaunchArgument(
+        'config_file',
+        default_value=PathJoinSubstitution([
+            FindPackageShare('race_monitor'),
+            'config',
+            'race_monitor.yaml'
+        ]),
+        description='Path to the race monitor configuration file'
+    )
+
     # Single integrated Race Monitor Node
     race_monitor_node = Node(
         package='race_monitor',
         executable='race_monitor',
         name='race_monitor',
         output='screen',
-        parameters=[{
-            # Race monitoring parameters
-            'start_line_p1': LaunchConfiguration('start_line_p1'),
-            'start_line_p2': LaunchConfiguration('start_line_p2'),
-            'required_laps': LaunchConfiguration('required_laps'),
-            'debounce_time': LaunchConfiguration('debounce_time'),
-            'output_file': LaunchConfiguration('output_file'),
-            'frame_id': LaunchConfiguration('frame_id'),
-
-            # EVO integration parameters
-            'enable_trajectory_evaluation': LaunchConfiguration('enable_trajectory_evaluation'),
-            'evaluation_interval_seconds': LaunchConfiguration('evaluation_interval_seconds'),
-            'evaluation_interval_laps': LaunchConfiguration('evaluation_interval_laps'),
-            'evaluation_interval_meters': LaunchConfiguration('evaluation_interval_meters'),
-
-            # Reference trajectory configuration
-            'reference_trajectory_file': LaunchConfiguration('reference_trajectory_file'),
-            'reference_trajectory_format': LaunchConfiguration('reference_trajectory_format'),
-
-            # Trajectory analysis settings
-            'save_trajectories': LaunchConfiguration('save_trajectories'),
-            'trajectory_output_directory': LaunchConfiguration('trajectory_output_directory'),
-            'evaluate_smoothness': LaunchConfiguration('evaluate_smoothness'),
-            'evaluate_consistency': LaunchConfiguration('evaluate_consistency'),
-
-            # Graph generation settings
-            'auto_generate_graphs': LaunchConfiguration('auto_generate_graphs'),
-            'graph_output_directory': LaunchConfiguration('graph_output_directory'),
-            'graph_formats': LaunchConfiguration('graph_formats'),
-            'plot_figsize': LaunchConfiguration('plot_figsize'),
-            'plot_dpi': LaunchConfiguration('plot_dpi'),
-            'plot_style': LaunchConfiguration('plot_style'),
-            'plot_color_scheme': LaunchConfiguration('plot_color_scheme'),
-
-            # Graph types to generate
-            'generate_trajectory_plots': LaunchConfiguration('generate_trajectory_plots'),
-            'generate_xyz_plots': LaunchConfiguration('generate_xyz_plots'),
-            'generate_rpy_plots': LaunchConfiguration('generate_rpy_plots'),
-            'generate_speed_plots': LaunchConfiguration('generate_speed_plots'),
-            'generate_error_plots': LaunchConfiguration('generate_error_plots'),
-            'generate_metrics_plots': LaunchConfiguration('generate_metrics_plots'),
-
-            # Horizon mapper interface settings
-            'enable_horizon_mapper_reference': LaunchConfiguration('enable_horizon_mapper_reference'),
-            'horizon_mapper_reference_topic': LaunchConfiguration('horizon_mapper_reference_topic'),
-
-            # Controller and experiment identification
-            'controller_name': LaunchConfiguration('controller_name'),
-            'experiment_id': LaunchConfiguration('experiment_id'),
-
-            # Computational performance monitoring settings
-            'enable_computational_monitoring': LaunchConfiguration('enable_computational_monitoring'),
-            'odometry_topics': LaunchConfiguration('odometry_topics'),
-            'control_command_topics': LaunchConfiguration('control_command_topics'),
-            'monitoring_window_size': LaunchConfiguration('monitoring_window_size'),
-            'cpu_monitoring_interval': LaunchConfiguration('cpu_monitoring_interval'),
-            'enable_performance_logging': LaunchConfiguration('enable_performance_logging'),
-            'performance_log_interval': LaunchConfiguration('performance_log_interval'),
-        }]
+        parameters=[
+            LaunchConfiguration('config_file'),
+            {
+                # Allow command line overrides
+                'controller_name': LaunchConfiguration('controller_name'),
+                'experiment_id': LaunchConfiguration('experiment_id'),
+            }
+        ]
     )
 
     # Create launch description
     return LaunchDescription([
-        # Launch arguments
-        start_line_p1_arg,
-        start_line_p2_arg,
-        required_laps_arg,
-        debounce_time_arg,
-        output_file_arg,
-        frame_id_arg,
-        enable_trajectory_evaluation_arg,
-        evaluation_interval_seconds_arg,
-        evaluation_interval_laps_arg,
-        evaluation_interval_meters_arg,
-        reference_trajectory_file_arg,
-        reference_trajectory_format_arg,
-        save_trajectories_arg,
-        trajectory_output_directory_arg,
-        evaluate_smoothness_arg,
-        evaluate_consistency_arg,
-        auto_generate_graphs_arg,
-        graph_output_directory_arg,
-        graph_formats_arg,
-        plot_figsize_arg,
-        plot_dpi_arg,
-        plot_style_arg,
-        plot_color_scheme_arg,
-        generate_trajectory_plots_arg,
-        generate_xyz_plots_arg,
-        generate_rpy_plots_arg,
-        generate_speed_plots_arg,
-        generate_error_plots_arg,
-        generate_metrics_plots_arg,
-        enable_horizon_mapper_reference_arg,
-        horizon_mapper_reference_topic_arg,
+        # Configuration file argument
+        config_file_arg,
+        
+        # Most commonly overridden arguments (can override config file values)
         controller_name_arg,
         experiment_id_arg,
-        enable_computational_monitoring_arg,
-        odometry_topics_arg,
-        control_command_topics_arg,
-        monitoring_window_size_arg,
-        cpu_monitoring_interval_arg,
-        enable_performance_logging_arg,
-        performance_log_interval_arg,
 
         # Single integrated node
         race_monitor_node,
