@@ -159,7 +159,7 @@ class RaceMonitor(Node):
         if not self.has_parameter('save_trajectories'):
             self.declare_parameter('save_trajectories', True)
         if not self.has_parameter('trajectory_output_directory'):
-            self.declare_parameter('trajectory_output_directory', 'evaluation_results')
+            self.declare_parameter('trajectory_output_directory', '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results')
         if not self.has_parameter('save_horizon_reference'):
             self.declare_parameter('save_horizon_reference', True)
         if not self.has_parameter('evaluate_smoothness'):
@@ -171,7 +171,7 @@ class RaceMonitor(Node):
         if not self.has_parameter('auto_generate_graphs'):
             self.declare_parameter('auto_generate_graphs', True)
         if not self.has_parameter('graph_output_directory'):
-            self.declare_parameter('graph_output_directory', 'evaluation_results/graphs')
+            self.declare_parameter('graph_output_directory', '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs')
         if not self.has_parameter('graph_formats'):
             self.declare_parameter('graph_formats', ['png', 'pdf'])
 
@@ -253,19 +253,8 @@ class RaceMonitor(Node):
 
         # Trajectory analysis settings
         self.save_trajectories = self.get_parameter('save_trajectories').value
-        trajectory_output_raw = str(self.get_parameter('trajectory_output_directory').value)
-        # Save relative to the workspace directory instead of package directory
-        if not os.path.isabs(trajectory_output_raw):
-            # Use workspace root directory
-            workspace_root = os.environ.get('PWD', os.getcwd())
-            if 'ws' in workspace_root:
-                # Find the workspace root (directory containing 'ws')
-                ws_index = workspace_root.find('/ws')
-                if ws_index != -1:
-                    workspace_root = workspace_root[:ws_index + 3]  # Include '/ws'
-            self.trajectory_output_directory = os.path.join(workspace_root, trajectory_output_raw)
-        else:
-            self.trajectory_output_directory = trajectory_output_raw
+        self.trajectory_output_directory = str(self.get_parameter('trajectory_output_directory').value)
+        self.get_logger().info(f"Trajectory output directory: {self.trajectory_output_directory}")
 
         self.save_horizon_reference = self.get_parameter('save_horizon_reference').value
         self.evaluate_smoothness = self.get_parameter('evaluate_smoothness').value
@@ -273,19 +262,8 @@ class RaceMonitor(Node):
 
         # Graph generation settings
         self.auto_generate_graphs = self.get_parameter('auto_generate_graphs').value
-        graph_output_raw = str(self.get_parameter('graph_output_directory').value)
-        # Save relative to the workspace directory instead of package directory
-        if not os.path.isabs(graph_output_raw):
-            # Use workspace root directory
-            workspace_root = os.environ.get('PWD', os.getcwd())
-            if 'ws' in workspace_root:
-                # Find the workspace root (directory containing 'ws')
-                ws_index = workspace_root.find('/ws')
-                if ws_index != -1:
-                    workspace_root = workspace_root[:ws_index + 3]  # Include '/ws'
-            self.graph_output_directory = os.path.join(workspace_root, graph_output_raw)
-        else:
-            self.graph_output_directory = graph_output_raw
+        self.graph_output_directory = str(self.get_parameter('graph_output_directory').value)
+        self.get_logger().info(f"Graph output directory: {self.graph_output_directory}")
         self.graph_formats = self.get_parameter('graph_formats').value
 
         # Graph types to generate
@@ -855,7 +833,6 @@ class RaceMonitor(Node):
 
             # Update the reference trajectory in EVO plotter
             self.evo_plotter.update_reference_trajectory_from_horizon_mapper(reference_trajectory_data)
-            print(f"Updated complete reference path from horizon mapper with {len(reference_trajectory_data)} points")
 
             # Save horizon mapper reference path as TUM file for EVO analysis
             if (self.save_horizon_reference and not self.horizon_reference_saved and

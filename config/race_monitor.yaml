@@ -87,7 +87,7 @@ race_monitor:
 
     # Data storage
     save_trajectories: true
-    trajectory_output_directory: "trajectory_evaluation"
+    trajectory_output_directory: "/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results"
 
     # Metrics to calculate
     evaluate_smoothness: true # Calculate trajectory smoothness
@@ -114,7 +114,7 @@ race_monitor:
 
     # Enable/disable automatic graph generation
     auto_generate_graphs: true
-    graph_output_directory: "trajectory_evaluation/graphs"
+    graph_output_directory: "/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs"
     graph_formats: ["png", "pdf"] # png, pdf, svg, html
 
     # Plot appearance settings
