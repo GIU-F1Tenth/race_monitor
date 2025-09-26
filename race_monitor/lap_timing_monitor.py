@@ -5,14 +5,14 @@ Race Monitor Node
 
 A comprehensive ROS2 node for autonomous racing trajectory analysis and performance evaluation.
 Integrates with the EVO library to provide advanced trajectory evaluation, real-time lap timing,
-and performance metrics calculation for individual controller assessment.
+and research-grade performance metrics calculation.
 
 Features:
     - Real-time lap detection and timing
     - Comprehensive trajectory recording and analysis
     - Advanced metrics calculation using EVO library
     - Multi-format data export (JSON, CSV, TUM, Pickle)
-    - Performance analysis and statistical metrics
+    - Research-ready statistical analysis
     - Support for trajectory filtering and smoothing
 
 Topics:
@@ -80,13 +80,13 @@ except ImportError:
 
 # Import our enhanced EVO plotter and research evaluator
 try:
-    from .evo_plotter import EVOPlotter
+    from .visualization_engine import EVOPlotter
     EVO_PLOTTER_AVAILABLE = True
 except ImportError:
     EVO_PLOTTER_AVAILABLE = False
 
 try:
-    from .research_evaluator import ResearchTrajectoryEvaluator, create_research_evaluator
+    from .trajectory_analyzer import ResearchTrajectoryEvaluator, create_research_evaluator
     RESEARCH_EVALUATOR_AVAILABLE = True
 except ImportError:
     RESEARCH_EVALUATOR_AVAILABLE = False
@@ -94,15 +94,15 @@ except ImportError:
 
 
 class RaceMonitor(Node):
-    """Race Monitor node with integrated trajectory evaluation
+    """Enhanced Race Monitor node with integrated trajectory evaluation
 
     - Counts laps using a start/finish line set in parameters or by clicking two points in RViz
     - Tracks lap times, best/worst/average, total race time
     - Publishes live lap count and race_running flag
     - Saves results to CSV when race completes (or on shutdown)
     - Publishes a nicer visualization of the start/finish line (checkered pattern + center line)
-    - INTEGRATED: Trajectory evaluation using evo library (performance metrics, smoothness, consistency)
-    - INTEGRATED: Trajectory export in TUM format for EVO analysis
+    - INTEGRATED: Trajectory evaluation using evo library (APE, RPE, smoothness, consistency)
+    - INTEGRATED: Trajectory export in TUM format for further analysis
     """
 
     def __init__(self):
@@ -153,7 +153,7 @@ class RaceMonitor(Node):
         if not self.has_parameter('save_trajectories'):
             self.declare_parameter('save_trajectories', True)
         if not self.has_parameter('trajectory_output_directory'):
-            self.declare_parameter('trajectory_output_directory', 'trajectory_evaluation')
+            self.declare_parameter('trajectory_output_directory', 'evaluation_results')
         if not self.has_parameter('save_horizon_reference'):
             self.declare_parameter('save_horizon_reference', True)
         if not self.has_parameter('evaluate_smoothness'):
@@ -165,7 +165,7 @@ class RaceMonitor(Node):
         if not self.has_parameter('auto_generate_graphs'):
             self.declare_parameter('auto_generate_graphs', True)
         if not self.has_parameter('graph_output_directory'):
-            self.declare_parameter('graph_output_directory', 'trajectory_evaluation/graphs')
+            self.declare_parameter('graph_output_directory', 'evaluation_results/graphs')
         if not self.has_parameter('graph_formats'):
             self.declare_parameter('graph_formats', ['png', 'pdf'])
 
@@ -186,17 +186,17 @@ class RaceMonitor(Node):
         # Computational Performance Monitoring parameters
         if not self.has_parameter('enable_computational_monitoring'):
             self.declare_parameter('enable_computational_monitoring', True)
-        
+
         # Multiple odometry topics support
         if not self.has_parameter('odometry_topics'):
             # Use string list instead of dict list for ROS 2 compatibility
             self.declare_parameter('odometry_topics', ['car_state/odom'])
-        
-        # Multiple control command topics support  
+
+        # Multiple control command topics support
         if not self.has_parameter('control_command_topics'):
             # Use string list instead of dict list for ROS 2 compatibility
             self.declare_parameter('control_command_topics', ['/drive'])
-            
+
         # Legacy single topic parameters (for backward compatibility)
         if not self.has_parameter('control_command_topic'):
             self.declare_parameter('control_command_topic', '/drive')
@@ -233,14 +233,27 @@ class RaceMonitor(Node):
 
         # Trajectory analysis settings
         self.save_trajectories = self.get_parameter('save_trajectories').value
-        self.trajectory_output_directory = str(self.get_parameter('trajectory_output_directory').value)
+        trajectory_output_raw = str(self.get_parameter('trajectory_output_directory').value)
+        # Resolve relative paths to be relative to the package directory
+        if not os.path.isabs(trajectory_output_raw):
+            package_dir = os.path.dirname(os.path.dirname(__file__))  # Go up to race_monitor package root
+            self.trajectory_output_directory = os.path.join(package_dir, trajectory_output_raw)
+        else:
+            self.trajectory_output_directory = trajectory_output_raw
+
         self.save_horizon_reference = self.get_parameter('save_horizon_reference').value
         self.evaluate_smoothness = self.get_parameter('evaluate_smoothness').value
         self.evaluate_consistency = self.get_parameter('evaluate_consistency').value
 
         # Graph generation settings
         self.auto_generate_graphs = self.get_parameter('auto_generate_graphs').value
-        self.graph_output_directory = str(self.get_parameter('graph_output_directory').value)
+        graph_output_raw = str(self.get_parameter('graph_output_directory').value)
+        # Resolve relative paths to be relative to the package directory
+        if not os.path.isabs(graph_output_raw):
+            package_dir = os.path.dirname(os.path.dirname(__file__))  # Go up to race_monitor package root
+            self.graph_output_directory = os.path.join(package_dir, graph_output_raw)
+        else:
+            self.graph_output_directory = graph_output_raw
         self.graph_formats = self.get_parameter('graph_formats').value
 
         # Graph types to generate
@@ -253,7 +266,7 @@ class RaceMonitor(Node):
 
         # Computational Performance Monitoring parameters
         self.enable_computational_monitoring = self.get_parameter('enable_computational_monitoring').value
-        
+
         # Get multiple topics configuration with simplified string-based approach
         try:
             odometry_topics_param = self.get_parameter('odometry_topics').value
@@ -267,7 +280,7 @@ class RaceMonitor(Node):
                             msg_type = 'geometry_msgs/PoseWithCovarianceStamped'
                         else:
                             msg_type = 'nav_msgs/Odometry'
-                        
+
                         self.odometry_topics_config.append({
                             'topic': topic,
                             'type': msg_type,
@@ -278,7 +291,7 @@ class RaceMonitor(Node):
                         topic_name = topic.get('name', topic.get('topic', ''))
                         msg_type = topic.get('message_type', topic.get('type', 'nav_msgs/Odometry'))
                         enabled = topic.get('enabled', True)
-                        
+
                         self.odometry_topics_config.append({
                             'topic': topic_name,
                             'type': msg_type,
@@ -294,7 +307,7 @@ class RaceMonitor(Node):
             self.odometry_topics_config = [
                 {'topic': 'car_state/odom', 'type': 'nav_msgs/Odometry', 'enabled': True}
             ]
-        
+
         try:
             control_topics_param = self.get_parameter('control_command_topics').value
             if isinstance(control_topics_param, list):
@@ -307,7 +320,7 @@ class RaceMonitor(Node):
                             msg_type = 'twist'
                         else:
                             msg_type = 'ackermann'
-                        
+
                         self.control_command_topics_config.append({
                             'topic': topic,
                             'type': msg_type,
@@ -318,7 +331,7 @@ class RaceMonitor(Node):
                         topic_name = topic.get('name', topic.get('topic', ''))
                         msg_type = topic.get('message_type', topic.get('type', 'ackermann'))
                         enabled = topic.get('enabled', True)
-                        
+
                         # Convert message type to simple format
                         if 'AckermannDriveStamped' in msg_type:
                             simple_type = 'ackermann'
@@ -326,7 +339,7 @@ class RaceMonitor(Node):
                             simple_type = 'twist'
                         else:
                             simple_type = msg_type
-                        
+
                         self.control_command_topics_config.append({
                             'topic': topic_name,
                             'type': simple_type,
@@ -342,7 +355,7 @@ class RaceMonitor(Node):
             self.control_command_topics_config = [
                 {'topic': '/drive', 'type': 'ackermann', 'enabled': True}
             ]
-        
+
         # Legacy single topic support (for backward compatibility)
         self.control_command_topic = str(self.get_parameter('control_command_topic').value)
         self.control_command_type = str(self.get_parameter('control_command_type').value)
@@ -392,34 +405,35 @@ class RaceMonitor(Node):
                 self.control_loop_latencies = deque(maxlen=self.monitoring_window_size)
                 self.cpu_usage_history = deque(maxlen=self.monitoring_window_size)
                 self.memory_usage_history = deque(maxlen=self.monitoring_window_size)
-                
+
                 # Control loop timing tracking (support multiple topics)
                 self.pending_odom_timestamps = {}  # topic_name -> timestamp
                 self.last_odom_timestamp = None
                 self.last_control_timestamp = None
-                
+
                 # Performance statistics
                 self.total_control_cycles = 0
                 self.total_processing_time = 0.0
                 self.max_latency = 0.0
                 self.min_latency = float('inf')
                 self.latency_violations = 0  # Count of cycles exceeding threshold
-                
+
                 # CPU/Memory monitoring
                 self.process = psutil.Process()
                 self.system_cpu_count = psutil.cpu_count()
-                
+
                 # Performance logging
                 self.performance_log_data = []
                 self.last_performance_log_time = time.time()
-                
+
                 # Topic tracking
                 self.active_odom_topics = []
                 self.active_control_topics = []
-                
+
                 self.computational_monitoring_initialized = True
-                self.get_logger().info(f"Window size: {self.monitoring_window_size}, CPU monitoring: {self.cpu_monitoring_interval}s")
-                
+                self.get_logger().info(
+                    f"Window size: {self.monitoring_window_size}, CPU monitoring: {self.cpu_monitoring_interval}s")
+
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize computational monitoring: {e}")
                 self.enable_computational_monitoring = False
@@ -519,36 +533,36 @@ class RaceMonitor(Node):
         # Subscribers
         # Create multiple odometry subscribers based on configuration
         self.odom_subscribers = {}
-        
+
         # Always create the default odometry subscriber
         self.odom_sub = self.create_subscription(Odometry, 'car_state/odom', self.odom_callback, 20)
         self.odom_subscribers['car_state/odom'] = self.odom_sub
-        
+
         # Create additional odometry subscribers if computational monitoring is enabled
         if self.enable_computational_monitoring and self.computational_monitoring_initialized:
             for odom_config in self.odometry_topics_config:
                 if odom_config.get('enabled', False):
                     topic = odom_config['topic']
                     msg_type = odom_config['type']
-                    
+
                     # Skip if already created
                     if topic in self.odom_subscribers:
                         continue
-                    
+
                     if msg_type == 'nav_msgs/Odometry':
-                        callback = lambda msg, topic_name=topic: self.odom_callback(msg, topic_name)
+                        def callback(msg, topic_name=topic): return self.odom_callback(msg, topic_name)
                         sub = self.create_subscription(Odometry, topic, callback, 20)
                     elif msg_type == 'geometry_msgs/PoseWithCovarianceStamped':
-                        callback = lambda msg, topic_name=topic: self.pose_with_cov_callback(msg, topic_name)
+                        def callback(msg, topic_name=topic): return self.pose_with_cov_callback(msg, topic_name)
                         sub = self.create_subscription(PoseWithCovarianceStamped, topic, callback, 20)
                     else:
                         self.get_logger().warn(f"Unsupported odometry message type: {msg_type} for topic {topic}")
                         continue
-                    
+
                     self.odom_subscribers[topic] = sub
                     self.active_odom_topics.append(topic)
                     self.get_logger().info(f"Subscribed to odometry topic: {topic} ({msg_type})")
-        
+
         # Clicked point subscriber
         self.clicked_point_sub = self.create_subscription(
             PointStamped, '/clicked_point', self.clicked_point_callback, 10)
@@ -561,38 +575,39 @@ class RaceMonitor(Node):
                 if control_config.get('enabled', False):
                     topic = control_config['topic']
                     cmd_type = control_config['type']
-                    
+
                     if cmd_type == 'ackermann':
-                        callback = lambda msg, topic_name=topic: self.control_command_callback(msg, topic_name)
+                        def callback(msg, topic_name=topic): return self.control_command_callback(msg, topic_name)
                         sub = self.create_subscription(AckermannDriveStamped, topic, callback, 20)
                     elif cmd_type == 'twist':
-                        callback = lambda msg, topic_name=topic: self.control_command_callback(msg, topic_name)
+                        def callback(msg, topic_name=topic): return self.control_command_callback(msg, topic_name)
                         sub = self.create_subscription(Twist, topic, callback, 20)
                     else:
                         self.get_logger().warn(f"Unsupported control command type: {cmd_type} for topic {topic}")
                         continue
-                    
+
                     self.control_subscribers[topic] = sub
                     self.active_control_topics.append(topic)
                     self.get_logger().info(f"Subscribed to control topic: {topic} ({cmd_type})")
-            
+
             # Fallback to legacy single topic if no topics are configured
             if not self.active_control_topics:
                 if self.control_command_type == 'ackermann':
                     self.control_sub = self.create_subscription(
-                        AckermannDriveStamped, self.control_command_topic, 
+                        AckermannDriveStamped, self.control_command_topic,
                         lambda msg: self.control_command_callback(msg, self.control_command_topic), 20)
                 elif self.control_command_type == 'twist':
                     self.control_sub = self.create_subscription(
-                        Twist, self.control_command_topic, 
+                        Twist, self.control_command_topic,
                         lambda msg: self.control_command_callback(msg, self.control_command_topic), 20)
                 else:
                     self.get_logger().warn(f"Unsupported control command type: {self.control_command_type}")
                     self.enable_computational_monitoring = False
-                
+
                 if self.enable_computational_monitoring:
                     self.active_control_topics.append(self.control_command_topic)
-                    self.get_logger().info(f"Using legacy control topic: {self.control_command_topic} ({self.control_command_type})")
+                    self.get_logger().info(
+                        f"Using legacy control topic: {self.control_command_topic} ({self.control_command_type})")
 
         # Horizon mapper reference trajectory subscriber (for EVO analysis)
         if not self.has_parameter('enable_horizon_mapper_reference'):
@@ -784,7 +799,7 @@ class RaceMonitor(Node):
             self.odom_receive_times.append(current_time)
             # Store timestamp per topic to handle multiple odometry sources
             self.pending_odom_timestamps[topic_name] = current_time
-            
+
         # Update position tracking for lap detection (use primary topic)
         if topic_name == 'car_state/odom' or not self.position_initialized:
             self.current_position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
@@ -826,7 +841,7 @@ class RaceMonitor(Node):
         odom_msg = Odometry()
         odom_msg.header = msg.header
         odom_msg.pose = msg.pose
-        
+
         # Call the regular odometry callback
         self.odom_callback(odom_msg, topic_name)
 
@@ -1043,31 +1058,32 @@ class RaceMonitor(Node):
             positions = []
             orientations = []
             timestamps = []
-            
+
             for pose in poses:
                 timestamp = pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
                 timestamps.append(timestamp)
                 positions.append([pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z])
                 orientations.append([pose['pose'].orientation.w, pose['pose'].orientation.x,
-                                   pose['pose'].orientation.y, pose['pose'].orientation.z])
-            
+                                     pose['pose'].orientation.y, pose['pose'].orientation.z])
+
             # Remove duplicate timestamps by keeping only unique consecutive timestamps
             filtered_positions = []
             filtered_orientations = []
             filtered_timestamps = []
-            
+
             for i in range(len(timestamps)):
                 # Keep first point or points with different timestamps
-                if i == 0 or timestamps[i] != timestamps[i-1]:
+                if i == 0 or timestamps[i] != timestamps[i - 1]:
                     filtered_timestamps.append(timestamps[i])
                     filtered_positions.append(positions[i])
                     filtered_orientations.append(orientations[i])
-            
+
             if len(filtered_timestamps) < 2:
                 self.get_logger().warn(f"Insufficient unique timestamps for lap {lap_number} trajectory evaluation")
                 return
-                
-            self.get_logger().info(f"Filtered trajectory: {len(poses)} -> {len(filtered_timestamps)} poses (removed {len(poses) - len(filtered_timestamps)} duplicates)")
+
+            self.get_logger().info(
+                f"Filtered trajectory: {len(poses)} -> {len(filtered_timestamps)} poses (removed {len(poses) - len(filtered_timestamps)} duplicates)")
 
             # Create trajectory object with filtered data
             traj = trajectory.PoseTrajectory3D(
@@ -1295,30 +1311,30 @@ class RaceMonitor(Node):
         if len(self.current_lap_trajectory) >= 2:
             # Create temporary trajectory for current lap with timestamp deduplication
             poses = self.current_lap_trajectory
-            
+
             # Extract raw data
             positions = []
             orientations = []
             timestamps = []
-            
+
             for pose in poses:
                 timestamp = pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
                 timestamps.append(timestamp)
                 positions.append([pose['pose'].position.x, pose['pose'].position.y, pose['pose'].position.z])
                 orientations.append([pose['pose'].orientation.w, pose['pose'].orientation.x,
-                                   pose['pose'].orientation.y, pose['pose'].orientation.z])
-            
+                                     pose['pose'].orientation.y, pose['pose'].orientation.z])
+
             # Remove duplicate timestamps
             filtered_positions = []
             filtered_orientations = []
             filtered_timestamps = []
-            
+
             for i in range(len(timestamps)):
-                if i == 0 or timestamps[i] != timestamps[i-1]:
+                if i == 0 or timestamps[i] != timestamps[i - 1]:
                     filtered_timestamps.append(timestamps[i])
                     filtered_positions.append(positions[i])
                     filtered_orientations.append(orientations[i])
-            
+
             if len(filtered_timestamps) >= 2:
                 traj = trajectory.PoseTrajectory3D(
                     positions_xyz=np.array(filtered_positions),
@@ -1371,27 +1387,27 @@ class RaceMonitor(Node):
         """Monitor CPU and memory usage for computational performance analysis"""
         if not self.enable_computational_monitoring or not self.computational_monitoring_initialized:
             return
-            
+
         try:
             # Get CPU usage
             cpu_percent = self.process.cpu_percent()
             self.cpu_usage_history.append(cpu_percent)
-            
+
             # Get memory usage
             memory_info = self.process.memory_info()
             memory_mb = memory_info.rss / 1024 / 1024  # Convert to MB
             self.memory_usage_history.append(memory_mb)
-            
+
             # Publish current CPU usage
             cpu_msg = Float32()
             cpu_msg.data = float(cpu_percent)
             self.cpu_usage_pub.publish(cpu_msg)
-            
+
             # Publish current memory usage
             memory_msg = Float32()
             memory_msg.data = float(memory_mb)
             self.memory_usage_pub.publish(memory_msg)
-            
+
             # Calculate and publish processing efficiency
             if len(self.control_loop_latencies) > 0:
                 avg_latency = sum(self.control_loop_latencies) / len(self.control_loop_latencies)
@@ -1400,46 +1416,46 @@ class RaceMonitor(Node):
                 normalized_latency = min(avg_latency * 20, 1.0)  # Normalize 50ms to 1.0
                 normalized_cpu = min(cpu_percent / 100.0, 1.0)
                 efficiency = 1.0 / (1.0 + normalized_latency + normalized_cpu)
-                
+
                 efficiency_msg = Float32()
                 efficiency_msg.data = float(efficiency)
                 self.processing_efficiency_pub.publish(efficiency_msg)
-                
+
         except Exception as e:
             self.get_logger().error(f"Error monitoring computational performance: {e}")
-    
+
     def log_performance_stats(self):
         """Log comprehensive performance statistics"""
         if not self.enable_computational_monitoring or not self.computational_monitoring_initialized:
             return
-            
+
         try:
             current_time = time.time()
-            
+
             # Calculate statistics
             stats = self.calculate_performance_statistics()
-            
+
             # Log to console
             self.get_logger().info(f"Performance Stats - Avg Latency: {stats['avg_latency_ms']:.2f}ms, "
-                                 f"Max Latency: {stats['max_latency_ms']:.2f}ms, "
-                                 f"CPU: {stats['avg_cpu_usage']:.1f}%, "
-                                 f"Memory: {stats['avg_memory_usage']:.1f}MB, "
-                                 f"Violations: {stats['latency_violations']}")
-            
+                                   f"Max Latency: {stats['max_latency_ms']:.2f}ms, "
+                                   f"CPU: {stats['avg_cpu_usage']:.1f}%, "
+                                   f"Memory: {stats['avg_memory_usage']:.1f}MB, "
+                                   f"Violations: {stats['latency_violations']}")
+
             # Publish comprehensive stats as JSON
             stats_msg = String()
             stats_msg.data = json.dumps(stats, indent=2)
             self.performance_stats_pub.publish(stats_msg)
-            
+
             # Store for CSV export
             stats['timestamp'] = current_time
             self.performance_log_data.append(stats)
-            
+
             self.last_performance_log_time = current_time
-            
+
         except Exception as e:
             self.get_logger().error(f"Error logging performance stats: {e}")
-    
+
     def calculate_performance_statistics(self):
         """Calculate comprehensive performance statistics"""
         stats = {
@@ -1457,59 +1473,59 @@ class RaceMonitor(Node):
             'processing_efficiency': 0.0,
             'control_frequency_hz': 0.0
         }
-        
+
         # Latency statistics
         if len(self.control_loop_latencies) > 0:
             latencies_ms = [l * 1000 for l in self.control_loop_latencies]
             stats['avg_latency_ms'] = sum(latencies_ms) / len(latencies_ms)
             stats['max_latency_ms'] = max(latencies_ms)
             stats['min_latency_ms'] = min(latencies_ms)
-            
+
             # Calculate standard deviation
             mean_lat = stats['avg_latency_ms']
             variance = sum((x - mean_lat) ** 2 for x in latencies_ms) / len(latencies_ms)
             stats['latency_std_ms'] = math.sqrt(variance)
-            
+
             stats['violation_rate'] = self.latency_violations / len(self.control_loop_latencies)
-        
+
         # CPU statistics
         if len(self.cpu_usage_history) > 0:
             stats['avg_cpu_usage'] = sum(self.cpu_usage_history) / len(self.cpu_usage_history)
             stats['max_cpu_usage'] = max(self.cpu_usage_history)
-        
+
         # Memory statistics
         if len(self.memory_usage_history) > 0:
             stats['avg_memory_usage'] = sum(self.memory_usage_history) / len(self.memory_usage_history)
             stats['max_memory_usage'] = max(self.memory_usage_history)
-        
+
         # Control frequency
         if len(self.control_send_times) > 1:
             time_span = self.control_send_times[-1] - self.control_send_times[0]
             if time_span > 0:
                 stats['control_frequency_hz'] = (len(self.control_send_times) - 1) / time_span
-        
+
         # Processing efficiency
         if stats['avg_latency_ms'] > 0 and stats['avg_cpu_usage'] > 0:
             normalized_latency = min(stats['avg_latency_ms'] / 50.0, 1.0)  # 50ms = 1.0
             normalized_cpu = min(stats['avg_cpu_usage'] / 100.0, 1.0)
             stats['processing_efficiency'] = 1.0 / (1.0 + normalized_latency + normalized_cpu)
-        
+
         return stats
-    
+
     def save_performance_data_to_csv(self):
         """Save computational performance data to CSV file"""
         if not self.enable_computational_monitoring or not self.performance_log_data:
             return
-            
+
         try:
             # Create performance data directory
             perf_dir = os.path.join(self.trajectory_output_directory, 'performance_data')
             os.makedirs(perf_dir, exist_ok=True)
-            
+
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = os.path.join(perf_dir, f'computational_performance_{timestamp}.csv')
-            
+
             # Write CSV
             with open(filename, 'w', newline='') as csvfile:
                 if self.performance_log_data:
@@ -1518,9 +1534,9 @@ class RaceMonitor(Node):
                     writer.writeheader()
                     for row in self.performance_log_data:
                         writer.writerow(row)
-            
+
             self.get_logger().info(f"Computational performance data saved to: {filename}")
-            
+
         except Exception as e:
             self.get_logger().error(f"Failed to save performance data: {e}")
 
@@ -1561,36 +1577,36 @@ class RaceMonitor(Node):
         """Callback for control command messages (computational monitoring)"""
         if not self.enable_computational_monitoring or not self.computational_monitoring_initialized:
             return
-            
+
         current_time = time.time()
         self.control_send_times.append(current_time)
         self.total_control_cycles += 1
-        
+
         # Calculate control loop latency from any pending odometry timestamps
         latencies_calculated = []
         for odom_topic, odom_timestamp in self.pending_odom_timestamps.items():
             latency = current_time - odom_timestamp
             self.control_loop_latencies.append(latency)
             latencies_calculated.append(latency)
-            
+
             # Update statistics
             self.total_processing_time += latency
             self.max_latency = max(self.max_latency, latency)
             self.min_latency = min(self.min_latency, latency)
-            
+
             # Check for latency violations (e.g., > 50ms for real-time control)
             if latency > 0.05:  # 50ms threshold
                 self.latency_violations += 1
-                
+
             self.get_logger().debug(f"Control latency from {odom_topic} to {topic_name}: {latency*1000:.2f}ms")
-        
+
         # Publish average latency if we calculated any
         if latencies_calculated:
             avg_latency = sum(latencies_calculated) / len(latencies_calculated)
             latency_msg = Float32()
             latency_msg.data = float(avg_latency * 1000)  # Convert to milliseconds
             self.control_loop_latency_pub.publish(latency_msg)
-            
+
         # Clear all pending timestamps after processing
         self.pending_odom_timestamps.clear()
 
@@ -1747,7 +1763,7 @@ def main(args=None):
             # Save trajectory evaluation summary if enabled
             if node.enable_trajectory_evaluation and EVO_AVAILABLE:
                 node.save_trajectory_evaluation_summary()
-                
+
             # Save computational performance data if enabled
             if node.enable_computational_monitoring and node.computational_monitoring_initialized:
                 node.save_performance_data_to_csv()

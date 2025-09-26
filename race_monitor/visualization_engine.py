@@ -53,7 +53,13 @@ class EVOPlotter:
 
         # Create graph output directory
         if self.config.get('auto_generate_graphs', False):
-            graph_dir = self.config.get('graph_output_directory', 'trajectory_evaluation/graphs')
+            graph_dir_config = self.config.get('graph_output_directory', 'evaluation_results/graphs')
+            if not os.path.isabs(graph_dir_config):
+                # Make path relative to the race_monitor package directory
+                package_dir = os.path.dirname(os.path.dirname(__file__))  # Go up to race_monitor package root
+                graph_dir = os.path.join(package_dir, graph_dir_config)
+            else:
+                graph_dir = graph_dir_config
             os.makedirs(graph_dir, exist_ok=True)
 
     def load_reference_trajectory(self, filepath, format_type='csv'):
@@ -258,26 +264,26 @@ class EVOPlotter:
         # Plot reference trajectory if available
         if self.reference_trajectory:
             ref_positions = self.reference_trajectory.positions_xyz
-            ax_traj.plot(ref_positions[:, 0], ref_positions[:, 1], 
-                        '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+            ax_traj.plot(ref_positions[:, 0], ref_positions[:, 1],
+                         '--', color='black', label='Reference', alpha=0.7, linewidth=2)
             # Add start/end markers
-            ax_traj.scatter(ref_positions[0, 0], ref_positions[0, 1], 
-                           color='darkgreen', s=100, marker='o', label='Ref Start', zorder=5)
-            ax_traj.scatter(ref_positions[-1, 0], ref_positions[-1, 1], 
-                           color='darkred', s=100, marker='s', label='Ref End', zorder=5)
+            ax_traj.scatter(ref_positions[0, 0], ref_positions[0, 1],
+                            color='darkgreen', s=100, marker='o', label='Ref Start', zorder=5)
+            ax_traj.scatter(ref_positions[-1, 0], ref_positions[-1, 1],
+                            color='darkred', s=100, marker='s', label='Ref End', zorder=5)
 
         # Plot all lap trajectories
         colors = cm.get_cmap(self.config.get('plot_color_scheme', 'viridis'))
         for i, (lap_num, traj) in enumerate(self.lap_trajectories.items()):
             color = colors(i / len(self.lap_trajectories))
             positions = traj.positions_xyz
-            ax_traj.plot(positions[:, 0], positions[:, 1], 
-                        '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+            ax_traj.plot(positions[:, 0], positions[:, 1],
+                         '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
             # Add start/end markers
-            ax_traj.scatter(positions[0, 0], positions[0, 1], 
-                           color=color, s=80, marker='o', alpha=0.9, zorder=4)
-            ax_traj.scatter(positions[-1, 0], positions[-1, 1], 
-                           color=color, s=80, marker='s', alpha=0.9, zorder=4)
+            ax_traj.scatter(positions[0, 0], positions[0, 1],
+                            color=color, s=80, marker='o', alpha=0.9, zorder=4)
+            ax_traj.scatter(positions[-1, 0], positions[-1, 1],
+                            color=color, s=80, marker='s', alpha=0.9, zorder=4)
 
         ax_traj.set_title('Trajectory Comparison')
         ax_traj.set_xlabel('X (m)')
@@ -300,12 +306,12 @@ class EVOPlotter:
         if self.reference_trajectory:
             ref_positions = self.reference_trajectory.positions_xyz
             ref_timestamps = self.reference_trajectory.timestamps
-            axarr_xyz[0].plot(ref_timestamps, ref_positions[:, 0], 
-                             '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_xyz[1].plot(ref_timestamps, ref_positions[:, 1], 
-                             '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_xyz[2].plot(ref_timestamps, ref_positions[:, 2], 
-                             '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+            axarr_xyz[0].plot(ref_timestamps, ref_positions[:, 0],
+                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+            axarr_xyz[1].plot(ref_timestamps, ref_positions[:, 1],
+                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+            axarr_xyz[2].plot(ref_timestamps, ref_positions[:, 2],
+                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
 
         # Plot all lap trajectories
         colors = cm.get_cmap(self.config.get('plot_color_scheme', 'viridis'))
@@ -313,12 +319,12 @@ class EVOPlotter:
             color = colors(i / len(self.lap_trajectories))
             positions = traj.positions_xyz
             timestamps = traj.timestamps
-            axarr_xyz[0].plot(timestamps, positions[:, 0], 
-                             '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
-            axarr_xyz[1].plot(timestamps, positions[:, 1], 
-                             '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
-            axarr_xyz[2].plot(timestamps, positions[:, 2], 
-                             '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+            axarr_xyz[0].plot(timestamps, positions[:, 0],
+                              '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+            axarr_xyz[1].plot(timestamps, positions[:, 1],
+                              '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+            axarr_xyz[2].plot(timestamps, positions[:, 2],
+                              '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
 
         axarr_xyz[0].set_title('X Position')
         axarr_xyz[0].set_ylabel('X (m)')
@@ -349,12 +355,12 @@ class EVOPlotter:
             ref_timestamps = self.reference_trajectory.timestamps
             # Convert quaternions to Euler angles for plotting
             ref_rpy = self._quat_to_euler(ref_orientations)
-            axarr_rpy[0].plot(ref_timestamps, ref_rpy[:, 0], 
-                             '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_rpy[1].plot(ref_timestamps, ref_rpy[:, 1], 
-                             '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_rpy[2].plot(ref_timestamps, ref_rpy[:, 2], 
-                             '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+            axarr_rpy[0].plot(ref_timestamps, ref_rpy[:, 0],
+                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+            axarr_rpy[1].plot(ref_timestamps, ref_rpy[:, 1],
+                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+            axarr_rpy[2].plot(ref_timestamps, ref_rpy[:, 2],
+                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
 
         # Plot all lap trajectories
         colors = cm.get_cmap(self.config.get('plot_color_scheme', 'viridis'))
@@ -364,12 +370,12 @@ class EVOPlotter:
             timestamps = traj.timestamps
             # Convert quaternions to Euler angles for plotting
             rpy = self._quat_to_euler(orientations)
-            axarr_rpy[0].plot(timestamps, rpy[:, 0], 
-                             '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
-            axarr_rpy[1].plot(timestamps, rpy[:, 1], 
-                             '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
-            axarr_rpy[2].plot(timestamps, rpy[:, 2], 
-                             '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+            axarr_rpy[0].plot(timestamps, rpy[:, 0],
+                              '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+            axarr_rpy[1].plot(timestamps, rpy[:, 1],
+                              '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+            axarr_rpy[2].plot(timestamps, rpy[:, 2],
+                              '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
 
         axarr_rpy[0].set_title('Roll')
         axarr_rpy[0].set_ylabel('Roll (rad)')
@@ -388,11 +394,11 @@ class EVOPlotter:
 
     def _quat_to_euler(self, quaternions):
         """Convert quaternions (w,x,y,z) to Euler angles (roll,pitch,yaw)"""
-        roll = np.arctan2(2*(quaternions[:,0]*quaternions[:,1] + quaternions[:,2]*quaternions[:,3]),
-                         1 - 2*(quaternions[:,1]**2 + quaternions[:,2]**2))
-        pitch = np.arcsin(2*(quaternions[:,0]*quaternions[:,2] - quaternions[:,3]*quaternions[:,1]))
-        yaw = np.arctan2(2*(quaternions[:,0]*quaternions[:,3] + quaternions[:,1]*quaternions[:,2]),
-                        1 - 2*(quaternions[:,2]**2 + quaternions[:,3]**2))
+        roll = np.arctan2(2 * (quaternions[:, 0] * quaternions[:, 1] + quaternions[:, 2] * quaternions[:, 3]),
+                          1 - 2 * (quaternions[:, 1]**2 + quaternions[:, 2]**2))
+        pitch = np.arcsin(2 * (quaternions[:, 0] * quaternions[:, 2] - quaternions[:, 3] * quaternions[:, 1]))
+        yaw = np.arctan2(2 * (quaternions[:, 0] * quaternions[:, 3] + quaternions[:, 1] * quaternions[:, 2]),
+                         1 - 2 * (quaternions[:, 2]**2 + quaternions[:, 3]**2))
         return np.column_stack([roll, pitch, yaw])
 
     def _generate_speed_plots(self):
@@ -409,7 +415,7 @@ class EVOPlotter:
                 ref_speeds = self._calculate_speeds(self.reference_trajectory)
                 ref_timestamps = self.reference_trajectory.timestamps[1:]  # One less due to speed calculation
                 ax_speed.plot(ref_timestamps, ref_speeds,
-                            '--', color='black', label='Reference', alpha=0.7, linewidth=2)
+                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
             except Exception as e:
                 print(f"Could not plot reference speeds: {e}")
 
@@ -421,7 +427,7 @@ class EVOPlotter:
                 speeds = self._calculate_speeds(traj)
                 timestamps = traj.timestamps[1:]  # One less due to speed calculation
                 ax_speed.plot(timestamps, speeds,
-                            '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
+                              '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
             except Exception as e:
                 print(f"Could not plot speeds for lap {lap_num}: {e}")
 
@@ -437,17 +443,17 @@ class EVOPlotter:
         """Calculate speeds from trajectory positions"""
         positions = trajectory.positions_xyz
         timestamps = trajectory.timestamps
-        
+
         speeds = []
         for i in range(1, len(positions)):
-            dt = timestamps[i] - timestamps[i-1]
+            dt = timestamps[i] - timestamps[i - 1]
             if dt > 0:
-                dp = np.linalg.norm(positions[i] - positions[i-1])
+                dp = np.linalg.norm(positions[i] - positions[i - 1])
                 speed = dp / dt
                 speeds.append(speed)
             else:
                 speeds.append(0.0)
-        
+
         return np.array(speeds)
 
     def _generate_error_plots(self):
@@ -561,7 +567,14 @@ class EVOPlotter:
 
         print(f"Plot collection has {len(self.plot_collection.figures)} figures")
 
-        graph_dir = self.config.get('graph_output_directory', 'trajectory_evaluation/graphs')
+        graph_dir_config = self.config.get('graph_output_directory', 'evaluation_results/graphs')
+        if not os.path.isabs(graph_dir_config):
+            # Make path relative to the race_monitor package directory
+            package_dir = os.path.dirname(os.path.dirname(__file__))  # Go up to race_monitor package root
+            graph_dir = os.path.join(package_dir, graph_dir_config)
+        else:
+            graph_dir = graph_dir_config
+
         graph_formats = self.config.get('graph_formats', ['png'])
 
         print(f"Saving plots to {graph_dir} in formats: {graph_formats}")
