@@ -205,3 +205,27 @@ race_monitor:
   target_control_frequency_hz: 50.0                 # Target control frequency (Hz)
   max_acceptable_cpu_usage: 80.0                    # Maximum acceptable CPU usage (%)
   max_acceptable_memory_mb: 512.0                   # Maximum acceptable memory usage (MB)
+
+  # ========================================
+  # CUSTOM RACE EVALUATION SYSTEM
+  # ========================================
+  
+  # Enable custom race evaluation format
+  enable_race_evaluation: true                      # Generate custom race evaluation files
+  
+  # Race evaluation settings
+  race_evaluation:
+    enable_export: true                             # Export race evaluation files
+    auto_increment_experiment: true                 # Auto-increment experiment IDs
+    include_recommendations: true                   # Generate performance recommendations
+    enable_comparison: true                         # Compare with previous experiments
+    grading_strictness: "normal"                    # Grading strictness: strict, normal, lenient
+    
+    # Evaluation focus areas
+    focus_on_consistency: true                      # Emphasize lap time consistency
+    focus_on_trajectory_accuracy: true             # Emphasize trajectory following
+    focus_on_racing_efficiency: true               # Emphasize racing line optimization
+    
+    # Output preferences
+    include_detailed_metrics: true                  # Include detailed metric breakdown
+    max_recommendations: 5                          # Maximum number of recommendations to generate
