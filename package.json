@@ -1,0 +1,15 @@
+{
+  "name": "race-monitor",
+  "version": "1.0.0",
+  "description": "F1Tenth Race Monitor System with Web UI",
+  "scripts": {
+    "dev": "cd web_ui && ./dev-simple.sh",
+    "start": "cd web_ui && ./start.sh",
+    "test": "cd web_ui && ./test-run.sh",
+    "setup": "cd web_ui && ./setup-simple.sh",
+    "quick-start": "cd web_ui && ./quick-start.sh"
+  },
+  "keywords": ["f1tenth", "race", "monitor", "ros2", "web-ui"],
+  "author": "GIU-F1Tenth",
+  "license": "MIT"
+}
