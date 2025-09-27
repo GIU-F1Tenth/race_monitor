@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+websockets
+pydantic
+pyyaml
+pandas
+numpy
+plotly
+python-multipart
+aiofiles
+python-socketio
+jinja2
+starlette
+watchdog
+scipy
+matplotlib
+seaborn
