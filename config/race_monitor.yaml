@@ -13,6 +13,41 @@ race_monitor:
     frame_id: "map" # Frame ID for visualization
 
     # ========================================
+    # RACE ENDING CONDITIONS
+    # ========================================
+    
+    # Race ending mode: "lap_complete", "crash", "manual"
+    # - lap_complete: Race ends when required laps are completed
+    # - crash: Race ends when crash is detected
+    # - manual: Race continues until node is manually killed
+    race_ending_mode: "lap_complete"
+    
+    # Crash detection parameters (only used when race_ending_mode is "crash")
+    crash_detection:
+      enable_crash_detection: true
+      # Maximum allowed stationary time before considering crash (seconds)
+      max_stationary_time: 5.0
+      # Minimum velocity threshold to consider vehicle as moving (m/s)
+      min_velocity_threshold: 0.1
+      # Maximum allowed time without odometry updates (seconds)
+      max_odometry_timeout: 3.0
+      # Enable collision detection based on sudden velocity changes
+      enable_collision_detection: true
+      # Velocity change threshold for collision detection (m/s)
+      collision_velocity_threshold: 2.0
+      # Time window for collision detection (seconds)
+      collision_detection_window: 0.5
+    
+    # Manual mode parameters (only used when race_ending_mode is "manual")
+    manual_mode:
+      # Save intermediate results periodically even if race doesn't end
+      save_intermediate_results: true
+      # Interval for saving intermediate results (seconds)
+      save_interval: 30.0
+      # Maximum race duration before automatic safety stop (seconds, 0 = no limit)
+      max_race_duration: 0
+
+    # ========================================
     # RESEARCH & ANALYSIS PARAMETERS
     # ========================================
 
@@ -59,7 +94,7 @@ race_monitor:
     reference_trajectory_format: "csv" # csv, tum, kitti
 
     # Horizon mapper interface (real-time reference trajectory)
-    enable_horizon_mapper_reference: true
+    enable_horizon_mapper_reference: false
     horizon_mapper_reference_topic: "/horizon_mapper/reference_trajectory"
 
     # Use complete reference path instead of reference trajectory points
@@ -87,7 +122,7 @@ race_monitor:
 
     # Data storage
     save_trajectories: true
-    trajectory_output_directory: "trajectory_evaluation"
+    trajectory_output_directory: "/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results"
 
     # Metrics to calculate
     evaluate_smoothness: true # Calculate trajectory smoothness
@@ -114,7 +149,7 @@ race_monitor:
 
     # Enable/disable automatic graph generation
     auto_generate_graphs: true
-    graph_output_directory: "trajectory_evaluation/graphs"
+    graph_output_directory: "/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs"
     graph_formats: ["png", "pdf"] # png, pdf, svg, html
 
     # Plot appearance settings
@@ -205,3 +240,27 @@ race_monitor:
   target_control_frequency_hz: 50.0                 # Target control frequency (Hz)
   max_acceptable_cpu_usage: 80.0                    # Maximum acceptable CPU usage (%)
   max_acceptable_memory_mb: 512.0                   # Maximum acceptable memory usage (MB)
+
+  # ========================================
+  # CUSTOM RACE EVALUATION SYSTEM
+  # ========================================
+  
+  # Enable custom race evaluation format
+  enable_race_evaluation: true                      # Generate custom race evaluation files
+  
+  # Race evaluation settings
+  race_evaluation:
+    enable_export: true                             # Export race evaluation files
+    auto_increment_experiment: true                 # Auto-increment experiment IDs
+    include_recommendations: true                   # Generate performance recommendations
+    enable_comparison: true                         # Compare with previous experiments
+    grading_strictness: "normal"                    # Grading strictness: strict, normal, lenient
+    
+    # Evaluation focus areas
+    focus_on_consistency: true                      # Emphasize lap time consistency
+    focus_on_trajectory_accuracy: true             # Emphasize trajectory following
+    focus_on_racing_efficiency: true               # Emphasize racing line optimization
+    
+    # Output preferences
+    include_detailed_metrics: true                  # Include detailed metric breakdown
+    max_recommendations: 5                          # Maximum number of recommendations to generate
