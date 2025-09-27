@@ -61,6 +61,19 @@ import psutil
 import threading
 from collections import deque
 
+
+def time_to_nanoseconds(time_obj):
+    """Convert a time object to nanoseconds."""
+    if hasattr(time_obj, 'nanoseconds'):
+        # rclpy.time.Time object
+        return time_obj.nanoseconds
+    elif hasattr(time_obj, 'sec') and hasattr(time_obj, 'nanosec'):
+        # builtin_interfaces.msg.Time object
+        return time_obj.sec * 1e9 + time_obj.nanosec
+    else:
+        raise ValueError(f"Unknown time object type: {type(time_obj)}")
+
+
 # Please ensure the 'evo' library is installed and available in your PYTHONPATH.
 # Add EVO library to Python path
 evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
@@ -166,7 +179,8 @@ class RaceMonitor(Node):
         if not self.has_parameter('save_trajectories'):
             self.declare_parameter('save_trajectories', True)
         if not self.has_parameter('trajectory_output_directory'):
-            self.declare_parameter('trajectory_output_directory', '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results')
+            self.declare_parameter('trajectory_output_directory',
+                                   '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results')
         if not self.has_parameter('save_horizon_reference'):
             self.declare_parameter('save_horizon_reference', True)
         if not self.has_parameter('evaluate_smoothness'):
@@ -178,7 +192,9 @@ class RaceMonitor(Node):
         if not self.has_parameter('auto_generate_graphs'):
             self.declare_parameter('auto_generate_graphs', True)
         if not self.has_parameter('graph_output_directory'):
-            self.declare_parameter('graph_output_directory', '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs')
+            self.declare_parameter(
+                'graph_output_directory',
+                '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs')
         if not self.has_parameter('graph_formats'):
             self.declare_parameter('graph_formats', ['png', 'pdf'])
 
@@ -581,7 +597,7 @@ class RaceMonitor(Node):
                 'enable_comparison': self.enable_comparison,
                 'auto_increment_experiment': self.auto_increment_experiment
             }
-            
+
             try:
                 self.race_evaluator = create_race_evaluator(race_eval_config)
                 self.get_logger().info(f"Race Evaluator initialized with {self.grading_strictness} grading")
@@ -713,7 +729,7 @@ class RaceMonitor(Node):
         self.race_running_pub = self.create_publisher(Bool, '/race_monitor/race_running', 10)
         self.start_line_marker_pub = self.create_publisher(Marker, '/race_monitor/start_line_marker', 10)
         self.race_state_pub = self.create_publisher(String, '/race_monitor/state', 10)
-        
+
         # Add raceline visualization publisher
         from visualization_msgs.msg import MarkerArray
         self.raceline_marker_pub = self.create_publisher(MarkerArray, '/race_monitor/raceline_markers', 10)
@@ -795,7 +811,7 @@ class RaceMonitor(Node):
                 # Load CSV format (x, y, v, theta) and convert to EVO format
                 data = np.loadtxt(self.reference_trajectory_file, delimiter=',', skiprows=1)
                 x = data[:, 0]
-                y = data[:, 1] 
+                y = data[:, 1]
                 v = data[:, 2] if data.shape[1] > 2 else np.zeros_like(x)
                 theta = data[:, 3] if data.shape[1] > 3 else np.zeros_like(x)
 
@@ -1017,8 +1033,8 @@ class RaceMonitor(Node):
         current_time = self.get_clock().now()
 
         # Debounce check
-        if (self.last_crossing_time is not None and
-                (current_time - self.last_crossing_time).nanoseconds / 1e9 < self.debounce_time):
+        if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) -
+                                                     time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
             return
 
         self.last_crossing_time = current_time
@@ -1039,7 +1055,7 @@ class RaceMonitor(Node):
         else:
             # Subsequent crossings - complete lap
             if self.lap_start_time is not None:
-                lap_time = (current_time - self.lap_start_time).nanoseconds / 1e9
+                lap_time = (time_to_nanoseconds(current_time) - time_to_nanoseconds(self.lap_start_time)) / 1e9
                 self.lap_times.append(lap_time)
 
                 # EVO: Complete and evaluate lap trajectory
@@ -1058,7 +1074,7 @@ class RaceMonitor(Node):
                 if self.lap_count >= self.required_laps and not self.race_finished:
                     self.race_finished = True
                     self.race_running = False
-                    total_time = (current_time - self.race_start_time).nanoseconds / 1e9
+                    total_time = (time_to_nanoseconds(current_time) - time_to_nanoseconds(self.race_start_time)) / 1e9
                     self.get_logger().info(f"Race finished! Total time: {total_time:.2f}s")
 
                     # EVO: Save final evaluation summary and generate plots
@@ -1095,29 +1111,30 @@ class RaceMonitor(Node):
                                             if key not in evo_metrics:
                                                 evo_metrics[key] = []
                                             evo_metrics[key].append(value)
-                                    
+
                                     # Calculate averages for EVO metrics
                                     for key, values in evo_metrics.items():
                                         if values and isinstance(values[0], (int, float)):
                                             evo_metrics[f'{key}_mean'] = sum(values) / len(values)
-                                            evo_metrics[f'{key}_std'] = (sum((x - evo_metrics[f'{key}_mean'])**2 for x in values) / len(values)) ** 0.5
+                                            evo_metrics[f'{key}_std'] = (
+                                                sum((x - evo_metrics[f'{key}_mean'])**2 for x in values) / len(values)) ** 0.5
                                             evo_metrics[f'{key}_max'] = max(values)
                                             evo_metrics[f'{key}_min'] = min(values)
 
                                 # Create and save race evaluation
                                 race_evaluation = self.race_evaluator.create_race_evaluation(research_data, evo_metrics)
                                 evaluation_filepath = self.race_evaluator.save_race_evaluation(race_evaluation)
-                                
+
                                 # Log summary
                                 eval_data = race_evaluation['race_evaluation']
                                 overall_grade = eval_data['performance_summary']['overall_grade']
                                 score = eval_data['performance_summary']['numerical_score']
                                 experiment_id = eval_data['metadata']['experiment_id']
-                                
+
                                 self.get_logger().info(f"Race evaluation saved: {evaluation_filepath}")
                                 self.get_logger().info(f"Overall Grade: {overall_grade} (Score: {score:.1f}/100)")
                                 self.get_logger().info(f"Experiment ID: {experiment_id}")
-                                
+
                                 # Log top recommendations
                                 recommendations = eval_data.get('recommendations', [])
                                 if recommendations:
@@ -1718,7 +1735,7 @@ class RaceMonitor(Node):
             # Reset lap detection state when start line changes
             if hasattr(self, 'last_side_of_line'):
                 delattr(self, 'last_side_of_line')
-            
+
             # Optionally reset race state for a fresh start with new line
             # Uncomment the following lines if you want to reset the race when line changes
             # self.race_started = False
@@ -1749,7 +1766,7 @@ class RaceMonitor(Node):
         # Calculate control loop latency from any pending odometry timestamps
         latencies_calculated = []
         for odom_topic, odom_timestamp in self.pending_odom_timestamps.items():
-            latency = current_time - odom_timestamp
+            latency = (time_to_nanoseconds(current_time) - time_to_nanoseconds(odom_timestamp)) / 1e9
             self.control_loop_latencies.append(latency)
             latencies_calculated.append(latency)
 
@@ -1812,16 +1829,16 @@ class RaceMonitor(Node):
         """Publish start/finish line visualization marker"""
         # Check if line has changed or if it's time to republish
         current_line = (tuple(self.start_line_p1), tuple(self.start_line_p2))
-        
+
         # Republish every 10 seconds even if unchanged (for new subscribers)
         should_republish = False
         if not hasattr(self, '_last_marker_publish_time'):
             self._last_marker_publish_time = 0
-        
+
         current_time = self.get_clock().now().nanoseconds / 1e9
         if current_time - self._last_marker_publish_time > 10.0:  # 10 seconds
             should_republish = True
-            
+
         if current_line == self._last_line and not should_republish:
             return  # No change and not time to republish
 
@@ -1900,14 +1917,14 @@ class RaceMonitor(Node):
         """Publish raceline visualization markers from reference trajectory"""
         if not hasattr(self, 'raceline_marker_pub'):
             return
-            
+
         # Try to get reference trajectory from different sources
         ref_trajectory = None
-        
+
         # First, try to get from evo_plotter
         if hasattr(self, 'evo_plotter') and self.evo_plotter and hasattr(self.evo_plotter, 'reference_trajectory'):
             ref_trajectory = self.evo_plotter.reference_trajectory
-        
+
         # If not available, try to load from file
         elif hasattr(self, 'reference_trajectory_file') and self.reference_trajectory_file:
             if os.path.exists(self.reference_trajectory_file):
@@ -1927,11 +1944,12 @@ class RaceMonitor(Node):
                             ref_trajectory = file_interface.read_kitti_poses_file(self.reference_trajectory_file)
                 except Exception as e:
                     # Don't log error too frequently
-                    if not hasattr(self, '_last_raceline_error_time') or time.time() - self._last_raceline_error_time > 10.0:
+                    if not hasattr(self, '_last_raceline_error_time') or time.time() - \
+                            self._last_raceline_error_time > 10.0:
                         self.get_logger().warn(f"Could not load reference trajectory for visualization: {e}")
                         self._last_raceline_error_time = time.time()
                     return
-        
+
         # Publish markers from EVO trajectory
         if ref_trajectory and hasattr(ref_trajectory, 'positions_xyz'):
             self._publish_raceline_from_evo_trajectory(ref_trajectory)
@@ -1940,9 +1958,9 @@ class RaceMonitor(Node):
         """Publish raceline markers from CSV data (x, y, v, theta)"""
         from visualization_msgs.msg import MarkerArray
         from geometry_msgs.msg import Point
-        
+
         marker_array = MarkerArray()
-        
+
         # Create line strip marker for the raceline
         line_marker = Marker()
         line_marker.header.stamp = self.get_clock().now().to_msg()
@@ -1951,18 +1969,18 @@ class RaceMonitor(Node):
         line_marker.id = 0
         line_marker.type = Marker.LINE_STRIP
         line_marker.action = Marker.ADD
-        
+
         # Line properties
         line_marker.scale.x = 0.05  # Line width
         line_marker.scale.y = 0.05
         line_marker.scale.z = 0.05
-        
+
         # Blue color for raceline
         line_marker.color.r = 0.0
         line_marker.color.g = 0.0
         line_marker.color.b = 1.0
         line_marker.color.a = 0.8
-        
+
         # Add points to the line strip
         for i in range(len(data)):
             if len(data[i]) >= 2:  # Ensure we have at least x, y
@@ -1971,13 +1989,13 @@ class RaceMonitor(Node):
                 pt.y = float(data[i][1])
                 pt.z = 0.01  # Slightly above ground
                 line_marker.points.append(pt)
-        
+
         marker_array.markers.append(line_marker)
-        
+
         # Note: Start point marker removed to avoid visualization confusion
-        
+
         self.raceline_marker_pub.publish(marker_array)
-        
+
         # Log only once or every 30 seconds
         if not hasattr(self, '_last_raceline_log_time') or time.time() - self._last_raceline_log_time > 30.0:
             self.get_logger().info(f"Published raceline with {len(data)} points")
@@ -1987,9 +2005,9 @@ class RaceMonitor(Node):
         """Publish raceline markers from EVO trajectory"""
         from visualization_msgs.msg import MarkerArray
         from geometry_msgs.msg import Point
-        
+
         marker_array = MarkerArray()
-        
+
         # Create line strip marker for the raceline
         line_marker = Marker()
         line_marker.header.stamp = self.get_clock().now().to_msg()
@@ -1998,18 +2016,18 @@ class RaceMonitor(Node):
         line_marker.id = 0
         line_marker.type = Marker.LINE_STRIP
         line_marker.action = Marker.ADD
-        
+
         # Line properties
         line_marker.scale.x = 0.05  # Line width
         line_marker.scale.y = 0.05
         line_marker.scale.z = 0.05
-        
+
         # Blue color for raceline
         line_marker.color.r = 0.0
         line_marker.color.g = 0.0
         line_marker.color.b = 1.0
         line_marker.color.a = 0.8
-        
+
         # Add points to the line strip
         positions = trajectory.positions_xyz
         for pos in positions:
@@ -2018,13 +2036,13 @@ class RaceMonitor(Node):
             pt.y = float(pos[1])
             pt.z = 0.01  # Slightly above ground
             line_marker.points.append(pt)
-        
+
         marker_array.markers.append(line_marker)
-        
+
         # Note: Start point marker removed to avoid visualization confusion
-        
+
         self.raceline_marker_pub.publish(marker_array)
-        
+
         # Log only once or every 30 seconds
         if not hasattr(self, '_last_raceline_log_time') or time.time() - self._last_raceline_log_time > 30.0:
             self.get_logger().info(f"Published raceline with {len(positions)} points")
@@ -2066,7 +2084,7 @@ def main(args=None):
         if node.race_started and len(node.lap_times) > 0:
             total = 0.0
             if node.race_start_time is not None:
-                total = (node.get_clock().now() - node.race_start_time).nanoseconds / 1e9
+                total = (time_to_nanoseconds(node.get_clock().now()) - time_to_nanoseconds(node.race_start_time)) / 1e9
             node.save_results_to_csv(total)
 
             # Save trajectory evaluation summary if enabled
