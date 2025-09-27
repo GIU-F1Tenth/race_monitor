@@ -301,19 +301,23 @@ class DataManager:
             self.logger.error(f"Error saving Pickle trajectory: {e}")
             return False
 
-    def save_race_results_to_csv(self, race_data: Dict) -> bool:
+    def save_race_results_to_csv(self, race_data: Dict, filename_override: str = None) -> bool:
         """
         Save race results to CSV file.
 
         Args:
             race_data: Race data including lap times, statistics, etc.
+            filename_override: Optional custom filename
 
         Returns:
             bool: True if successfully saved
         """
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"race_results_{timestamp}.csv"
+            if filename_override:
+                filename = filename_override
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"race_results_{timestamp}.csv"
             filepath = os.path.join(self.results_dir, filename)
 
             with open(filepath, 'w', newline='') as csvfile:
@@ -327,6 +331,12 @@ class DataManager:
                 writer.writerow(['Total Race Time (s)', race_data.get('total_race_time', 0.0)])
                 writer.writerow(['Total Laps', len(race_data.get('lap_times', []))])
                 writer.writerow(['Controller', race_data.get('controller_name', 'unknown')])
+                writer.writerow(['Experiment ID', race_data.get('experiment_id', 'unknown')])
+                writer.writerow(['Race Ending Mode', race_data.get('race_ending_mode', 'unknown')])
+                writer.writerow(['Race Ending Reason', race_data.get('race_ending_reason', 'unknown')])
+                writer.writerow(['Crashed', race_data.get('crashed', False)])
+                writer.writerow(['Forced Shutdown', race_data.get('forced_shutdown', False)])
+                writer.writerow(['Intermediate Save', race_data.get('intermediate_save', False)])
                 writer.writerow([])
 
                 # Lap times

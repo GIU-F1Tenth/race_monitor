@@ -1,370 +1,299 @@
 #!/usr/bin/env python3
 
 """
-Race Monitor Launch File
+Race Monitor - Unified Launch File
 
-Launches the race monitor node with comprehensive trajectory analysis and computational 
-performance monitoring capabilities. This unified launch file provides configurable 
-parameters for autonomous racing performance evaluation including real-time computational 
-efficiency monitoring.
+A single launch file that supports all three race ending modes:
+1. lap_complete - Race ends after completing required laps (default)
+2. crash - Race ends when crash is detected
+3. manual - Race continues until manually killed
 
-Usage:
-    ros2 launch race_monitor race_monitor.launch.py
-    
-    # With custom parameters:
-    ros2 launch race_monitor race_monitor.launch.py \
-        controller_name:=my_controller \
-        experiment_id:=session_001 \
-        enable_trajectory_evaluation:=true \
-        enable_computational_monitoring:=true
+Usage Examples:
+  # Default lap complete mode (5 laps)
+  ros2 launch race_monitor race_monitor.launch.py
+  
+  # Lap complete mode with custom laps
+  ros2 launch race_monitor race_monitor.launch.py race_mode:=lap_complete required_laps:=10
+  
+  # Crash detection mode
+  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash
+  
+  # Manual endurance mode
+  ros2 launch race_monitor race_monitor.launch.py race_mode:=manual save_interval:=60.0
+  
+  # Custom crash detection parameters
+  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash max_stationary_time:=10.0 enable_collision_detection:=false
 
-    # With multiple odometry sources:
-    ros2 launch race_monitor race_monitor.launch.py \
-        controller_name:=my_controller \
-        experiment_id:=session_001 \
-        odometry_topics:='["car_state/odom", "ekf/odometry"]' \
-        control_command_topics:='["drive", "cmd_vel"]' \
-        enable_computational_monitoring:=true
-
-Available Parameters:
-    controller_name (string): Name of the controller being tested
-    experiment_id (string): Unique identifier for this experiment
-    start_line_p1 (list): First point of start/finish line [x, y]
-    start_line_p2 (list): Second point of start/finish line [x, y]
-    required_laps (int): Number of laps required to complete race
-    enable_trajectory_evaluation (bool): Enable advanced trajectory analysis
-    enable_computational_monitoring (bool): Enable performance monitoring
-    enable_horizon_mapper_reference (bool): Enable horizon mapper reference trajectory
-    odometry_topics (list): Array of odometry topic names to monitor
-    control_command_topics (list): Array of control command topics to monitor
-    
-Computational Monitoring Features:
-    - Real-time control loop latency measurement
-    - CPU and memory usage tracking
-    - Processing efficiency calculation
-    - Multi-topic support for complex systems
-    - Performance statistics logging
-    - Control frequency analysis
-    
-Output:
-    The system generates comprehensive analysis data in:
-    evaluation_results/research_data/{controller_name}/{experiment_id}/
-    
-    Performance monitoring topics:
-    /race_monitor/control_loop_latency - Control loop latency in milliseconds
-    /race_monitor/cpu_usage - Current CPU usage percentage
-    /race_monitor/memory_usage - Current memory usage in MB
-    /race_monitor/processing_efficiency - Processing efficiency score (0-1)
-    
 Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License 
+License: MIT License
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 import os
+from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    """
-    Generate launch description for race monitor with comprehensive analysis capabilities.
+    """Generate unified launch description supporting all race ending modes."""
     
-    Returns:
-        LaunchDescription: Configured launch description with all necessary parameters
-    """
-
-    # Race monitoring parameters
-    start_line_p1_arg = DeclareLaunchArgument(
-        'start_line_p1',
-        default_value='[0.0, -1.0]',
-        description='Start line point 1 [x, y]'
+    # Get package directory and config file
+    config_file_path = PathJoinSubstitution([
+        FindPackageShare('race_monitor'),
+        'config',
+        'race_monitor.yaml'
+    ])
+    
+    # Common launch arguments
+    race_mode_arg = DeclareLaunchArgument(
+        'race_mode',
+        default_value='lap_complete',
+        description='Race ending mode: lap_complete, crash, or manual',
+        choices=['lap_complete', 'crash', 'manual']
     )
-
-    start_line_p2_arg = DeclareLaunchArgument(
-        'start_line_p2',
-        default_value='[0.0, 1.0]',
-        description='Start line point 2 [x, y]'
-    )
-
-    required_laps_arg = DeclareLaunchArgument(
-        'required_laps',
-        default_value='5',
-        description='Number of required laps'
-    )
-
-    debounce_time_arg = DeclareLaunchArgument(
-        'debounce_time',
-        default_value='2.0',
-        description='Debounce time for lap detection'
-    )
-
-    output_file_arg = DeclareLaunchArgument(
-        'output_file',
-        default_value='race_results.csv',
-        description='Output CSV file name'
-    )
-
-    frame_id_arg = DeclareLaunchArgument(
-        'frame_id',
-        default_value='map',
-        description='Frame ID for visualization'
-    )
-
-    # EVO integration parameters
-    enable_trajectory_evaluation_arg = DeclareLaunchArgument(
-        'enable_trajectory_evaluation',
-        default_value='true',
-        description='Whether to enable trajectory evaluation with evo'
-    )
-
-    # Evaluation timing options
-    evaluation_interval_seconds_arg = DeclareLaunchArgument(
-        'evaluation_interval_seconds',
-        default_value='1.0',
-        description='Time-based evaluation interval in seconds (0 = disable)'
-    )
-
-    evaluation_interval_laps_arg = DeclareLaunchArgument(
-        'evaluation_interval_laps',
-        default_value='0',
-        description='Lap-based evaluation interval (0 = disable)'
-    )
-
-    evaluation_interval_meters_arg = DeclareLaunchArgument(
-        'evaluation_interval_meters',
-        default_value='0.0',
-        description='Distance-based evaluation interval in meters (0 = disable)'
-    )
-
-    # Reference trajectory configuration
-    reference_trajectory_file_arg = DeclareLaunchArgument(
-        'reference_trajectory_file',
-        default_value='horizon_mapper/horizon_mapper/ref_trajectory.csv',
-        description='Path to reference trajectory file'
-    )
-
-    reference_trajectory_format_arg = DeclareLaunchArgument(
-        'reference_trajectory_format',
-        default_value='csv',
-        description='Reference trajectory format (csv, tum, kitti)'
-    )
-
-    # Controller and experiment identification
+    
     controller_name_arg = DeclareLaunchArgument(
         'controller_name',
-        default_value='unknown_controller',
+        default_value='test_controller',
         description='Name of the controller being tested'
     )
-
+    
     experiment_id_arg = DeclareLaunchArgument(
         'experiment_id',
         default_value='exp_001',
-        description='Unique identifier for this experiment session'
+        description='Experiment identifier'
     )
-
-    # Trajectory analysis settings
+    
+    # Lap complete mode arguments
+    required_laps_arg = DeclareLaunchArgument(
+        'required_laps',
+        default_value='5',
+        description='Number of laps required to complete the race (lap_complete mode only)'
+    )
+    
+    # Crash detection mode arguments
+    max_stationary_time_arg = DeclareLaunchArgument(
+        'max_stationary_time',
+        default_value='5.0',
+        description='Maximum time vehicle can be stationary before crash detection (seconds)'
+    )
+    
+    min_velocity_threshold_arg = DeclareLaunchArgument(
+        'min_velocity_threshold',
+        default_value='0.1',
+        description='Minimum velocity threshold to consider vehicle as moving (m/s)'
+    )
+    
+    max_odometry_timeout_arg = DeclareLaunchArgument(
+        'max_odometry_timeout',
+        default_value='3.0',
+        description='Maximum time without odometry updates before crash detection (seconds)'
+    )
+    
+    enable_collision_detection_arg = DeclareLaunchArgument(
+        'enable_collision_detection',
+        default_value='true',
+        description='Enable collision detection based on sudden velocity changes'
+    )
+    
+    collision_velocity_threshold_arg = DeclareLaunchArgument(
+        'collision_velocity_threshold',
+        default_value='2.0',
+        description='Velocity change threshold for collision detection (m/s)'
+    )
+    
+    collision_detection_window_arg = DeclareLaunchArgument(
+        'collision_detection_window',
+        default_value='0.5',
+        description='Time window for collision detection (seconds)'
+    )
+    
+    # Manual mode arguments
+    save_interval_arg = DeclareLaunchArgument(
+        'save_interval',
+        default_value='30.0',
+        description='Interval for saving intermediate results in manual mode (seconds)'
+    )
+    
+    max_duration_arg = DeclareLaunchArgument(
+        'max_duration',
+        default_value='0',
+        description='Maximum race duration for safety in manual mode (seconds, 0 = no limit)'
+    )
+    
+    enable_intermediate_saves_arg = DeclareLaunchArgument(
+        'enable_intermediate_saves',
+        default_value='true',
+        description='Enable periodic intermediate result saves in manual mode'
+    )
+    
+    # Advanced configuration arguments
+    enable_crash_detection_arg = DeclareLaunchArgument(
+        'enable_crash_detection',
+        default_value='true',
+        description='Enable crash detection (used in crash and manual modes)'
+    )
+    
+    enable_trajectory_evaluation_arg = DeclareLaunchArgument(
+        'enable_trajectory_evaluation',
+        default_value='true',
+        description='Enable trajectory evaluation and analysis'
+    )
+    
+    enable_computational_monitoring_arg = DeclareLaunchArgument(
+        'enable_computational_monitoring',
+        default_value='true',
+        description='Enable computational performance monitoring'
+    )
+    
     save_trajectories_arg = DeclareLaunchArgument(
         'save_trajectories',
         default_value='true',
-        description='Whether to save trajectory files'
+        description='Save trajectory data to files'
     )
-
-    trajectory_output_directory_arg = DeclareLaunchArgument(
-        'trajectory_output_directory',
-        default_value='evaluation_results',
-        description='Directory for trajectory evaluation output'
-    )
-
-    evaluate_smoothness_arg = DeclareLaunchArgument(
-        'evaluate_smoothness',
-        default_value='true',
-        description='Whether to evaluate trajectory smoothness'
-    )
-
-    evaluate_consistency_arg = DeclareLaunchArgument(
-        'evaluate_consistency',
-        default_value='true',
-        description='Whether to evaluate trajectory consistency'
-    )
-
-    # Graph generation settings
+    
     auto_generate_graphs_arg = DeclareLaunchArgument(
         'auto_generate_graphs',
         default_value='true',
-        description='Whether to automatically generate EVO plots'
+        description='Automatically generate analysis graphs'
     )
 
-    graph_output_directory_arg = DeclareLaunchArgument(
-        'graph_output_directory',
-        default_value='evaluation_results/graphs',
-        description='Directory for graph output'
-    )
-
-    graph_formats_arg = DeclareLaunchArgument(
-        'graph_formats',
-        default_value='["png", "pdf"]',
-        description='Graph output formats'
-    )
-
-    # Plot settings
-    plot_figsize_arg = DeclareLaunchArgument(
-        'plot_figsize',
-        default_value='[12.0, 8.0]',
-        description='Figure size [width, height] for plots'
-    )
-
-    plot_dpi_arg = DeclareLaunchArgument(
-        'plot_dpi',
-        default_value='300',
-        description='DPI for saved plot images'
-    )
-
-    plot_style_arg = DeclareLaunchArgument(
-        'plot_style',
-        default_value='seaborn',
-        description='Matplotlib style for plots'
-    )
-
-    plot_color_scheme_arg = DeclareLaunchArgument(
-        'plot_color_scheme',
-        default_value='viridis',
-        description='Color scheme for multiple trajectories'
-    )
-
-    # Graph types to generate
-    generate_trajectory_plots_arg = DeclareLaunchArgument(
-        'generate_trajectory_plots',
-        default_value='true',
-        description='Generate 2D/3D trajectory visualization'
-    )
-
-    generate_xyz_plots_arg = DeclareLaunchArgument(
-        'generate_xyz_plots',
-        default_value='true',
-        description='Generate X, Y, Z position over time plots'
-    )
-
-    generate_rpy_plots_arg = DeclareLaunchArgument(
-        'generate_rpy_plots',
-        default_value='true',
-        description='Generate Roll, Pitch, Yaw over time plots'
-    )
-
-    generate_speed_plots_arg = DeclareLaunchArgument(
-        'generate_speed_plots',
-        default_value='true',
-        description='Generate velocity analysis plots'
-    )
-
-    generate_error_plots_arg = DeclareLaunchArgument(
-        'generate_error_plots',
-        default_value='true',
-        description='Generate APE/RPE error analysis plots'
-    )
-
-    generate_metrics_plots_arg = DeclareLaunchArgument(
-        'generate_metrics_plots',
-        default_value='true',
-        description='Generate smoothness/consistency over time plots'
-    )
-
-    # Horizon mapper reference trajectory settings
-    enable_horizon_mapper_reference_arg = DeclareLaunchArgument(
-        'enable_horizon_mapper_reference',
-        default_value='true',
-        description='Whether to enable horizon mapper reference trajectory interface'
-    )
-
-    horizon_mapper_reference_topic_arg = DeclareLaunchArgument(
-        'horizon_mapper_reference_topic',
-        default_value='/horizon_mapper/reference_trajectory',
-        description='Topic for horizon mapper reference trajectory messages'
-    )
-
-
-
-    # Computational performance monitoring parameters
-    enable_computational_monitoring_arg = DeclareLaunchArgument(
-        'enable_computational_monitoring',
-        default_value='false',
-        description='Enable computational performance monitoring'
-    )
-
-    odometry_topics_arg = DeclareLaunchArgument(
-        'odometry_topics',
-        default_value='["car_state/odom"]',
-        description='Array of odometry topic names to monitor'
-    )
-
-    control_command_topics_arg = DeclareLaunchArgument(
-        'control_command_topics',
-        default_value='["drive"]',
-        description='Array of control command topic names to monitor'
-    )
-
-    monitoring_window_size_arg = DeclareLaunchArgument(
-        'monitoring_window_size',
-        default_value='100',
-        description='Number of performance samples to keep in memory'
-    )
-
-    cpu_monitoring_interval_arg = DeclareLaunchArgument(
-        'cpu_monitoring_interval',
-        default_value='0.1',
-        description='CPU monitoring interval in seconds'
-    )
-
-    enable_performance_logging_arg = DeclareLaunchArgument(
-        'enable_performance_logging',
-        default_value='true',
-        description='Enable periodic performance logging'
-    )
-
-    performance_log_interval_arg = DeclareLaunchArgument(
-        'performance_log_interval',
-        default_value='5.0',
-        description='Performance logging interval in seconds'
-    )
-
-    # Configuration file path
-    config_file_arg = DeclareLaunchArgument(
-        'config_file',
-        default_value=PathJoinSubstitution([
-            FindPackageShare('race_monitor'),
-            'config',
-            'race_monitor.yaml'
-        ]),
-        description='Path to the race monitor configuration file'
-    )
-
-    # Single integrated Race Monitor Node
-    race_monitor_node = Node(
-        package='race_monitor',
-        executable='race_monitor',
-        name='race_monitor',
-        output='screen',
-        parameters=[
-            LaunchConfiguration('config_file'),
-            {
-                # Allow command line overrides
-                'controller_name': LaunchConfiguration('controller_name'),
-                'experiment_id': LaunchConfiguration('experiment_id'),
-            }
-        ]
-    )
-
-    # Create launch description
-    return LaunchDescription([
-        # Configuration file argument
-        config_file_arg,
+    def launch_setup(context, *args, **kwargs):
+        """Setup launch configuration based on selected mode."""
         
-        # Most commonly overridden arguments (can override config file values)
+        # Get parameter values
+        race_mode = LaunchConfiguration('race_mode').perform(context)
+        controller_name = LaunchConfiguration('controller_name').perform(context)
+        experiment_id = LaunchConfiguration('experiment_id').perform(context)
+        
+        # Base parameters (common to all modes)
+        base_parameters = {
+            'race_ending_mode': race_mode,
+            'controller_name': controller_name,
+            'experiment_id': experiment_id,
+            'enable_trajectory_evaluation': LaunchConfiguration('enable_trajectory_evaluation'),
+            'enable_computational_monitoring': LaunchConfiguration('enable_computational_monitoring'),
+            'save_trajectories': LaunchConfiguration('save_trajectories'),
+            'auto_generate_graphs': LaunchConfiguration('auto_generate_graphs'),
+        }
+        
+        # Mode-specific parameters
+        if race_mode == 'lap_complete':
+            # Lap complete mode parameters
+            mode_parameters = {
+                'required_laps': LaunchConfiguration('required_laps'),
+            }
+            
+        elif race_mode == 'crash':
+            # Crash detection mode parameters
+            mode_parameters = {
+                'required_laps': 999,  # High number for crash mode (won't be reached)
+                'crash_detection.enable_crash_detection': LaunchConfiguration('enable_crash_detection'),
+                'crash_detection.max_stationary_time': LaunchConfiguration('max_stationary_time'),
+                'crash_detection.min_velocity_threshold': LaunchConfiguration('min_velocity_threshold'),
+                'crash_detection.max_odometry_timeout': LaunchConfiguration('max_odometry_timeout'),
+                'crash_detection.enable_collision_detection': LaunchConfiguration('enable_collision_detection'),
+                'crash_detection.collision_velocity_threshold': LaunchConfiguration('collision_velocity_threshold'),
+                'crash_detection.collision_detection_window': LaunchConfiguration('collision_detection_window'),
+            }
+            
+        elif race_mode == 'manual':
+            # Manual mode parameters
+            mode_parameters = {
+                'required_laps': 999,  # High number for manual mode (won't be reached)
+                'crash_detection.enable_crash_detection': LaunchConfiguration('enable_crash_detection'),
+                'crash_detection.max_stationary_time': LaunchConfiguration('max_stationary_time'),
+                'crash_detection.min_velocity_threshold': LaunchConfiguration('min_velocity_threshold'),
+                'crash_detection.max_odometry_timeout': LaunchConfiguration('max_odometry_timeout'),
+                'crash_detection.enable_collision_detection': LaunchConfiguration('enable_collision_detection'),
+                'crash_detection.collision_velocity_threshold': LaunchConfiguration('collision_velocity_threshold'),
+                'crash_detection.collision_detection_window': LaunchConfiguration('collision_detection_window'),
+                'manual_mode.save_intermediate_results': LaunchConfiguration('enable_intermediate_saves'),
+                'manual_mode.save_interval': LaunchConfiguration('save_interval'),
+                'manual_mode.max_race_duration': LaunchConfiguration('max_duration'),
+            }
+        
+        else:
+            raise ValueError(f"Unknown race mode: {race_mode}")
+        
+        # Combine all parameters
+        all_parameters = {**base_parameters, **mode_parameters}
+        
+        # Create race monitor node
+        race_monitor_node = Node(
+            package='race_monitor',
+            executable='race_monitor',
+            name='race_monitor',
+            parameters=[config_file_path, all_parameters],
+            output='screen',
+            emulate_tty=True,
+        )
+        
+        return [race_monitor_node]
+    
+    return LaunchDescription([
+        # Common arguments
+        race_mode_arg,
         controller_name_arg,
         experiment_id_arg,
-
-        # Single integrated node
-        race_monitor_node,
+        
+        # Lap complete mode arguments
+        required_laps_arg,
+        
+        # Crash detection arguments
+        max_stationary_time_arg,
+        min_velocity_threshold_arg,
+        max_odometry_timeout_arg,
+        enable_collision_detection_arg,
+        collision_velocity_threshold_arg,
+        collision_detection_window_arg,
+        
+        # Manual mode arguments
+        save_interval_arg,
+        max_duration_arg,
+        enable_intermediate_saves_arg,
+        
+        # Advanced arguments
+        enable_crash_detection_arg,
+        enable_trajectory_evaluation_arg,
+        enable_computational_monitoring_arg,
+        save_trajectories_arg,
+        auto_generate_graphs_arg,
+        
+        # Setup function
+        OpaqueFunction(function=launch_setup)
     ])
+
+
+if __name__ == '__main__':
+    print("Race Monitor - Unified Launch File")
+    print("=" * 40)
+    print()
+    print("Available race modes:")
+    print("  lap_complete - Race ends after completing required laps (default)")
+    print("  crash        - Race ends when crash is detected")
+    print("  manual       - Race continues until manually killed")
+    print()
+    print("Quick start examples:")
+    print()
+    print("Standard 5-lap race:")
+    print("  ros2 launch race_monitor race_monitor.launch.py")
+    print()
+    print("10-lap race:")
+    print("  ros2 launch race_monitor race_monitor.launch.py required_laps:=10")
+    print()
+    print("Crash detection mode:")
+    print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash")
+    print()
+    print("Manual endurance mode:")
+    print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=manual")
+    print()
+    print("Custom crash detection:")
+    print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash \\")
+    print("    max_stationary_time:=10.0 enable_collision_detection:=false")
+    print()
+    print("For full argument list:")
+    print("  ros2 launch race_monitor race_monitor.launch.py --show-args")

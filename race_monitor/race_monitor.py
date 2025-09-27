@@ -113,7 +113,13 @@ class RaceMonitor(Node):
         self._start_monitoring_systems()
         
         self.get_logger().info("✅ Race Monitor initialized successfully!")
+        self.get_logger().info(f"   - Race Ending Mode: {self.config['race_ending_mode'].upper()}")
         self.get_logger().info(f"   - Lap Detection: Enabled")
+        if self.config['race_ending_mode'] == 'crash':
+            self.get_logger().info(f"   - Crash Detection: {'Enabled' if self.config['crash_detection']['enable_crash_detection'] else 'Disabled'}")
+        elif self.config['race_ending_mode'] == 'manual':
+            duration_limit = self.config['manual_mode']['max_race_duration']
+            self.get_logger().info(f"   - Manual Mode: Max duration = {duration_limit}s ({'no limit' if duration_limit == 0 else 'limited'})")
         self.get_logger().info(f"   - Reference Trajectory: {'Enabled' if self.reference_manager.is_reference_available() else 'Disabled'}")
         self.get_logger().info(f"   - Performance Monitoring: {'Enabled' if self.config.get('enable_computational_monitoring', True) else 'Disabled'}")
         self.get_logger().info(f"   - Research Evaluator: {'Enabled' if RESEARCH_EVALUATOR_AVAILABLE else 'Disabled'}")
@@ -137,6 +143,23 @@ class RaceMonitor(Node):
         self.declare_parameter('enable_race_evaluation', True)
         self.declare_parameter('save_trajectories', True)
         self.declare_parameter('auto_generate_graphs', True)
+        
+        # Race ending parameters
+        self.declare_parameter('race_ending_mode', 'lap_complete')
+        
+        # Crash detection parameters
+        self.declare_parameter('crash_detection.enable_crash_detection', True)
+        self.declare_parameter('crash_detection.max_stationary_time', 5.0)
+        self.declare_parameter('crash_detection.min_velocity_threshold', 0.1)
+        self.declare_parameter('crash_detection.max_odometry_timeout', 3.0)
+        self.declare_parameter('crash_detection.enable_collision_detection', True)
+        self.declare_parameter('crash_detection.collision_velocity_threshold', 2.0)
+        self.declare_parameter('crash_detection.collision_detection_window', 0.5)
+        
+        # Manual mode parameters
+        self.declare_parameter('manual_mode.save_intermediate_results', True)
+        self.declare_parameter('manual_mode.save_interval', 30.0)
+        self.declare_parameter('manual_mode.max_race_duration', 0)
         
         # Reference trajectory parameters
         self.declare_parameter('reference_trajectory_file', '')
@@ -193,6 +216,21 @@ class RaceMonitor(Node):
             'output_formats': self.get_parameter('output_formats').value,
             'include_timestamps': self.get_parameter('include_timestamps').value,
             'save_intermediate_results': self.get_parameter('save_intermediate_results').value,
+            'race_ending_mode': self.get_parameter('race_ending_mode').value,
+            'crash_detection': {
+                'enable_crash_detection': self.get_parameter('crash_detection.enable_crash_detection').value,
+                'max_stationary_time': self.get_parameter('crash_detection.max_stationary_time').value,
+                'min_velocity_threshold': self.get_parameter('crash_detection.min_velocity_threshold').value,
+                'max_odometry_timeout': self.get_parameter('crash_detection.max_odometry_timeout').value,
+                'enable_collision_detection': self.get_parameter('crash_detection.enable_collision_detection').value,
+                'collision_velocity_threshold': self.get_parameter('crash_detection.collision_velocity_threshold').value,
+                'collision_detection_window': self.get_parameter('crash_detection.collision_detection_window').value
+            },
+            'manual_mode': {
+                'save_intermediate_results': self.get_parameter('manual_mode.save_intermediate_results').value,
+                'save_interval': self.get_parameter('manual_mode.save_interval').value,
+                'max_race_duration': self.get_parameter('manual_mode.max_race_duration').value
+            },
             'race_evaluation': {
                 'grading_strictness': self.get_parameter('race_evaluation.grading_strictness').value,
                 'enable_recommendations': self.get_parameter('race_evaluation.enable_recommendations').value,
@@ -294,13 +332,22 @@ class RaceMonitor(Node):
         self.lap_detector.set_callbacks(
             on_race_start=self._on_race_start,
             on_lap_complete=self._on_lap_complete,
-            on_race_complete=self._on_race_complete
+            on_race_complete=self._on_race_complete,
+            on_race_crash=self._on_race_crash
         )
     
     def _start_monitoring_systems(self):
         """Start active monitoring systems."""
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.start_monitoring()
+        
+        # Set up intermediate save timer for manual mode
+        if (self.config['race_ending_mode'] == 'manual' and 
+            self.config['manual_mode']['save_intermediate_results']):
+            save_interval = self.config['manual_mode']['save_interval']
+            self.intermediate_save_timer = self.create_timer(
+                save_interval, self._save_intermediate_results
+            )
         
         # Initial visualization
         self.visualization_publisher.publish_start_line_marker()
@@ -319,8 +366,13 @@ class RaceMonitor(Node):
             y = msg.pose.pose.position.y
             z = msg.pose.pose.position.z
             
-            # Update lap detector
-            self.lap_detector.update_position(x, y, msg.header.stamp)
+            # Calculate velocity
+            linear_velocity = (msg.twist.twist.linear.x**2 + 
+                             msg.twist.twist.linear.y**2 + 
+                             msg.twist.twist.linear.z**2) ** 0.5
+            
+            # Update lap detector with position and velocity
+            self.lap_detector.update_position(x, y, msg.header.stamp, velocity=linear_velocity)
             
             # Add point to current trajectory
             if self.lap_detector.is_race_active():
@@ -329,11 +381,7 @@ class RaceMonitor(Node):
                     'qy': msg.pose.pose.orientation.y,
                     'qz': msg.pose.pose.orientation.z,
                     'qw': msg.pose.pose.orientation.w,
-                    'linear_velocity': np.sqrt(
-                        msg.twist.twist.linear.x**2 + 
-                        msg.twist.twist.linear.y**2 + 
-                        msg.twist.twist.linear.z**2
-                    ),
+                    'linear_velocity': linear_velocity,
                     'angular_velocity': msg.twist.twist.angular.z
                 }
                 self.data_manager.add_trajectory_point(x, y, z, msg.header.stamp, additional_data)
@@ -403,10 +451,15 @@ class RaceMonitor(Node):
     
     def _on_race_complete(self, total_time: float, lap_times: list):
         """Handle race completion event."""
-        self.get_logger().info(f"🏆 Race completed in {total_time:.3f}s!")
+        race_stats = self.lap_detector.get_race_stats()
+        reason = race_stats['race_ending_reason']
         
-        # Update visualization
-        self.visualization_publisher.publish_race_status_marker("FINISHED", len(lap_times), self.config['required_laps'])
+        self.get_logger().info(f"🏆 Race completed in {total_time:.3f}s! (Reason: {reason})")
+        
+        # Update visualization based on ending reason
+        status_text = "FINISHED" if reason == "Laps completed" else f"ENDED-{reason.upper()}"
+        required_laps = self.config['required_laps'] if self.config['race_ending_mode'] == 'lap_complete' else len(lap_times)
+        self.visualization_publisher.publish_race_status_marker(status_text, len(lap_times), required_laps)
         
         # Save race results
         race_data = {
@@ -414,11 +467,45 @@ class RaceMonitor(Node):
             'lap_times': lap_times,
             'controller_name': self.config['controller_name'],
             'experiment_id': self.config['experiment_id'],
+            'race_ending_mode': self.config['race_ending_mode'],
+            'race_ending_reason': reason,
+            'laps_completed': len(lap_times),
             'timestamp': datetime.now().isoformat()
         }
         self.data_manager.save_race_results_to_csv(race_data)
         
         # Perform comprehensive race analysis
+        self._perform_comprehensive_analysis(race_data)
+        
+        # Save performance data
+        if self.config['enable_computational_monitoring']:
+            self.performance_monitor.save_performance_data_to_csv(
+                os.path.join(self.config['trajectory_output_directory'], 'performance_data')
+            )
+    
+    def _on_race_crash(self, crash_reason: str, total_time: float, lap_times: list):
+        """Handle race crash event."""
+        self.get_logger().warning(f"🚨 Race ended due to crash: {crash_reason}")
+        self.get_logger().info(f"   Duration: {total_time:.3f}s, Laps: {len(lap_times)}")
+        
+        # Update visualization
+        self.visualization_publisher.publish_race_status_marker("CRASHED", len(lap_times), len(lap_times))
+        
+        # Save race results with crash information
+        race_data = {
+            'total_race_time': total_time,
+            'lap_times': lap_times,
+            'controller_name': self.config['controller_name'],
+            'experiment_id': self.config['experiment_id'],
+            'race_ending_mode': 'crash',
+            'race_ending_reason': crash_reason,
+            'laps_completed': len(lap_times),
+            'crashed': True,
+            'timestamp': datetime.now().isoformat()
+        }
+        self.data_manager.save_race_results_to_csv(race_data)
+        
+        # Perform analysis even for crashed races
         self._perform_comprehensive_analysis(race_data)
         
         # Save performance data
@@ -488,11 +575,16 @@ class RaceMonitor(Node):
             lap_time_msg.data = race_stats['lap_times'][-1]
             self.lap_time_pub.publish(lap_time_msg)
         
-        # Publish race status
+        # Publish race status based on ending mode and current state
         if race_stats['race_completed']:
-            status = "FINISHED"
+            if race_stats['race_ended_by_crash']:
+                status = "CRASHED"
+            elif race_stats['race_ended_manually']:
+                status = "TIMEOUT"
+            else:
+                status = "FINISHED"
         elif race_stats['race_started']:
-            status = "RACING"
+            status = f"RACING-{race_stats['race_ending_mode'].upper()}"
         else:
             status = "WAITING"
         
@@ -505,6 +597,35 @@ class RaceMonitor(Node):
         race_running_msg.data = race_stats['race_started'] and not race_stats['race_completed']
         self.race_running_pub.publish(race_running_msg)
     
+    def _save_intermediate_results(self):
+        """Save intermediate results for manual mode."""
+        race_stats = self.lap_detector.get_race_stats()
+        
+        if race_stats['race_started'] and not race_stats['race_completed']:
+            current_time = self.get_clock().now()
+            elapsed_time = (current_time.nanoseconds - race_stats.get('race_start_time', 0)) / 1e9
+            
+            self.get_logger().info(f"💾 Saving intermediate results (Manual mode) - "
+                                 f"Elapsed: {elapsed_time:.1f}s, Laps: {len(race_stats['lap_times'])}")
+            
+            # Save intermediate race data
+            race_data = {
+                'total_race_time': elapsed_time,
+                'lap_times': race_stats['lap_times'],
+                'controller_name': self.config['controller_name'],
+                'experiment_id': self.config['experiment_id'],
+                'race_ending_mode': self.config['race_ending_mode'],
+                'race_ending_reason': 'Intermediate save',
+                'laps_completed': len(race_stats['lap_times']),
+                'intermediate_save': True,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Save with timestamp suffix to avoid overwriting
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"intermediate_results_{timestamp_str}.csv"
+            self.data_manager.save_race_results_to_csv(race_data, filename_override=filename)
+    
     def destroy_node(self):
         """Clean up resources before node destruction."""
         self.get_logger().info("🛑 Shutting down race monitor...")
@@ -513,14 +634,30 @@ class RaceMonitor(Node):
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.stop_monitoring()
         
+        # Clean up timers
+        if hasattr(self, 'intermediate_save_timer'):
+            self.intermediate_save_timer.cancel()
+        
         # Save any remaining data
         race_stats = self.lap_detector.get_race_stats()
-        if race_stats['race_started'] and race_stats['lap_times']:
+        if race_stats['race_started']:
+            current_time = self.get_clock().now()
+            
+            # Calculate elapsed time if race is still active
+            if not race_stats['race_completed'] and race_stats.get('race_start_time'):
+                elapsed_time = (current_time.nanoseconds - race_stats['race_start_time']) / 1e9
+            else:
+                elapsed_time = race_stats['total_race_time']
+            
             race_data = {
-                'total_race_time': race_stats['total_race_time'],
+                'total_race_time': elapsed_time,
                 'lap_times': race_stats['lap_times'],
                 'controller_name': self.config['controller_name'],
                 'experiment_id': self.config['experiment_id'],
+                'race_ending_mode': self.config['race_ending_mode'],
+                'race_ending_reason': race_stats.get('race_ending_reason', 'Node shutdown'),
+                'laps_completed': len(race_stats['lap_times']),
+                'forced_shutdown': not race_stats['race_completed'],
                 'timestamp': datetime.now().isoformat()
             }
             self.data_manager.save_race_results_to_csv(race_data)

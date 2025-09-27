@@ -13,6 +13,41 @@ race_monitor:
     frame_id: "map" # Frame ID for visualization
 
     # ========================================
+    # RACE ENDING CONDITIONS
+    # ========================================
+    
+    # Race ending mode: "lap_complete", "crash", "manual"
+    # - lap_complete: Race ends when required laps are completed
+    # - crash: Race ends when crash is detected
+    # - manual: Race continues until node is manually killed
+    race_ending_mode: "lap_complete"
+    
+    # Crash detection parameters (only used when race_ending_mode is "crash")
+    crash_detection:
+      enable_crash_detection: true
+      # Maximum allowed stationary time before considering crash (seconds)
+      max_stationary_time: 5.0
+      # Minimum velocity threshold to consider vehicle as moving (m/s)
+      min_velocity_threshold: 0.1
+      # Maximum allowed time without odometry updates (seconds)
+      max_odometry_timeout: 3.0
+      # Enable collision detection based on sudden velocity changes
+      enable_collision_detection: true
+      # Velocity change threshold for collision detection (m/s)
+      collision_velocity_threshold: 2.0
+      # Time window for collision detection (seconds)
+      collision_detection_window: 0.5
+    
+    # Manual mode parameters (only used when race_ending_mode is "manual")
+    manual_mode:
+      # Save intermediate results periodically even if race doesn't end
+      save_intermediate_results: true
+      # Interval for saving intermediate results (seconds)
+      save_interval: 30.0
+      # Maximum race duration before automatic safety stop (seconds, 0 = no limit)
+      max_race_duration: 0
+
+    # ========================================
     # RESEARCH & ANALYSIS PARAMETERS
     # ========================================
 
