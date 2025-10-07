@@ -14,7 +14,9 @@ import glob
 
 class DataAnalyzer:
     def __init__(self):
-        self.data_dir = Path("../../race_monitor/evaluation_results")
+        # Use absolute path to avoid issues when running from different directories
+        base_path = Path(__file__).parent.parent.parent
+        self.data_dir = base_path / "race_monitor" / "evaluation_results"
         self.graphs_dir = self.data_dir / "graphs"
         self.performance_dir = self.data_dir / "performance_data"
         self.research_dir = self.data_dir / "research_data"

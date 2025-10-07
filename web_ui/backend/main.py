@@ -55,12 +55,44 @@ except ImportError as e:
         async def start(self): return {"status": "disabled"}
         async def stop(self): pass
 
+# Dynamic port configuration
+def get_frontend_origins():
+    """Get allowed origins for CORS based on dynamic port configuration"""
+    origins = [
+        "http://localhost:3000", 
+        "http://localhost:5173",  # Default Vite port
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3003",
+        "http://localhost:3004",
+        "http://localhost:3005"
+    ]
+    
+    # Add dynamic port if available
+    frontend_port = os.getenv('FRONTEND_PORT')
+    if frontend_port:
+        origins.append(f"http://localhost:{frontend_port}")
+    
+    # Add network access
+    try:
+        import socket
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        if frontend_port:
+            origins.append(f"http://{local_ip}:{frontend_port}")
+        for port in [3000, 3001, 3002, 3003, 3004, 3005]:
+            origins.append(f"http://{local_ip}:{port}")
+    except:
+        pass
+    
+    return origins
+
 app = FastAPI(title="Race Monitor Web UI", version="1.0.0")
 
-# Enable CORS for frontend
+# Enable CORS for frontend with dynamic origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
+    allow_origins=get_frontend_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -121,6 +153,19 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0"
+    }
+
+@app.get("/api/info/ports")
+async def get_port_info():
+    """Get current port configuration"""
+    backend_port = os.getenv('BACKEND_PORT', 'unknown')
+    frontend_port = os.getenv('FRONTEND_PORT', 'unknown')
+    
+    return {
+        "backend_port": backend_port,
+        "frontend_port": frontend_port,
+        "backend_url": f"http://localhost:{backend_port}" if backend_port != 'unknown' else 'unknown',
+        "frontend_url": f"http://localhost:{frontend_port}" if frontend_port != 'unknown' else 'unknown'
     }
 
 # Configuration Management
