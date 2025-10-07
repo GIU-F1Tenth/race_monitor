@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Gauge, 
   Activity, 
@@ -6,9 +6,17 @@ import {
   TrendingUp, 
   AlertCircle, 
   CheckCircle,
-  RefreshCw
+  RefreshCw,
+  Network,
+  Radio,
+  Wifi,
+  WifiOff,
+  Settings,
+  BarChart3,
+  Monitor
 } from 'lucide-react';
 import axios from 'axios';
+import RQTGraph from '../components/LQTGraph';
 
 interface DashboardData {
   experiments_count: number;
@@ -21,15 +29,38 @@ interface DashboardData {
   };
 }
 
+interface RosStatus {
+  ros_available: boolean;
+  monitoring_active: boolean;
+  active_nodes?: number;
+  active_topics?: number;
+}
+
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [rosStatus, setRosStatus] = useState<RosStatus>({
+    ros_available: false,
+    monitoring_active: false,
+    active_nodes: 0,
+    active_topics: 0
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     try {
-      const response = await axios.get('/api/data/summary');
-      setData(response.data);
+      const [dataResponse, statusResponse] = await Promise.all([
+        axios.get('/api/data/summary'),
+        axios.get('/api/live/status')
+      ]);
+      
+      setData(dataResponse.data);
+      setRosStatus({
+        ros_available: statusResponse.data.ros_available || false,
+        monitoring_active: statusResponse.data.monitoring_active || false,
+        active_nodes: statusResponse.data.active_nodes || 0,
+        active_topics: statusResponse.data.active_topics || 0
+      });
       setError(null);
     } catch (err) {
       setError('Failed to fetch dashboard data');
@@ -41,6 +72,10 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(fetchDashboardData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = () => {
@@ -163,6 +198,9 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
+      {/* RQT Graph - ROS2 Node Graph */}
+      <RQTGraph realtime={rosStatus.monitoring_active} />
+
       {/* Quick Actions */}
       <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
@@ -192,7 +230,7 @@ const Dashboard: React.FC = () => {
       {/* System Health */}
       <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">System Health</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
             <div>
               <p className="text-sm font-medium text-gray-600">Backend API</p>
@@ -201,12 +239,40 @@ const Dashboard: React.FC = () => {
             <CheckCircle className="h-6 w-6 text-green-500" />
           </div>
           
-          <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
+          <div className={`flex items-center justify-between p-4 rounded-lg ${
+            rosStatus.ros_available ? 'bg-green-50' : 'bg-red-50'
+          }`}>
             <div>
               <p className="text-sm font-medium text-gray-600">ROS2 Connection</p>
-              <p className="text-lg font-semibold text-yellow-600">Checking...</p>
+              <p className={`text-lg font-semibold ${
+                rosStatus.ros_available ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {rosStatus.ros_available ? 'Connected' : 'Disconnected'}
+              </p>
             </div>
-            <RefreshCw className="h-6 w-6 text-yellow-500 animate-spin" />
+            {rosStatus.ros_available ? (
+              <Wifi className="h-6 w-6 text-green-500" />
+            ) : (
+              <WifiOff className="h-6 w-6 text-red-500" />
+            )}
+          </div>
+          
+          <div className={`flex items-center justify-between p-4 rounded-lg ${
+            rosStatus.monitoring_active ? 'bg-blue-50' : 'bg-yellow-50'
+          }`}>
+            <div>
+              <p className="text-sm font-medium text-gray-600">Monitoring</p>
+              <p className={`text-lg font-semibold ${
+                rosStatus.monitoring_active ? 'text-blue-600' : 'text-yellow-600'
+              }`}>
+                {rosStatus.monitoring_active ? 'Active' : 'Idle'}
+              </p>
+            </div>
+            {rosStatus.monitoring_active ? (
+              <Activity className="h-6 w-6 text-blue-500 animate-pulse" />
+            ) : (
+              <Clock className="h-6 w-6 text-yellow-500" />
+            )}
           </div>
           
           <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
@@ -217,6 +283,30 @@ const Dashboard: React.FC = () => {
             <CheckCircle className="h-6 w-6 text-blue-500" />
           </div>
         </div>
+        
+        {/* ROS2 Quick Stats */}
+        {rosStatus.ros_available && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">ROS2 System Overview</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <Network className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-sm text-gray-600">Active Nodes</p>
+                  <p className="text-lg font-semibold text-gray-900">{rosStatus.active_nodes || 'N/A'}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <Radio className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-sm text-gray-600">Active Topics</p>
+                  <p className="text-lg font-semibold text-gray-900">{rosStatus.active_topics || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
