@@ -805,7 +805,7 @@ class RaceMonitor(Node):
         # ========================================
         # COMPUTATIONAL PERFORMANCE MONITORING
         # ========================================
-        self.declare_parameter('enable_computational_monitoring', True)
+        self.declare_parameter('enable_computational_monitoring', False)
 
         # Odometry input topics
         self.declare_parameter('odometry_topics', ['car_state/odom'])

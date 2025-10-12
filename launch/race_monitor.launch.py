@@ -148,7 +148,7 @@ def generate_launch_description():
 
     enable_computational_monitoring_arg = DeclareLaunchArgument(
         'enable_computational_monitoring',
-        default_value='true',
+        default_value='false',
         description='Enable computational performance monitoring'
     )
 
@@ -162,6 +162,26 @@ def generate_launch_description():
         'auto_generate_graphs',
         default_value='true',
         description='Automatically generate analysis graphs'
+    )
+
+    # Smart controller detection arguments
+    enable_smart_controller_detection_arg = DeclareLaunchArgument(
+        'enable_smart_controller_detection',
+        default_value='true',
+        description='Enable automatic controller detection from topic publishers (only when controller_name is empty)'
+    )
+
+    # Auto-shutdown arguments
+    auto_shutdown_on_race_complete_arg = DeclareLaunchArgument(
+        'auto_shutdown_on_race_complete',
+        default_value='true',
+        description='Automatically shutdown node when race is completed'
+    )
+
+    shutdown_delay_seconds_arg = DeclareLaunchArgument(
+        'shutdown_delay_seconds',
+        default_value='5.0',
+        description='Delay before shutdown to allow final data processing'
     )
 
     def launch_setup(context, *args, **kwargs):
@@ -278,6 +298,13 @@ def generate_launch_description():
         save_trajectories_arg,
         auto_generate_graphs_arg,
 
+        # Smart controller detection arguments
+        enable_smart_controller_detection_arg,
+
+        # Auto-shutdown arguments
+        auto_shutdown_on_race_complete_arg,
+        shutdown_delay_seconds_arg,
+
         # Setup function
         OpaqueFunction(function=launch_setup)
     ])
@@ -302,6 +329,15 @@ if __name__ == '__main__':
     print()
     print("Crash detection mode:")
     print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash")
+    print()
+    print("With smart controller detection disabled:")
+    print("  ros2 launch race_monitor race_monitor.launch.py enable_smart_controller_detection:=false")
+    print()
+    print("With auto-shutdown disabled:")
+    print("  ros2 launch race_monitor race_monitor.launch.py auto_shutdown_on_race_complete:=false")
+    print()
+    print("Set custom controller name (disables auto-detection):")
+    print("  ros2 launch race_monitor race_monitor.launch.py controller_name:=my_controller")
     print()
     print("Manual endurance mode:")
     print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=manual")
