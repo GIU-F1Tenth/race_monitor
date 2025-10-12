@@ -95,6 +95,11 @@ class LapDetector:
         self.previous_position = None
         self.current_heading = 0.0  # Vehicle heading in radians
 
+        # Lap detection configuration
+        self.expected_direction = "any"  # "any", "positive", "negative"
+        self.validate_heading_direction = False
+        self.log_level = "normal"  # "minimal", "normal", "debug"
+
         # Crash detection state
         self.last_odometry_time = None
         self.last_velocity = 0.0
@@ -120,6 +125,13 @@ class LapDetector:
         self.debounce_time = config.get('debounce_time', self.debounce_time)
         self.required_laps = config.get('required_laps', self.required_laps)
 
+        # Lap detection configuration
+        lap_detection_config = config.get('lap_detection', {})
+        self.expected_direction = lap_detection_config.get('expected_direction', self.expected_direction)
+        self.validate_heading_direction = lap_detection_config.get(
+            'validate_heading_direction', self.validate_heading_direction)
+        self.log_level = lap_detection_config.get('log_level', self.log_level)
+
         # Race ending configuration
         self.race_ending_mode = config.get('race_ending_mode', self.race_ending_mode)
 
@@ -140,17 +152,20 @@ class LapDetector:
         manual_config = config.get('manual_mode', {})
         self.max_race_duration = manual_config.get('max_race_duration', self.max_race_duration)
 
-        self.logger.info(f"Lap detector configured:")
-        self.logger.info(f"  - Start line: ({self.start_line_p1}, {self.start_line_p2})")
-        self.logger.info(f"  - Required laps: {self.required_laps}")
-        self.logger.info(f"  - Debounce time: {self.debounce_time}s")
-        self.logger.info(f"  - Race ending mode: {self.race_ending_mode}")
+        self.logger.info(f"Lap detector configuration:")
+        self.logger.info(f"  Start line: P1={self.start_line_p1}, P2={self.start_line_p2}")
+        self.logger.info(f"  Required laps: {self.required_laps}")
+        self.logger.info(f"  Debounce time: {self.debounce_time}s")
+        self.logger.info(f"  Race ending mode: {self.race_ending_mode}")
+        self.logger.info(f"  Expected direction: {self.expected_direction}")
+        self.logger.info(f"  Validate heading: {self.validate_heading_direction}")
+        self.logger.info(f"  Log level: {self.log_level}")
         if self.race_ending_mode == "crash":
-            self.logger.info(f"  - Crash detection enabled: {self.crash_detection_enabled}")
-            self.logger.info(f"  - Max stationary time: {self.max_stationary_time}s")
+            self.logger.info(f"  Crash detection enabled: {self.crash_detection_enabled}")
+            self.logger.info(f"  Max stationary time: {self.max_stationary_time}s")
         elif self.race_ending_mode == "manual":
             self.logger.info(
-                f"  - Max race duration: {self.max_race_duration}s ({'no limit' if self.max_race_duration == 0 else 'limit'})")
+                f"  Max race duration: {self.max_race_duration}s ({'no limit' if self.max_race_duration == 0 else 'limit'})")
 
     def set_callbacks(self, on_race_start: Callable = None,
                       on_lap_complete: Callable = None,
@@ -251,9 +266,12 @@ class LapDetector:
             # Check if crossing in the correct direction using heading
             direction_ok = self._check_crossing_direction()
             if direction_ok:
+                if self.log_level == "debug":
+                    self.logger.debug("Valid line crossing detected")
                 return True
             else:
-                self.logger.info("❌ Wrong direction - ignoring crossing")
+                if self.log_level in ["normal", "debug"]:
+                    self.logger.info("Invalid crossing direction - ignoring")
 
         return False
 
@@ -281,18 +299,30 @@ class LapDetector:
 
         result = (ccw(A, C, D) != ccw(B, C, D)) and (ccw(A, B, C) != ccw(A, B, D))
 
+        if self.log_level == "debug":
+            self.logger.debug(f"Line intersection: path {p1}->{p2} vs line {q1}->{q2} = {result}")
+
         return result
 
     def _check_crossing_direction(self):
         """
-        Check if the vehicle is crossing the line in the correct direction.
-
-        This uses the vehicle heading to determine if the crossing is in the expected
-        direction. We'll accept crossings in either direction for now to be more flexible.
+        Check if the vehicle is crossing the line in the expected direction.
 
         Returns:
-            bool: True if crossing in correct direction
+            bool: True if crossing is valid based on configuration
         """
+        # If no direction validation required, accept all crossings
+        if not self.validate_heading_direction or self.expected_direction == "any":
+            if self.log_level == "debug":
+                self.logger.debug("Direction validation disabled - accepting crossing")
+            return True
+
+        # Need heading data for direction validation
+        if self.current_heading is None:
+            if self.log_level in ["normal", "debug"]:
+                self.logger.warning("No heading data available for direction validation")
+            return self.expected_direction == "any"
+
         # Calculate line vector (from p1 to p2)
         line_vector = np.array([
             self.start_line_p2[0] - self.start_line_p1[0],
@@ -301,9 +331,36 @@ class LapDetector:
 
         # Check for degenerate line
         if np.linalg.norm(line_vector) == 0.0:
+            if self.log_level in ["normal", "debug"]:
+                self.logger.warning("Degenerate start line detected")
             return False
 
-        return True
+        # Calculate line normal (perpendicular to line)
+        line_normal = np.array([-line_vector[1], line_vector[0]], dtype=float)
+        line_normal = line_normal / np.linalg.norm(line_normal)
+
+        # Vehicle direction vector from heading
+        vehicle_direction = np.array([
+            np.cos(self.current_heading),
+            np.sin(self.current_heading)
+        ], dtype=float)
+
+        # Calculate cross product to determine direction
+        cross_product = np.dot(vehicle_direction, line_normal)
+
+        # Determine if crossing is in expected direction
+        crossing_positive = cross_product > 0
+
+        if self.log_level == "debug":
+            self.logger.debug(f"Direction analysis: heading={self.current_heading:.3f}rad, "
+                              f"cross_product={cross_product:.3f}, positive={crossing_positive}")
+
+        if self.expected_direction == "positive":
+            return crossing_positive
+        elif self.expected_direction == "negative":
+            return not crossing_positive
+        else:  # "any"
+            return True
 
     def quaternion_to_yaw(self, q):
         """
@@ -368,7 +425,10 @@ class LapDetector:
         self.lap_times = []
         self.last_lap_time = timestamp
 
-        self.logger.info(f"🏁 Race started! Beginning lap {self.current_lap}")
+        if self.log_level == "minimal":
+            self.logger.info(f"Race started - Lap {self.current_lap}")
+        else:
+            self.logger.info(f"Race started! Beginning lap {self.current_lap}")
 
         if self.on_race_start:
             self.on_race_start(timestamp)
@@ -384,7 +444,10 @@ class LapDetector:
         lap_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.last_lap_time)) / 1e9
         self.lap_times.append(lap_time)
 
-        self.logger.info(f"🏎️  Lap {self.current_lap} completed in {lap_time:.3f}s")
+        if self.log_level == "minimal":
+            self.logger.info(f"Lap {self.current_lap} completed: {lap_time:.3f}s")
+        else:
+            self.logger.info(f"Lap {self.current_lap} completed in {lap_time:.3f}s")
 
         # Trigger lap completion callback
         if self.on_lap_complete:
@@ -397,12 +460,18 @@ class LapDetector:
             # Start next lap
             self.current_lap += 1
             self.last_lap_time = timestamp
-            self.logger.info(f"🚀 Starting lap {self.current_lap}")
+            if self.log_level == "minimal":
+                self.logger.info(f"Starting lap {self.current_lap}")
+            else:
+                self.logger.info(f"Starting lap {self.current_lap}")
         else:
             # For crash and manual modes, continue laps indefinitely
             self.current_lap += 1
             self.last_lap_time = timestamp
-            self.logger.info(f"🚀 Starting lap {self.current_lap} (mode: {self.race_ending_mode})")
+            if self.log_level == "minimal":
+                self.logger.info(f"Starting lap {self.current_lap}")
+            else:
+                self.logger.info(f"Starting lap {self.current_lap} (mode: {self.race_ending_mode})")
 
     def _complete_race(self, timestamp):
         """
@@ -419,12 +488,16 @@ class LapDetector:
         best_lap_time = min(self.lap_times)
         worst_lap_time = max(self.lap_times)
 
-        self.logger.info(f"🏆 Race completed!")
-        self.logger.info(f"   Total time: {self.total_race_time:.3f}s")
-        self.logger.info(f"   Total laps: {len(self.lap_times)}")
-        self.logger.info(f"   Average lap: {avg_lap_time:.3f}s")
-        self.logger.info(f"   Best lap: {best_lap_time:.3f}s")
-        self.logger.info(f"   Worst lap: {worst_lap_time:.3f}s")
+        if self.log_level == "minimal":
+            self.logger.info(
+                f"Race completed - Time: {self.total_race_time:.3f}s, Laps: {len(self.lap_times)}, Best: {best_lap_time:.3f}s")
+        else:
+            self.logger.info(f"Race completed!")
+            self.logger.info(f"  Total time: {self.total_race_time:.3f}s")
+            self.logger.info(f"  Total laps: {len(self.lap_times)}")
+            self.logger.info(f"  Average lap: {avg_lap_time:.3f}s")
+            self.logger.info(f"  Best lap: {best_lap_time:.3f}s")
+            self.logger.info(f"  Worst lap: {worst_lap_time:.3f}s")
 
         # Trigger race completion callback
         if self.on_race_complete:
@@ -594,11 +667,14 @@ class LapDetector:
         self.race_ended_by_crash = True
         self.total_race_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.race_start_time)) / 1e9
 
-        self.logger.warning(f"🚨 Race ended due to crash: {crash_reason}")
-        self.logger.info(f"   Race duration: {self.total_race_time:.3f}s")
-        self.logger.info(f"   Laps completed: {len(self.lap_times)}")
-        if self.lap_times:
-            self.logger.info(f"   Last lap time: {self.lap_times[-1]:.3f}s")
+        if self.log_level == "minimal":
+            self.logger.warning(f"Race ended - crash detected: {crash_reason} (Duration: {self.total_race_time:.3f}s)")
+        else:
+            self.logger.warning(f"Race ended due to crash: {crash_reason}")
+            self.logger.info(f"  Race duration: {self.total_race_time:.3f}s")
+            self.logger.info(f"  Laps completed: {len(self.lap_times)}")
+            if self.lap_times:
+                self.logger.info(f"  Last lap time: {self.lap_times[-1]:.3f}s")
 
         # Trigger crash callback
         if self.on_race_crash:
@@ -615,9 +691,12 @@ class LapDetector:
         self.race_ended_manually = True
         self.total_race_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.race_start_time)) / 1e9
 
-        self.logger.info(f"⏰ Race ended due to maximum duration limit ({self.max_race_duration}s)")
-        self.logger.info(f"   Total race time: {self.total_race_time:.3f}s")
-        self.logger.info(f"   Laps completed: {len(self.lap_times)}")
+        if self.log_level == "minimal":
+            self.logger.info(f"Race ended - timeout limit ({self.max_race_duration}s) reached")
+        else:
+            self.logger.info(f"Race ended due to maximum duration limit ({self.max_race_duration}s)")
+            self.logger.info(f"  Total race time: {self.total_race_time:.3f}s")
+            self.logger.info(f"  Laps completed: {len(self.lap_times)}")
 
         # Trigger race completion callback
         if self.on_race_complete:
