@@ -137,8 +137,8 @@ class RaceMonitor(Node):
         # ========================================
         # RACE MONITORING PARAMETERS
         # ========================================
-        self.declare_parameter('start_line_p1', [0.0, -1.0])
-        self.declare_parameter('start_line_p2', [1.0, 0.0])
+        self.declare_parameter('start_line_p1', [-2.0, 2.0])
+        self.declare_parameter('start_line_p2', [2.0, 2.0])
         self.declare_parameter('required_laps', 20)
         self.declare_parameter('debounce_time', 2.0)
         self.declare_parameter('output_file', 'race_results.csv')
@@ -486,7 +486,7 @@ class RaceMonitor(Node):
         self.lap_time_pub = self.create_publisher(Float32, '/race_monitor/lap_time', 10)
         self.race_status_pub = self.create_publisher(String, '/race_monitor/race_status', 10)
         self.race_running_pub = self.create_publisher(Bool, '/race_monitor/race_running', 10)
-        self.visualization_marker_pub = self.create_publisher(Marker, '/visualization_marker', 10)
+        self.start_line_marker_pub = self.create_publisher(Marker, '/race_monitor/start_line_marker', 10)
 
         # Subscribers
         self.odom_sub = self.create_subscription(
@@ -537,6 +537,10 @@ class RaceMonitor(Node):
             on_race_crash=self._on_race_crash
         )
 
+        # Update visualization publisher with current start line configuration
+        self.visualization_publisher.start_line_p1 = self.config['start_line_p1']
+        self.visualization_publisher.start_line_p2 = self.config['start_line_p2']
+
     def _start_monitoring_systems(self):
         """Start active monitoring systems."""
         if self.config['enable_computational_monitoring']:
@@ -553,13 +557,8 @@ class RaceMonitor(Node):
         # Set up periodic visualization timer to ensure raceline stays visible
         self.visualization_timer = self.create_timer(5.0, self._periodic_visualization_update)
 
-        # Initial visualization
+        # Initial enhanced visualization
         self.visualization_publisher.publish_start_line_marker()
-
-        # Publish reference trajectory if available
-        reference_points = self.reference_manager.get_reference_points()
-        if reference_points:
-            self.visualization_publisher.publish_raceline_markers(reference_points=reference_points)
 
     # ROS2 Callback Methods
     def _odometry_callback(self, msg: Odometry):
@@ -634,14 +633,14 @@ class RaceMonitor(Node):
             self.get_logger().info(
                 f"  P2: ({self.config['start_line_p2'][0]:.2f}, {self.config['start_line_p2'][1]:.2f})")
 
-            # Update visualization
+            # Update visualization with enhanced start line markers
             self.visualization_publisher.publish_start_line_markers(
                 self.config['start_line_p1'], self.config['start_line_p2'], self.config['frame_id']
             )
 
     def _publish_marker(self, marker: Marker):
         """Publish visualization marker."""
-        self.visualization_marker_pub.publish(marker)
+        self.start_line_marker_pub.publish(marker)
 
     # Race Event Handlers
     def _on_race_start(self, timestamp):
@@ -832,18 +831,10 @@ class RaceMonitor(Node):
         self.race_running_pub.publish(race_running_msg)
 
     def _periodic_visualization_update(self):
-        """Periodically update visualization to ensure raceline stays visible."""
+        """Periodically update visualization to ensure start line stays visible."""
         try:
-            # Re-publish start line marker
+            # Re-publish enhanced start line marker
             self.visualization_publisher.publish_start_line_marker()
-
-            # Re-publish reference trajectory if available
-            reference_points = self.reference_manager.get_reference_points()
-            if reference_points:
-                self.visualization_publisher.publish_raceline_markers(reference_points=reference_points)
-                self.get_logger().debug(f"Refreshed raceline visualization with {len(reference_points)} points")
-            else:
-                self.get_logger().debug("No reference trajectory available for visualization")
 
         except Exception as e:
             self.get_logger().error(f"Error in periodic visualization update: {e}")

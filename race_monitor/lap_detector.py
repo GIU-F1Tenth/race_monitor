@@ -57,10 +57,10 @@ class LapDetector:
         self.clock = clock
 
         # Lap detection configuration
-        self.start_line_p1 = [0.0, -1.0]  # Default start line points
-        self.start_line_p2 = [0.0, 1.0]
+        self.start_line_p1 = [8.0, -10.0]
+        self.start_line_p2 = [8.5, -10.0]
         self.debounce_time = 2.0  # seconds
-        self.required_laps = 20  # Changed default to match config
+        self.required_laps = 20
 
         # Race ending configuration
         self.race_ending_mode = "lap_complete"  # "lap_complete", "crash", "manual"
@@ -92,6 +92,7 @@ class LapDetector:
         self.last_crossing_time = None
         self.previous_side = None
         self.current_position = None
+        self.previous_position = None
 
         # Crash detection state
         self.last_odometry_time = None
@@ -178,6 +179,8 @@ class LapDetector:
             timestamp: Optional timestamp, uses current time if None
             velocity: Optional velocity for crash detection
         """
+        # Store previous position before updating current
+        self.previous_position = self.current_position
         self.current_position = [x, y]
 
         if timestamp is None:
@@ -211,35 +214,88 @@ class LapDetector:
 
     def _detect_lap_crossing(self, current_time) -> bool:
         """
-        Detect if the vehicle has crossed the start/finish line.
+        Detect if the vehicle has crossed the start/finish line in the correct direction.
 
         Args:
             current_time: Current timestamp
 
         Returns:
-            bool: True if a lap crossing is detected
+            bool: True if a valid lap crossing is detected
         """
-        if self.current_position is None:
+        if self.current_position is None or self.previous_position is None:
             return False
 
         # Check debounce time
         if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) -
-                                                     time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
+                time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
             return False
 
-        current_side = self._get_side_of_line(self.current_position)
+        # Check if the movement crosses the start/finish line
+        if self._line_intersection(self.previous_position, self.current_position,
+                                   self.start_line_p1, self.start_line_p2):
 
-        # Initialize if this is the first position
-        if self.previous_side is None:
-            self.previous_side = current_side
-            return False
-
-        # Check for side change (crossing)
-        if current_side != self.previous_side:
-            self.previous_side = current_side
-            return True
+            # Check if crossing in the correct direction
+            if self._check_crossing_direction():
+                return True
 
         return False
+
+    def _line_intersection(self, p1, p2, q1, q2):
+        """
+        Check if line segment p1-p2 intersects with line segment q1-q2.
+
+        Args:
+            p1, p2: Movement line (previous position to current position)
+            q1, q2: Start/finish line points
+
+        Returns:
+            bool: True if segments intersect
+        """
+        def ccw(A, B, C):
+            return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
+
+        A, B = p1, p2
+        C, D = q1, q2
+        return (ccw(A, C, D) != ccw(B, C, D)) and (ccw(A, B, C) != ccw(A, B, D))
+
+    def _check_crossing_direction(self):
+        """
+        Check if the vehicle is crossing the line in the correct direction.
+
+        This uses the cross product of the movement vector and the line vector
+        to determine if the crossing is in the expected direction.
+
+        Returns:
+            bool: True if crossing in correct direction
+        """
+        # Calculate movement vector
+        movement_vector = [
+            self.current_position[0] - self.previous_position[0],
+            self.current_position[1] - self.previous_position[1]
+        ]
+
+        # Calculate line vector (from p1 to p2)
+        line_vector = [
+            self.start_line_p2[0] - self.start_line_p1[0],
+            self.start_line_p2[1] - self.start_line_p1[1]
+        ]
+
+        # Calculate the normal vector to the line (perpendicular, pointing "forward")
+        # Rotate line vector 90 degrees counterclockwise to get normal
+        line_normal = [-line_vector[1], line_vector[0]]
+
+        # Normalize the normal vector
+        normal_magnitude = math.sqrt(line_normal[0]**2 + line_normal[1]**2)
+        if normal_magnitude == 0:
+            return False
+        line_normal = [line_normal[0] / normal_magnitude, line_normal[1] / normal_magnitude]
+
+        # Check if movement is in the positive normal direction
+        dot_product = (movement_vector[0] * line_normal[0] +
+                       movement_vector[1] * line_normal[1])
+
+        # Crossing is valid if dot product is positive (moving in correct direction)
+        return dot_product > 0
 
     def _get_side_of_line(self, position: list) -> int:
         """

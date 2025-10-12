@@ -86,37 +86,129 @@ class VisualizationPublisher:
         self.logger.info(f"Visualization publisher configured: frame_id={self.frame_id}")
 
     def publish_start_line_marker(self):
-        """Publish start/finish line marker for RViz visualization."""
+        """Publish enhanced start/finish line marker for RViz visualization with endpoint markers."""
         try:
-            marker = Marker()
-            marker.header.frame_id = self.frame_id
-            marker.header.stamp = rclpy.time.Time().to_msg()
-            marker.ns = "race_monitor"
-            marker.id = self.start_line_marker_id
-            marker.type = Marker.LINE_STRIP
-            marker.action = Marker.ADD
+            # Check if line has changed to avoid unnecessary republishing
+            current_line = (tuple(self.start_line_p1), tuple(self.start_line_p2))
 
-            # Line properties
-            marker.scale.x = 0.1  # Line width
-            marker.color = self.colors['start_line']
+            if not hasattr(self, '_last_published_line'):
+                self._last_published_line = None
 
-            # Start and end points
-            start_point = Point()
-            start_point.x = float(self.start_line_p1[0])
-            start_point.y = float(self.start_line_p1[1])
-            start_point.z = 0.0
+            # Only publish if line has changed or it's been a while (for new subscribers)
+            if not hasattr(self, '_last_line_publish_time'):
+                self._last_line_publish_time = 0
 
-            end_point = Point()
-            end_point.x = float(self.start_line_p2[0])
-            end_point.y = float(self.start_line_p2[1])
-            end_point.z = 0.0
+            import time
+            current_time = time.time()
+            should_republish = (current_time - self._last_line_publish_time > 5.0)  # Every 5 seconds
 
-            marker.points = [start_point, end_point]
+            if self._last_published_line == current_line and not should_republish:
+                return
 
-            self.publish_marker(marker)
+            self._last_published_line = current_line
+            self._last_line_publish_time = current_time
+
+            # Delete existing markers first
+            clear_marker = Marker()
+            clear_marker.header.frame_id = self.frame_id
+            clear_marker.header.stamp = rclpy.time.Time().to_msg()
+            clear_marker.ns = "race_monitor_start_line"
+            clear_marker.action = Marker.DELETEALL
+            self.publish_marker(clear_marker)
+
+            # Create main line marker (sleek green line)
+            line_marker = Marker()
+            line_marker.header.frame_id = self.frame_id
+            line_marker.header.stamp = rclpy.time.Time().to_msg()
+            line_marker.ns = "race_monitor_start_line"
+            line_marker.id = 0
+            line_marker.type = Marker.LINE_STRIP
+            line_marker.action = Marker.ADD
+            line_marker.scale.x = 0.15  # Reduced thickness (15cm) for cleaner look
+
+            # Bright green color for start/finish line with reduced opacity
+            line_marker.color.r = 0.0
+            line_marker.color.g = 0.8
+            line_marker.color.b = 0.2
+            line_marker.color.a = 0.6  # More transparent for subtle appearance
+
+            # Add two points (endpoints) to the line strip
+            pt1 = Point()
+            pt1.x = float(self.start_line_p1[0])
+            pt1.y = float(self.start_line_p1[1])
+            pt1.z = 0.02  # Lower to ground for more realistic appearance
+
+            pt2 = Point()
+            pt2.x = float(self.start_line_p2[0])
+            pt2.y = float(self.start_line_p2[1])
+            pt2.z = 0.02  # Lower to ground for more realistic appearance
+
+            line_marker.points = [pt1, pt2]
+            self.publish_marker(line_marker)
+
+            # Add subtle endpoint markers for better visibility
+            for i, point in enumerate([self.start_line_p1, self.start_line_p2]):
+                endpoint_marker = Marker()
+                endpoint_marker.header.frame_id = self.frame_id
+                endpoint_marker.header.stamp = rclpy.time.Time().to_msg()
+                endpoint_marker.ns = "race_monitor_start_line"
+                endpoint_marker.id = i + 1
+                endpoint_marker.type = Marker.SPHERE
+                endpoint_marker.action = Marker.ADD
+
+                # Position
+                endpoint_marker.pose.position.x = float(point[0])
+                endpoint_marker.pose.position.y = float(point[1])
+                endpoint_marker.pose.position.z = 0.03
+                endpoint_marker.pose.orientation.w = 1.0
+
+                # Small sphere size
+                endpoint_marker.scale.x = 0.1
+                endpoint_marker.scale.y = 0.1
+                endpoint_marker.scale.z = 0.1
+
+                # Slightly darker green for endpoints with reduced opacity
+                endpoint_marker.color.r = 0.0
+                endpoint_marker.color.g = 0.6
+                endpoint_marker.color.b = 0.1
+                endpoint_marker.color.a = 0.5  # More transparent
+
+                self.publish_marker(endpoint_marker)
+
+            # Calculate line length for logging
+            import numpy as np
+            line_length = np.linalg.norm(np.array(self.start_line_p2) - np.array(self.start_line_p1))
+            self.logger.debug(f"Published enhanced start line (length: {line_length:.2f}m) in frame '{self.frame_id}'")
 
         except Exception as e:
             self.logger.error(f"Error publishing start line marker: {e}")
+
+    def publish_start_line_markers(self, p1: List[float], p2: List[float], frame_id: str = None):
+        """
+        Publish start/finish line markers with specific points (for clicked point updates).
+
+        Args:
+            p1: First point coordinates [x, y]
+            p2: Second point coordinates [x, y]
+            frame_id: Frame ID for the markers (defaults to self.frame_id)
+        """
+        try:
+            if frame_id is None:
+                frame_id = self.frame_id
+
+            # Update internal points
+            self.start_line_p1 = p1
+            self.start_line_p2 = p2
+
+            # Force republish by clearing cache
+            if hasattr(self, '_last_published_line'):
+                self._last_published_line = None
+
+            # Publish the enhanced start line
+            self.publish_start_line_marker()
+
+        except Exception as e:
+            self.logger.error(f"Error publishing start line markers with specific points: {e}")
 
     def publish_raceline_markers(self, reference_points: List[Dict[str, float]] = None,
                                  evo_trajectory=None, csv_data: List[List[str]] = None):
