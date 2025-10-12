@@ -74,7 +74,7 @@ try:
     evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
     if os.path.exists(evo_path) and evo_path not in sys.path:
         sys.path.insert(0, evo_path)
-    
+
     from evo.core import trajectory, metrics, sync
     EVO_AVAILABLE = True
 except ImportError:
@@ -84,69 +84,71 @@ except ImportError:
 class RaceMonitor(Node):
     """
     Main race monitoring node that orchestrates all components.
-    
+
     Provides a clean, modular architecture for race monitoring with
     clear separation of concerns and easy extensibility.
     """
-    
+
     def __init__(self):
         super().__init__('race_monitor')
-        
+
         self.get_logger().info("🏁 Starting Race Monitor with modular architecture...")
-        
+
         # Load configuration parameters
         self._load_parameters()
-        
+
         # Initialize core components
         self._initialize_components()
-        
+
         # Set up ROS interfaces
         self._setup_ros_interfaces()
-        
+
         # Configure components with loaded parameters
         self._configure_components()
-        
+
         # Set up component interactions
         self._setup_component_callbacks()
-        
+
         # Start monitoring systems
         self._start_monitoring_systems()
-        
+
         self.get_logger().info("✅ Race Monitor initialized successfully!")
         self.get_logger().info(f"   - Race Ending Mode: {self.config['race_ending_mode'].upper()}")
         self.get_logger().info(f"   - Lap Detection: Enabled")
         if self.config['race_ending_mode'] == 'crash':
-            self.get_logger().info(f"   - Crash Detection: {'Enabled' if self.config['crash_detection']['enable_crash_detection'] else 'Disabled'}")
+            self.get_logger().info(
+                f"   - Crash Detection: {'Enabled' if self.config['crash_detection']['enable_crash_detection'] else 'Disabled'}")
         elif self.config['race_ending_mode'] == 'manual':
             duration_limit = self.config['manual_mode']['max_race_duration']
-            self.get_logger().info(f"   - Manual Mode: Max duration = {duration_limit}s ({'no limit' if duration_limit == 0 else 'limited'})")
-        self.get_logger().info(f"   - Reference Trajectory: {'Enabled' if self.reference_manager.is_reference_available() else 'Disabled'}")
-        self.get_logger().info(f"   - Performance Monitoring: {'Enabled' if self.config.get('enable_computational_monitoring', True) else 'Disabled'}")
+            self.get_logger().info(
+                f"   - Manual Mode: Max duration = {duration_limit}s ({'no limit' if duration_limit == 0 else 'limited'})")
+        self.get_logger().info(
+            f"   - Reference Trajectory: {'Enabled' if self.reference_manager.is_reference_available() else 'Disabled'}")
+        self.get_logger().info(
+            f"   - Performance Monitoring: {'Enabled' if self.config.get('enable_computational_monitoring', True) else 'Disabled'}")
         self.get_logger().info(f"   - Research Evaluator: {'Enabled' if RESEARCH_EVALUATOR_AVAILABLE else 'Disabled'}")
         self.get_logger().info(f"   - Race Evaluator: {'Enabled' if RACE_EVALUATOR_AVAILABLE else 'Disabled'}")
         self.get_logger().info(f"   - EVO Integration: {'Enabled' if EVO_AVAILABLE else 'Disabled'}")
-        self.get_logger().info(f"   - EVO Graph Generation: {'Enabled' if self.evo_plotter is not None else 'Disabled'}")
-    
+        self.get_logger().info(
+            f"   - EVO Graph Generation: {'Enabled' if self.evo_plotter is not None else 'Disabled'}")
+
     def _load_parameters(self):
         """Load ROS2 parameters and configuration."""
-        # Declare parameters with defaults
+        # ========================================
+        # RACE MONITORING PARAMETERS
+        # ========================================
         self.declare_parameter('start_line_p1', [0.0, -1.0])
-        self.declare_parameter('start_line_p2', [0.0, 1.0])
-        self.declare_parameter('required_laps', 5)
+        self.declare_parameter('start_line_p2', [1.0, 0.0])
+        self.declare_parameter('required_laps', 20)
         self.declare_parameter('debounce_time', 2.0)
+        self.declare_parameter('output_file', 'race_results.csv')
         self.declare_parameter('frame_id', 'map')
-        self.declare_parameter('controller_name', 'custom_controller')
-        self.declare_parameter('experiment_id', 'exp_001')
-        self.declare_parameter('trajectory_output_directory', '')
-        self.declare_parameter('enable_trajectory_evaluation', True)
-        self.declare_parameter('enable_computational_monitoring', True)
-        self.declare_parameter('enable_race_evaluation', True)
-        self.declare_parameter('save_trajectories', True)
-        self.declare_parameter('auto_generate_graphs', True)
-        
-        # Race ending parameters
+
+        # ========================================
+        # RACE ENDING CONDITIONS
+        # ========================================
         self.declare_parameter('race_ending_mode', 'lap_complete')
-        
+
         # Crash detection parameters
         self.declare_parameter('crash_detection.enable_crash_detection', True)
         self.declare_parameter('crash_detection.max_stationary_time', 5.0)
@@ -155,67 +157,257 @@ class RaceMonitor(Node):
         self.declare_parameter('crash_detection.enable_collision_detection', True)
         self.declare_parameter('crash_detection.collision_velocity_threshold', 2.0)
         self.declare_parameter('crash_detection.collision_detection_window', 0.5)
-        
+
         # Manual mode parameters
         self.declare_parameter('manual_mode.save_intermediate_results', True)
         self.declare_parameter('manual_mode.save_interval', 30.0)
         self.declare_parameter('manual_mode.max_race_duration', 0)
-        
-        # Reference trajectory parameters
-        self.declare_parameter('reference_trajectory_file', '')
+
+        # ========================================
+        # RESEARCH & ANALYSIS PARAMETERS
+        # ========================================
+        self.declare_parameter('controller_name', 'custom_controller')
+        self.declare_parameter('experiment_id', 'exp_001')
+        self.declare_parameter('test_description', 'Controller performance evaluation and analysis')
+
+        # Advanced metrics parameters
+        self.declare_parameter('enable_advanced_metrics', True)
+        self.declare_parameter('calculate_all_statistics', True)
+        self.declare_parameter('analyze_rotation_errors', True)
+        self.declare_parameter('enable_geometric_analysis', True)
+        self.declare_parameter('enable_filtering_analysis', True)
+
+        # Analysis evaluation modes
+        self.declare_parameter('detailed_lap_analysis', True)
+        self.declare_parameter('comparative_analysis', True)
+        self.declare_parameter('statistical_significance', True)
+
+        # ========================================
+        # EVO INTEGRATION PARAMETERS
+        # ========================================
+        self.declare_parameter('enable_trajectory_evaluation', True)
+        self.declare_parameter('evaluation_interval_seconds', 0)
+        self.declare_parameter('evaluation_interval_laps', 1)
+        self.declare_parameter('evaluation_interval_meters', 0.0)
+
+        # ========================================
+        # REFERENCE TRAJECTORY CONFIGURATION
+        # ========================================
+        self.declare_parameter('reference_trajectory_file', 'horizon_mapper/horizon_mapper/ref_trajectory.csv')
         self.declare_parameter('reference_trajectory_format', 'csv')
         self.declare_parameter('enable_horizon_mapper_reference', False)
+        self.declare_parameter('horizon_mapper_reference_topic', '/horizon_mapper/reference_trajectory')
         self.declare_parameter('use_complete_reference_path', True)
-        
-        # Performance monitoring parameters
+        self.declare_parameter('horizon_mapper_path_topic', '/horizon_mapper/reference_path')
+
+        # ========================================
+        # ADVANCED FILE OUTPUT FOR RESEARCH
+        # ========================================
+        self.declare_parameter('export_to_pandas', True)
+        self.declare_parameter('save_detailed_statistics', True)
+        self.declare_parameter('save_filtered_trajectories', True)
+        self.declare_parameter('export_research_summary', True)
+        self.declare_parameter('output_formats', ['csv', 'json', 'pickle', 'mat'])
+        self.declare_parameter('include_timestamps', True)
+        self.declare_parameter('save_intermediate_results', True)
+
+        # ========================================
+        # TRAJECTORY ANALYSIS SETTINGS
+        # ========================================
+        self.declare_parameter('save_trajectories', True)
+        self.declare_parameter('trajectory_output_directory',
+                               '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results')
+
+        # Metrics to calculate
+        self.declare_parameter('evaluate_smoothness', True)
+        self.declare_parameter('evaluate_consistency', True)
+        self.declare_parameter('evaluate_efficiency', True)
+        self.declare_parameter('evaluate_aggressiveness', True)
+        self.declare_parameter('evaluate_stability', True)
+
+        # Advanced EVO metrics
+        self.declare_parameter('pose_relations', ['translation_part', 'rotation_part', 'full_transformation'])
+        self.declare_parameter('statistics_types', ['rmse', 'mean', 'median', 'std', 'min', 'max', 'sse'])
+
+        # Filtering options
+        self.declare_parameter('apply_trajectory_filtering', True)
+        self.declare_parameter('filter_types', ['motion', 'distance', 'angle'])
+        self.declare_parameter('filter_parameters.motion_threshold', 0.1)
+        self.declare_parameter('filter_parameters.distance_threshold', 0.05)
+        self.declare_parameter('filter_parameters.angle_threshold', 0.1)
+
+        # ========================================
+        # GRAPH GENERATION SETTINGS
+        # ========================================
+        self.declare_parameter('auto_generate_graphs', True)
+        self.declare_parameter(
+            'graph_output_directory',
+            '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs')
+        self.declare_parameter('graph_formats', ['png', 'pdf'])
+
+        # Plot appearance settings
+        self.declare_parameter('plot_figsize', [12.0, 8.0])
+        self.declare_parameter('plot_dpi', 300)
+        self.declare_parameter('plot_style', 'seaborn')
+        self.declare_parameter('plot_color_scheme', 'viridis')
+
+        # Types of graphs to generate
+        self.declare_parameter('generate_trajectory_plots', True)
+        self.declare_parameter('generate_xyz_plots', True)
+        self.declare_parameter('generate_rpy_plots', True)
+        self.declare_parameter('generate_speed_plots', True)
+        self.declare_parameter('generate_error_plots', True)
+        self.declare_parameter('generate_metrics_plots', True)
+
+        # ========================================
+        # F1TENTH INTERFACE SETTINGS
+        # ========================================
+        self.declare_parameter('enable_f1tenth_interface', True)
+        self.declare_parameter('f1tenth_vehicle_state_topic', '/vehicle_state')
+        self.declare_parameter('f1tenth_constrained_state_topic', '/constrained_vehicle_state')
+
+        # ========================================
+        # COMPUTATIONAL PERFORMANCE MONITORING
+        # ========================================
+        self.declare_parameter('enable_computational_monitoring', True)
+
+        # Odometry input topics
+        self.declare_parameter('odometry_topics', ['car_state/odom'])
+
+        # Control command output topics
+        self.declare_parameter('control_command_topics', ['/drive'])
+
+        # Performance monitoring configuration
         self.declare_parameter('monitoring_window_size', 100)
         self.declare_parameter('cpu_monitoring_interval', 0.1)
+        self.declare_parameter('enable_performance_logging', True)
         self.declare_parameter('performance_log_interval', 5.0)
+
+        # Performance thresholds
         self.declare_parameter('max_acceptable_latency_ms', 50.0)
         self.declare_parameter('target_control_frequency_hz', 50.0)
         self.declare_parameter('max_acceptable_cpu_usage', 80.0)
         self.declare_parameter('max_acceptable_memory_mb', 512.0)
-        
-        # Data management parameters
-        self.declare_parameter('output_formats', ['csv', 'json'])
-        self.declare_parameter('include_timestamps', True)
-        self.declare_parameter('save_intermediate_results', True)
-        
-        # Race evaluation parameters
-        self.declare_parameter('race_evaluation.grading_strictness', 'normal')
-        self.declare_parameter('race_evaluation.enable_recommendations', True)
-        self.declare_parameter('race_evaluation.enable_comparison', True)
+
+        # ========================================
+        # CUSTOM RACE EVALUATION SYSTEM
+        # ========================================
+        self.declare_parameter('enable_race_evaluation', True)
+
+        # Race evaluation settings
+        self.declare_parameter('race_evaluation.enable_export', True)
         self.declare_parameter('race_evaluation.auto_increment_experiment', True)
-        
-        # Store configuration
+        self.declare_parameter('race_evaluation.include_recommendations', True)
+        self.declare_parameter('race_evaluation.enable_comparison', True)
+        self.declare_parameter('race_evaluation.grading_strictness', 'normal')
+
+        # Evaluation focus areas
+        self.declare_parameter('race_evaluation.focus_on_consistency', True)
+        self.declare_parameter('race_evaluation.focus_on_trajectory_accuracy', True)
+        self.declare_parameter('race_evaluation.focus_on_racing_efficiency', True)
+
+        # Output preferences
+        self.declare_parameter('race_evaluation.include_detailed_metrics', True)
+        self.declare_parameter('race_evaluation.max_recommendations', 5)
+
+        # Store comprehensive configuration
         self.config = {
+            # Basic race monitoring
             'start_line_p1': self.get_parameter('start_line_p1').value,
             'start_line_p2': self.get_parameter('start_line_p2').value,
             'required_laps': self.get_parameter('required_laps').value,
             'debounce_time': self.get_parameter('debounce_time').value,
+            'output_file': self.get_parameter('output_file').value,
             'frame_id': self.get_parameter('frame_id').value,
+
+            # Research & analysis
             'controller_name': self.get_parameter('controller_name').value,
             'experiment_id': self.get_parameter('experiment_id').value,
-            'trajectory_output_directory': self.get_parameter('trajectory_output_directory').value,
+            'test_description': self.get_parameter('test_description').value,
+            'enable_advanced_metrics': self.get_parameter('enable_advanced_metrics').value,
+            'calculate_all_statistics': self.get_parameter('calculate_all_statistics').value,
+            'analyze_rotation_errors': self.get_parameter('analyze_rotation_errors').value,
+            'enable_geometric_analysis': self.get_parameter('enable_geometric_analysis').value,
+            'enable_filtering_analysis': self.get_parameter('enable_filtering_analysis').value,
+            'detailed_lap_analysis': self.get_parameter('detailed_lap_analysis').value,
+            'comparative_analysis': self.get_parameter('comparative_analysis').value,
+            'statistical_significance': self.get_parameter('statistical_significance').value,
+
+            # EVO integration
             'enable_trajectory_evaluation': self.get_parameter('enable_trajectory_evaluation').value,
-            'enable_computational_monitoring': self.get_parameter('enable_computational_monitoring').value,
-            'enable_race_evaluation': self.get_parameter('enable_race_evaluation').value,
-            'save_trajectories': self.get_parameter('save_trajectories').value,
-            'auto_generate_graphs': self.get_parameter('auto_generate_graphs').value,
+            'evaluation_interval_seconds': self.get_parameter('evaluation_interval_seconds').value,
+            'evaluation_interval_laps': self.get_parameter('evaluation_interval_laps').value,
+            'evaluation_interval_meters': self.get_parameter('evaluation_interval_meters').value,
+
+            # Reference trajectory
             'reference_trajectory_file': self.get_parameter('reference_trajectory_file').value,
             'reference_trajectory_format': self.get_parameter('reference_trajectory_format').value,
             'enable_horizon_mapper_reference': self.get_parameter('enable_horizon_mapper_reference').value,
+            'horizon_mapper_reference_topic': self.get_parameter('horizon_mapper_reference_topic').value,
             'use_complete_reference_path': self.get_parameter('use_complete_reference_path').value,
+            'horizon_mapper_path_topic': self.get_parameter('horizon_mapper_path_topic').value,
+
+            # Advanced file output
+            'export_to_pandas': self.get_parameter('export_to_pandas').value,
+            'save_detailed_statistics': self.get_parameter('save_detailed_statistics').value,
+            'save_filtered_trajectories': self.get_parameter('save_filtered_trajectories').value,
+            'export_research_summary': self.get_parameter('export_research_summary').value,
+            'output_formats': self.get_parameter('output_formats').value,
+            'include_timestamps': self.get_parameter('include_timestamps').value,
+            'save_intermediate_results': self.get_parameter('save_intermediate_results').value,
+
+            # Trajectory analysis
+            'save_trajectories': self.get_parameter('save_trajectories').value,
+            'trajectory_output_directory': self.get_parameter('trajectory_output_directory').value,
+            'evaluate_smoothness': self.get_parameter('evaluate_smoothness').value,
+            'evaluate_consistency': self.get_parameter('evaluate_consistency').value,
+            'evaluate_efficiency': self.get_parameter('evaluate_efficiency').value,
+            'evaluate_aggressiveness': self.get_parameter('evaluate_aggressiveness').value,
+            'evaluate_stability': self.get_parameter('evaluate_stability').value,
+            'pose_relations': self.get_parameter('pose_relations').value,
+            'statistics_types': self.get_parameter('statistics_types').value,
+            'apply_trajectory_filtering': self.get_parameter('apply_trajectory_filtering').value,
+            'filter_types': self.get_parameter('filter_types').value,
+            'filter_parameters': {
+                'motion_threshold': self.get_parameter('filter_parameters.motion_threshold').value,
+                'distance_threshold': self.get_parameter('filter_parameters.distance_threshold').value,
+                'angle_threshold': self.get_parameter('filter_parameters.angle_threshold').value,
+            },
+
+            # Graph generation
+            'auto_generate_graphs': self.get_parameter('auto_generate_graphs').value,
+            'graph_output_directory': self.get_parameter('graph_output_directory').value,
+            'graph_formats': self.get_parameter('graph_formats').value,
+            'plot_figsize': self.get_parameter('plot_figsize').value,
+            'plot_dpi': self.get_parameter('plot_dpi').value,
+            'plot_style': self.get_parameter('plot_style').value,
+            'plot_color_scheme': self.get_parameter('plot_color_scheme').value,
+            'generate_trajectory_plots': self.get_parameter('generate_trajectory_plots').value,
+            'generate_xyz_plots': self.get_parameter('generate_xyz_plots').value,
+            'generate_rpy_plots': self.get_parameter('generate_rpy_plots').value,
+            'generate_speed_plots': self.get_parameter('generate_speed_plots').value,
+            'generate_error_plots': self.get_parameter('generate_error_plots').value,
+            'generate_metrics_plots': self.get_parameter('generate_metrics_plots').value,
+
+            # F1Tenth interface
+            'enable_f1tenth_interface': self.get_parameter('enable_f1tenth_interface').value,
+            'f1tenth_vehicle_state_topic': self.get_parameter('f1tenth_vehicle_state_topic').value,
+            'f1tenth_constrained_state_topic': self.get_parameter('f1tenth_constrained_state_topic').value,
+
+            # Performance monitoring
+            'enable_computational_monitoring': self.get_parameter('enable_computational_monitoring').value,
+            'odometry_topics': self.get_parameter('odometry_topics').value,
+            'control_command_topics': self.get_parameter('control_command_topics').value,
             'monitoring_window_size': self.get_parameter('monitoring_window_size').value,
             'cpu_monitoring_interval': self.get_parameter('cpu_monitoring_interval').value,
+            'enable_performance_logging': self.get_parameter('enable_performance_logging').value,
             'performance_log_interval': self.get_parameter('performance_log_interval').value,
             'max_acceptable_latency_ms': self.get_parameter('max_acceptable_latency_ms').value,
             'target_control_frequency_hz': self.get_parameter('target_control_frequency_hz').value,
             'max_acceptable_cpu_usage': self.get_parameter('max_acceptable_cpu_usage').value,
             'max_acceptable_memory_mb': self.get_parameter('max_acceptable_memory_mb').value,
-            'output_formats': self.get_parameter('output_formats').value,
-            'include_timestamps': self.get_parameter('include_timestamps').value,
-            'save_intermediate_results': self.get_parameter('save_intermediate_results').value,
+
+            # Race ending mode
             'race_ending_mode': self.get_parameter('race_ending_mode').value,
             'crash_detection': {
                 'enable_crash_detection': self.get_parameter('crash_detection.enable_crash_detection').value,
@@ -224,21 +416,30 @@ class RaceMonitor(Node):
                 'max_odometry_timeout': self.get_parameter('crash_detection.max_odometry_timeout').value,
                 'enable_collision_detection': self.get_parameter('crash_detection.enable_collision_detection').value,
                 'collision_velocity_threshold': self.get_parameter('crash_detection.collision_velocity_threshold').value,
-                'collision_detection_window': self.get_parameter('crash_detection.collision_detection_window').value
+                'collision_detection_window': self.get_parameter('crash_detection.collision_detection_window').value,
             },
             'manual_mode': {
                 'save_intermediate_results': self.get_parameter('manual_mode.save_intermediate_results').value,
                 'save_interval': self.get_parameter('manual_mode.save_interval').value,
-                'max_race_duration': self.get_parameter('manual_mode.max_race_duration').value
+                'max_race_duration': self.get_parameter('manual_mode.max_race_duration').value,
             },
+
+            # Race evaluation
+            'enable_race_evaluation': self.get_parameter('enable_race_evaluation').value,
             'race_evaluation': {
-                'grading_strictness': self.get_parameter('race_evaluation.grading_strictness').value,
-                'enable_recommendations': self.get_parameter('race_evaluation.enable_recommendations').value,
+                'enable_export': self.get_parameter('race_evaluation.enable_export').value,
+                'auto_increment_experiment': self.get_parameter('race_evaluation.auto_increment_experiment').value,
+                'include_recommendations': self.get_parameter('race_evaluation.include_recommendations').value,
                 'enable_comparison': self.get_parameter('race_evaluation.enable_comparison').value,
-                'auto_increment_experiment': self.get_parameter('race_evaluation.auto_increment_experiment').value
+                'grading_strictness': self.get_parameter('race_evaluation.grading_strictness').value,
+                'focus_on_consistency': self.get_parameter('race_evaluation.focus_on_consistency').value,
+                'focus_on_trajectory_accuracy': self.get_parameter('race_evaluation.focus_on_trajectory_accuracy').value,
+                'focus_on_racing_efficiency': self.get_parameter('race_evaluation.focus_on_racing_efficiency').value,
+                'include_detailed_metrics': self.get_parameter('race_evaluation.include_detailed_metrics').value,
+                'max_recommendations': self.get_parameter('race_evaluation.max_recommendations').value,
             }
         }
-    
+
     def _initialize_components(self):
         """Initialize all monitoring components."""
         # Core components
@@ -247,26 +448,26 @@ class RaceMonitor(Node):
         self.performance_monitor = PerformanceMonitor(self.get_logger(), self.get_clock())
         self.visualization_publisher = VisualizationPublisher(self.get_logger(), self._publish_marker)
         self.data_manager = DataManager(self.get_logger())
-        
+
         # Analysis components (if available)
         self.research_evaluator = None
         self.race_evaluator = None
         self.evo_plotter = None
-        
+
         if RESEARCH_EVALUATOR_AVAILABLE and self.config['enable_trajectory_evaluation']:
             try:
                 self.research_evaluator = create_research_evaluator(self.config)
                 self.get_logger().info("Research evaluator initialized")
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize research evaluator: {e}")
-        
+
         if RACE_EVALUATOR_AVAILABLE and self.config['enable_race_evaluation']:
             try:
                 self.race_evaluator = create_race_evaluator(self.config)
                 self.get_logger().info("Race evaluator initialized")
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize race evaluator: {e}")
-        
+
         if EVO_PLOTTER_AVAILABLE and self.config['auto_generate_graphs']:
             try:
                 self.evo_plotter = EVOPlotter(self.config)
@@ -277,7 +478,7 @@ class RaceMonitor(Node):
                 self.evo_plotter = None
                 # Disable auto_generate_graphs to prevent further attempts
                 self.config['auto_generate_graphs'] = False
-    
+
     def _setup_ros_interfaces(self):
         """Set up ROS2 publishers, subscribers, and services."""
         # Publishers
@@ -286,7 +487,7 @@ class RaceMonitor(Node):
         self.race_status_pub = self.create_publisher(String, '/race_monitor/race_status', 10)
         self.race_running_pub = self.create_publisher(Bool, '/race_monitor/race_running', 10)
         self.visualization_marker_pub = self.create_publisher(Marker, '/visualization_marker', 10)
-        
+
         # Subscribers
         self.odom_sub = self.create_subscription(
             Odometry, '/car_state/odom', self._odometry_callback, 10
@@ -294,26 +495,26 @@ class RaceMonitor(Node):
         self.clicked_point_sub = self.create_subscription(
             PointStamped, '/clicked_point', self._clicked_point_callback, 10
         )
-        
+
         # Optional subscribers based on configuration
         if self.config['enable_horizon_mapper_reference']:
             self.reference_trajectory_sub = self.create_subscription(
-                Path, '/horizon_mapper/reference_trajectory', 
+                Path, '/horizon_mapper/reference_trajectory',
                 self.reference_manager.update_reference_trajectory, 10
             )
-        
+
         if self.config['use_complete_reference_path']:
             self.reference_path_sub = self.create_subscription(
                 Path, '/horizon_mapper/reference_path',
                 self.reference_manager.update_reference_path, 10
             )
-        
+
         # Control command subscriber for performance monitoring
         if self.config['enable_computational_monitoring']:
             self.control_cmd_sub = self.create_subscription(
                 AckermannDriveStamped, '/drive', self._control_command_callback, 10
             )
-    
+
     def _configure_components(self):
         """Configure all components with loaded parameters."""
         self.lap_detector.configure(self.config)
@@ -321,11 +522,11 @@ class RaceMonitor(Node):
         self.performance_monitor.configure(self.config)
         self.visualization_publisher.configure(self.config)
         self.data_manager.configure(self.config)
-        
+
         # Load reference trajectory if specified
         if self.config['reference_trajectory_file']:
             self.reference_manager.load_reference_trajectory()
-    
+
     def _setup_component_callbacks(self):
         """Set up callbacks between components."""
         # Lap detector callbacks
@@ -335,28 +536,31 @@ class RaceMonitor(Node):
             on_race_complete=self._on_race_complete,
             on_race_crash=self._on_race_crash
         )
-    
+
     def _start_monitoring_systems(self):
         """Start active monitoring systems."""
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.start_monitoring()
-        
+
         # Set up intermediate save timer for manual mode
-        if (self.config['race_ending_mode'] == 'manual' and 
-            self.config['manual_mode']['save_intermediate_results']):
+        if (self.config['race_ending_mode'] == 'manual' and
+                self.config['manual_mode']['save_intermediate_results']):
             save_interval = self.config['manual_mode']['save_interval']
             self.intermediate_save_timer = self.create_timer(
                 save_interval, self._save_intermediate_results
             )
-        
+
+        # Set up periodic visualization timer to ensure raceline stays visible
+        self.visualization_timer = self.create_timer(5.0, self._periodic_visualization_update)
+
         # Initial visualization
         self.visualization_publisher.publish_start_line_marker()
-        
+
         # Publish reference trajectory if available
         reference_points = self.reference_manager.get_reference_points()
         if reference_points:
             self.visualization_publisher.publish_raceline_markers(reference_points=reference_points)
-    
+
     # ROS2 Callback Methods
     def _odometry_callback(self, msg: Odometry):
         """Handle odometry messages."""
@@ -365,15 +569,15 @@ class RaceMonitor(Node):
             x = msg.pose.pose.position.x
             y = msg.pose.pose.position.y
             z = msg.pose.pose.position.z
-            
+
             # Calculate velocity
-            linear_velocity = (msg.twist.twist.linear.x**2 + 
-                             msg.twist.twist.linear.y**2 + 
-                             msg.twist.twist.linear.z**2) ** 0.5
-            
+            linear_velocity = (msg.twist.twist.linear.x**2 +
+                               msg.twist.twist.linear.y**2 +
+                               msg.twist.twist.linear.z**2) ** 0.5
+
             # Update lap detector with position and velocity
             self.lap_detector.update_position(x, y, msg.header.stamp, velocity=linear_velocity)
-            
+
             # Add point to current trajectory
             if self.lap_detector.is_race_active():
                 additional_data = {
@@ -385,82 +589,112 @@ class RaceMonitor(Node):
                     'angular_velocity': msg.twist.twist.angular.z
                 }
                 self.data_manager.add_trajectory_point(x, y, z, msg.header.stamp, additional_data)
-            
+
             # Performance monitoring
             if self.config['enable_computational_monitoring']:
                 self.performance_monitor.record_odometry_timestamp('car_state/odom', msg.header.stamp)
-            
+
             # Publish race status
             self._publish_race_status()
-            
+
         except Exception as e:
             self.get_logger().error(f"Error in odometry callback: {e}")
-    
+
     def _control_command_callback(self, msg: AckermannDriveStamped):
         """Handle control command messages for performance monitoring."""
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.record_control_command_timestamp('/drive', msg.header.stamp)
-    
+
     def _clicked_point_callback(self, msg: PointStamped):
         """Handle clicked point messages for manual start line setup."""
-        self.get_logger().info(f"Clicked point received: ({msg.point.x:.2f}, {msg.point.y:.2f})")
-        # Could be used to dynamically set start line points
-    
+        point = [msg.point.x, msg.point.y]
+        self.get_logger().info(f"Clicked point received: ({point[0]:.2f}, {point[1]:.2f})")
+
+        if not hasattr(self, 'pending_start_point'):
+            self.pending_start_point = None
+
+        if self.pending_start_point is None:
+            # First click - store as pending point
+            self.pending_start_point = point
+            self.get_logger().info(f"Pending start/finish point set. Click second point to complete the line.")
+        else:
+            # Second click - update start line
+            self.config['start_line_p1'] = self.pending_start_point
+            self.config['start_line_p2'] = point
+
+            # Reconfigure lap detector with new start line
+            self.lap_detector.configure(self.config)
+
+            # Reset pending point
+            self.pending_start_point = None
+
+            self.get_logger().info(f"Start/finish line updated:")
+            self.get_logger().info(
+                f"  P1: ({self.config['start_line_p1'][0]:.2f}, {self.config['start_line_p1'][1]:.2f})")
+            self.get_logger().info(
+                f"  P2: ({self.config['start_line_p2'][0]:.2f}, {self.config['start_line_p2'][1]:.2f})")
+
+            # Update visualization
+            self.visualization_publisher.publish_start_line_markers(
+                self.config['start_line_p1'], self.config['start_line_p2'], self.config['frame_id']
+            )
+
     def _publish_marker(self, marker: Marker):
         """Publish visualization marker."""
         self.visualization_marker_pub.publish(marker)
-    
+
     # Race Event Handlers
     def _on_race_start(self, timestamp):
         """Handle race start event."""
         self.get_logger().info("🏁 Race started!")
-        
+
         # Start new lap trajectory
         self.data_manager.start_new_lap_trajectory(1)
-        
+
         # Update visualization
         self.visualization_publisher.publish_race_status_marker("RACING", 1, self.config['required_laps'])
-        
+
         # Reset performance monitoring data
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.reset_performance_data()
-    
+
     def _on_lap_complete(self, lap_number: int, lap_time: float):
         """Handle lap completion event."""
         self.get_logger().info(f"🏎️ Lap {lap_number} completed in {lap_time:.3f}s")
-        
+
         # Complete current lap trajectory
         self.data_manager.complete_lap_trajectory(lap_number, lap_time)
-        
+
         # Start next lap trajectory if race not complete
         if lap_number < self.config['required_laps']:
             self.data_manager.start_new_lap_trajectory(lap_number + 1)
-        
+
         # Update visualization
         race_stats = self.lap_detector.get_race_stats()
         self.visualization_publisher.publish_lap_completion_marker(lap_number, lap_time)
-        
+
         if not race_stats['race_completed']:
             self.visualization_publisher.publish_race_status_marker(
                 "RACING", race_stats['current_lap'], self.config['required_laps']
             )
-        
+
         # Perform trajectory evaluation if enabled
         if self.config['enable_trajectory_evaluation'] and EVO_AVAILABLE:
             self._evaluate_lap_trajectory(lap_number)
-    
+
     def _on_race_complete(self, total_time: float, lap_times: list):
         """Handle race completion event."""
         race_stats = self.lap_detector.get_race_stats()
         reason = race_stats['race_ending_reason']
-        
+
         self.get_logger().info(f"🏆 Race completed in {total_time:.3f}s! (Reason: {reason})")
-        
+
         # Update visualization based on ending reason
         status_text = "FINISHED" if reason == "Laps completed" else f"ENDED-{reason.upper()}"
-        required_laps = self.config['required_laps'] if self.config['race_ending_mode'] == 'lap_complete' else len(lap_times)
+        required_laps = self.config['required_laps'] if self.config['race_ending_mode'] == 'lap_complete' else len(
+            lap_times)
         self.visualization_publisher.publish_race_status_marker(status_text, len(lap_times), required_laps)
-        
+
         # Save race results
         race_data = {
             'total_race_time': total_time,
@@ -473,24 +707,24 @@ class RaceMonitor(Node):
             'timestamp': datetime.now().isoformat()
         }
         self.data_manager.save_race_results_to_csv(race_data)
-        
+
         # Perform comprehensive race analysis
         self._perform_comprehensive_analysis(race_data)
-        
+
         # Save performance data
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.save_performance_data_to_csv(
                 os.path.join(self.config['trajectory_output_directory'], 'performance_data')
             )
-    
+
     def _on_race_crash(self, crash_reason: str, total_time: float, lap_times: list):
         """Handle race crash event."""
         self.get_logger().warning(f"🚨 Race ended due to crash: {crash_reason}")
         self.get_logger().info(f"   Duration: {total_time:.3f}s, Laps: {len(lap_times)}")
-        
+
         # Update visualization
         self.visualization_publisher.publish_race_status_marker("CRASHED", len(lap_times), len(lap_times))
-        
+
         # Save race results with crash information
         race_data = {
             'total_race_time': total_time,
@@ -504,16 +738,16 @@ class RaceMonitor(Node):
             'timestamp': datetime.now().isoformat()
         }
         self.data_manager.save_race_results_to_csv(race_data)
-        
+
         # Perform analysis even for crashed races
         self._perform_comprehensive_analysis(race_data)
-        
+
         # Save performance data
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.save_performance_data_to_csv(
                 os.path.join(self.config['trajectory_output_directory'], 'performance_data')
             )
-    
+
     def _evaluate_lap_trajectory(self, lap_number: int):
         """Evaluate individual lap trajectory."""
         try:
@@ -521,60 +755,60 @@ class RaceMonitor(Node):
             evo_trajectory = self.data_manager.create_evo_trajectory(lap_number)
             if not evo_trajectory:
                 return
-            
+
             # Perform evaluation using research evaluator if available
             if self.research_evaluator and self.reference_manager.is_reference_available():
                 reference_trajectory = self.reference_manager.get_reference_trajectory()
                 if reference_trajectory:
                     # TODO: Implement single lap evaluation
                     pass
-            
+
         except Exception as e:
             self.get_logger().error(f"Error evaluating lap {lap_number}: {e}")
-    
+
     def _perform_comprehensive_analysis(self, race_data: dict):
         """Perform comprehensive race analysis after completion."""
         try:
             self.get_logger().info("🔬 Performing comprehensive race analysis...")
-            
+
             # Compile all trajectory data for analysis
             all_trajectories = self.data_manager.get_trajectory_data()
-            
+
             if self.research_evaluator and all_trajectories:
                 # Perform research-grade analysis
                 self.get_logger().info("📊 Running research trajectory evaluation...")
                 # TODO: Implement comprehensive analysis with research evaluator
-            
+
             if self.race_evaluator and all_trajectories:
                 # Perform custom race evaluation
                 self.get_logger().info("🏁 Running custom race evaluation...")
                 # TODO: Implement race evaluation integration
-            
+
             if self.evo_plotter and all_trajectories:
                 # Generate visualization plots
                 self.get_logger().info("📈 Generating analysis plots...")
                 # TODO: Implement plot generation
-            
+
             self.get_logger().info("✅ Comprehensive analysis completed!")
-            
+
         except Exception as e:
             self.get_logger().error(f"Error in comprehensive analysis: {e}")
-    
+
     def _publish_race_status(self):
         """Publish current race status."""
         race_stats = self.lap_detector.get_race_stats()
-        
+
         # Publish lap count
         lap_count_msg = Int32()
         lap_count_msg.data = race_stats['current_lap']
         self.lap_count_pub.publish(lap_count_msg)
-        
+
         # Publish last lap time
         if race_stats['lap_times']:
             lap_time_msg = Float32()
             lap_time_msg.data = race_stats['lap_times'][-1]
             self.lap_time_pub.publish(lap_time_msg)
-        
+
         # Publish race status based on ending mode and current state
         if race_stats['race_completed']:
             if race_stats['race_ended_by_crash']:
@@ -587,27 +821,44 @@ class RaceMonitor(Node):
             status = f"RACING-{race_stats['race_ending_mode'].upper()}"
         else:
             status = "WAITING"
-        
+
         race_status_msg = String()
         race_status_msg.data = status
         self.race_status_pub.publish(race_status_msg)
-        
+
         # Publish race running status
         race_running_msg = Bool()
         race_running_msg.data = race_stats['race_started'] and not race_stats['race_completed']
         self.race_running_pub.publish(race_running_msg)
-    
+
+    def _periodic_visualization_update(self):
+        """Periodically update visualization to ensure raceline stays visible."""
+        try:
+            # Re-publish start line marker
+            self.visualization_publisher.publish_start_line_marker()
+
+            # Re-publish reference trajectory if available
+            reference_points = self.reference_manager.get_reference_points()
+            if reference_points:
+                self.visualization_publisher.publish_raceline_markers(reference_points=reference_points)
+                self.get_logger().debug(f"Refreshed raceline visualization with {len(reference_points)} points")
+            else:
+                self.get_logger().debug("No reference trajectory available for visualization")
+
+        except Exception as e:
+            self.get_logger().error(f"Error in periodic visualization update: {e}")
+
     def _save_intermediate_results(self):
         """Save intermediate results for manual mode."""
         race_stats = self.lap_detector.get_race_stats()
-        
+
         if race_stats['race_started'] and not race_stats['race_completed']:
             current_time = self.get_clock().now()
             elapsed_time = (current_time.nanoseconds - race_stats.get('race_start_time', 0)) / 1e9
-            
+
             self.get_logger().info(f"💾 Saving intermediate results (Manual mode) - "
-                                 f"Elapsed: {elapsed_time:.1f}s, Laps: {len(race_stats['lap_times'])}")
-            
+                                   f"Elapsed: {elapsed_time:.1f}s, Laps: {len(race_stats['lap_times'])}")
+
             # Save intermediate race data
             race_data = {
                 'total_race_time': elapsed_time,
@@ -620,35 +871,37 @@ class RaceMonitor(Node):
                 'intermediate_save': True,
                 'timestamp': datetime.now().isoformat()
             }
-            
+
             # Save with timestamp suffix to avoid overwriting
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"intermediate_results_{timestamp_str}.csv"
             self.data_manager.save_race_results_to_csv(race_data, filename_override=filename)
-    
+
     def destroy_node(self):
         """Clean up resources before node destruction."""
         self.get_logger().info("🛑 Shutting down race monitor...")
-        
+
         # Stop monitoring systems
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.stop_monitoring()
-        
+
         # Clean up timers
         if hasattr(self, 'intermediate_save_timer'):
             self.intermediate_save_timer.cancel()
-        
+        if hasattr(self, 'visualization_timer'):
+            self.visualization_timer.cancel()
+
         # Save any remaining data
         race_stats = self.lap_detector.get_race_stats()
         if race_stats['race_started']:
             current_time = self.get_clock().now()
-            
+
             # Calculate elapsed time if race is still active
             if not race_stats['race_completed'] and race_stats.get('race_start_time'):
                 elapsed_time = (current_time.nanoseconds - race_stats['race_start_time']) / 1e9
             else:
                 elapsed_time = race_stats['total_race_time']
-            
+
             race_data = {
                 'total_race_time': elapsed_time,
                 'lap_times': race_stats['lap_times'],
@@ -661,14 +914,14 @@ class RaceMonitor(Node):
                 'timestamp': datetime.now().isoformat()
             }
             self.data_manager.save_race_results_to_csv(race_data)
-        
+
         super().destroy_node()
 
 
 def main(args=None):
     """Main entry point for the race monitor node."""
     rclpy.init(args=args)
-    
+
     node = None
     try:
         node = RaceMonitor()
@@ -687,7 +940,7 @@ def main(args=None):
                 node.destroy_node()
             except Exception:
                 pass  # Ignore cleanup errors
-        
+
         # Only shutdown if RCL context is still valid
         try:
             if rclpy.ok():

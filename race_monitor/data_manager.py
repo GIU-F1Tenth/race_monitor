@@ -66,12 +66,64 @@ class DataManager:
         """
         self.logger = logger
 
-        # Configuration
+        # Basic configuration
         self.trajectory_output_directory = ""
-        self.output_formats = ["csv", "json"]
         self.save_trajectories = True
-        self.include_timestamps = True
         self.save_intermediate_results = True
+
+        # Advanced file output configuration
+        self.output_formats = ["csv", "json"]
+        self.include_timestamps = True
+        self.export_to_pandas = True
+        self.save_detailed_statistics = True
+        self.save_filtered_trajectories = True
+        self.export_research_summary = True
+
+        # Research and analysis configuration
+        self.controller_name = 'custom_controller'
+        self.experiment_id = 'exp_001'
+        self.test_description = 'Controller performance evaluation'
+        self.enable_advanced_metrics = True
+        self.calculate_all_statistics = True
+
+        # Trajectory analysis configuration
+        self.evaluate_smoothness = True
+        self.evaluate_consistency = True
+        self.evaluate_efficiency = True
+        self.evaluate_aggressiveness = True
+        self.evaluate_stability = True
+
+        # EVO metrics configuration
+        self.pose_relations = ['translation_part', 'rotation_part', 'full_transformation']
+        self.statistics_types = ['rmse', 'mean', 'median', 'std', 'min', 'max', 'sse']
+
+        # Filtering configuration
+        self.apply_trajectory_filtering = True
+        self.filter_types = ['motion', 'distance', 'angle']
+        self.filter_parameters = {
+            'motion_threshold': 0.1,
+            'distance_threshold': 0.05,
+            'angle_threshold': 0.1
+        }
+
+        # Graph generation configuration
+        self.auto_generate_graphs = True
+        self.graph_output_directory = ''
+        self.graph_formats = ['png', 'pdf']
+
+        # Plot appearance configuration
+        self.plot_figsize = [12.0, 8.0]
+        self.plot_dpi = 300
+        self.plot_style = 'seaborn'
+        self.plot_color_scheme = 'viridis'
+
+        # Graph types configuration
+        self.generate_trajectory_plots = True
+        self.generate_xyz_plots = True
+        self.generate_rpy_plots = True
+        self.generate_speed_plots = True
+        self.generate_error_plots = True
+        self.generate_metrics_plots = True
 
         # Data storage
         self.current_lap_trajectory = []
@@ -91,18 +143,74 @@ class DataManager:
         Args:
             config: Dictionary containing configuration parameters
         """
+        # Core data storage configuration
         self.trajectory_output_directory = config.get('trajectory_output_directory', "")
-        self.output_formats = config.get('output_formats', self.output_formats)
         self.save_trajectories = config.get('save_trajectories', self.save_trajectories)
-        self.include_timestamps = config.get('include_timestamps', self.include_timestamps)
         self.save_intermediate_results = config.get('save_intermediate_results', self.save_intermediate_results)
+
+        # Advanced file output configuration
+        self.output_formats = config.get('output_formats', self.output_formats)
+        self.include_timestamps = config.get('include_timestamps', self.include_timestamps)
+        self.export_to_pandas = config.get('export_to_pandas', True)
+        self.save_detailed_statistics = config.get('save_detailed_statistics', True)
+        self.save_filtered_trajectories = config.get('save_filtered_trajectories', True)
+        self.export_research_summary = config.get('export_research_summary', True)
+
+        # Research and analysis configuration
+        self.controller_name = config.get('controller_name', 'custom_controller')
+        self.experiment_id = config.get('experiment_id', 'exp_001')
+        self.test_description = config.get('test_description', 'Controller performance evaluation')
+        self.enable_advanced_metrics = config.get('enable_advanced_metrics', True)
+        self.calculate_all_statistics = config.get('calculate_all_statistics', True)
+
+        # Trajectory analysis configuration
+        self.evaluate_smoothness = config.get('evaluate_smoothness', True)
+        self.evaluate_consistency = config.get('evaluate_consistency', True)
+        self.evaluate_efficiency = config.get('evaluate_efficiency', True)
+        self.evaluate_aggressiveness = config.get('evaluate_aggressiveness', True)
+        self.evaluate_stability = config.get('evaluate_stability', True)
+
+        # EVO metrics configuration
+        self.pose_relations = config.get('pose_relations', ['translation_part', 'rotation_part', 'full_transformation'])
+        self.statistics_types = config.get('statistics_types', ['rmse', 'mean', 'median', 'std', 'min', 'max', 'sse'])
+
+        # Filtering configuration
+        self.apply_trajectory_filtering = config.get('apply_trajectory_filtering', True)
+        self.filter_types = config.get('filter_types', ['motion', 'distance', 'angle'])
+        self.filter_parameters = config.get('filter_parameters', {
+            'motion_threshold': 0.1,
+            'distance_threshold': 0.05,
+            'angle_threshold': 0.1
+        })
+
+        # Graph generation configuration
+        self.auto_generate_graphs = config.get('auto_generate_graphs', True)
+        self.graph_output_directory = config.get('graph_output_directory', '')
+        self.graph_formats = config.get('graph_formats', ['png', 'pdf'])
+
+        # Plot appearance configuration
+        self.plot_figsize = config.get('plot_figsize', [12.0, 8.0])
+        self.plot_dpi = config.get('plot_dpi', 300)
+        self.plot_style = config.get('plot_style', 'seaborn')
+        self.plot_color_scheme = config.get('plot_color_scheme', 'viridis')
+
+        # Graph types configuration
+        self.generate_trajectory_plots = config.get('generate_trajectory_plots', True)
+        self.generate_xyz_plots = config.get('generate_xyz_plots', True)
+        self.generate_rpy_plots = config.get('generate_rpy_plots', True)
+        self.generate_speed_plots = config.get('generate_speed_plots', True)
+        self.generate_error_plots = config.get('generate_error_plots', True)
+        self.generate_metrics_plots = config.get('generate_metrics_plots', True)
 
         # Set up directory structure
         if self.trajectory_output_directory:
             self._setup_directories()
 
         self.logger.info(f"Data manager configured: output_dir={self.trajectory_output_directory}, "
-                         f"formats={self.output_formats}")
+                         f"formats={self.output_formats}, controller={self.controller_name}, "
+                         f"experiment={self.experiment_id}")
+        self.logger.info(f"Advanced features: pandas_export={self.export_to_pandas}, "
+                         f"graphs={self.auto_generate_graphs}, filtering={self.apply_trajectory_filtering}")
 
     def _setup_directories(self):
         """Create directory structure for data storage."""
