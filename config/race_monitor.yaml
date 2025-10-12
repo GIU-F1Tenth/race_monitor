@@ -7,7 +7,7 @@ race_monitor:
     # Start/finish line configuration
     start_line_p1: [0.0, -2.0] # Bottom point of start line [x, y]
     start_line_p2: [0.0, 2.0] # Top point of start line [x, y]
-    required_laps: 90 # Number of laps to complete race
+    required_laps: 7 # Number of laps to complete race
     debounce_time: 2.0 # Debounce time for lap detection (seconds)
     output_file: "race_results.csv" # CSV file for race results
     frame_id: "map" # Frame ID for visualization
@@ -64,9 +64,17 @@ race_monitor:
     # ========================================
 
     # Controller identification for research comparison
-    controller_name: "custom_controller" # Name of the controller being tested
+    controller_name: "" # Name of the controller being tested
+
+    # Smart controller detection settings
+    enable_smart_controller_detection: true # Automatically detect controller from topic publishers (only when controller_name is empty)
+
     experiment_id: "exp_001" # Experiment identifier for this run
     test_description: "Controller performance evaluation and analysis"
+
+    # Auto-shutdown settings
+    auto_shutdown_on_race_complete: true # Automatically shutdown node when race is completed
+    shutdown_delay_seconds: 5.0 # Delay before shutdown to allow final data processing
 
     # Advanced metrics for current controller analysis
     enable_advanced_metrics: true # Enable comprehensive metric calculations
@@ -169,6 +177,13 @@ race_monitor:
     generate_speed_plots: true # Velocity analysis
     generate_error_plots: true # APE/RPE error analysis
     generate_metrics_plots: true # Smoothness/consistency over time
+
+    # ========================================
+    # COMPUTATIONAL MONITORING SETTINGS
+    # ========================================
+
+    # Enable/disable CPU performance monitoring
+    enable_computational_monitoring: false
 
     # ========================================
     # F1TENTH INTERFACE SETTINGS

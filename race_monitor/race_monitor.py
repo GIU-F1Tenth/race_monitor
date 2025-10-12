@@ -29,6 +29,7 @@ License: MIT License
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
+from rclpy.parameter import Parameter
 from std_msgs.msg import Int32, Float32, Bool, String
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PointStamped, Twist, PoseWithCovarianceStamped
@@ -168,9 +169,17 @@ class RaceMonitor(Node):
         # ========================================
         # RESEARCH & ANALYSIS PARAMETERS
         # ========================================
-        self.declare_parameter('controller_name', 'custom_controller')
+        self.declare_parameter('controller_name', '')
+
+        # Smart controller detection parameters
+        self.declare_parameter('enable_smart_controller_detection', True)
+
         self.declare_parameter('experiment_id', 'exp_001')
         self.declare_parameter('test_description', 'Controller performance evaluation and analysis')
+
+        # Auto-shutdown parameters
+        self.declare_parameter('auto_shutdown_on_race_complete', True)
+        self.declare_parameter('shutdown_delay_seconds', 5.0)
 
         # Advanced metrics parameters
         self.declare_parameter('enable_advanced_metrics', True)
@@ -271,7 +280,7 @@ class RaceMonitor(Node):
         # ========================================
         # COMPUTATIONAL PERFORMANCE MONITORING
         # ========================================
-        self.declare_parameter('enable_computational_monitoring', True)
+        self.declare_parameter('enable_computational_monitoring', False)
 
         # Odometry input topics
         self.declare_parameter('odometry_topics', ['car_state/odom'])
@@ -324,8 +333,11 @@ class RaceMonitor(Node):
 
             # Research & analysis
             'controller_name': self.get_parameter('controller_name').value,
+            'enable_smart_controller_detection': self.get_parameter('enable_smart_controller_detection').value,
             'experiment_id': self.get_parameter('experiment_id').value,
             'test_description': self.get_parameter('test_description').value,
+            'auto_shutdown_on_race_complete': self.get_parameter('auto_shutdown_on_race_complete').value,
+            'shutdown_delay_seconds': self.get_parameter('shutdown_delay_seconds').value,
             'enable_advanced_metrics': self.get_parameter('enable_advanced_metrics').value,
             'calculate_all_statistics': self.get_parameter('calculate_all_statistics').value,
             'analyze_rotation_errors': self.get_parameter('analyze_rotation_errors').value,
@@ -451,6 +463,11 @@ class RaceMonitor(Node):
         self.visualization_publisher = VisualizationPublisher(self.get_logger(), self._publish_marker)
         self.data_manager = DataManager(self.get_logger())
 
+        # Smart controller detection variables
+        self.detected_controller_names = set()
+        self.controller_detection_timer = None
+        self.controller_first_detection_time = None
+
         # Analysis components (if available)
         self.research_evaluator = None
         self.race_evaluator = None
@@ -559,6 +576,10 @@ class RaceMonitor(Node):
         # Set up periodic visualization timer to ensure raceline stays visible
         self.visualization_timer = self.create_timer(5.0, self._periodic_visualization_update)
 
+        # Set up smart controller detection timer
+        if self.config['enable_smart_controller_detection']:
+            self.controller_detection_timer = self.create_timer(2.0, self._detect_active_controller)
+
         # Initial enhanced visualization
         self.visualization_publisher.publish_start_line_marker()
 
@@ -609,6 +630,92 @@ class RaceMonitor(Node):
         """Handle control command messages for performance monitoring."""
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.record_control_command_timestamp('/drive', msg.header.stamp)
+
+    def _detect_active_controller(self):
+        """Detect which controller is actively publishing to control topics."""
+        try:
+            # Only detect if enabled and conditions are met
+            if not self.config['enable_smart_controller_detection']:
+                return
+
+            current_name = self.config['controller_name']
+
+            # Only detect when controller name is empty
+            if current_name not in ['', None]:
+                return
+
+            # Get topic info for control command topics
+            topic_names_and_types = self.get_topic_names_and_types()
+            control_topics = self.config.get('control_command_topics', ['/drive'])
+
+            for topic in control_topics:
+                # Check if topic exists
+                topic_exists = any(name == topic for name, _ in topic_names_and_types)
+
+                if topic_exists:
+                    # Get publishers for this topic
+                    try:
+                        publishers_info = self.get_publishers_info_by_topic(topic)
+
+                        for publisher_info in publishers_info:
+                            node_name = publisher_info.node_name
+
+                            # Skip system/simulation nodes
+                            if node_name in ['race_monitor', 'rqt_gui', 'rviz2', '/sim_time_monitor']:
+                                continue
+
+                            # Add to detected controllers
+                            if node_name not in self.detected_controller_names:
+                                self.detected_controller_names.add(node_name)
+
+                                # Set first detection time
+                                if self.controller_first_detection_time is None:
+                                    self.controller_first_detection_time = self.get_clock().now()
+
+                                self.get_logger().info(f"Detected controller: {node_name} publishing to {topic}")
+
+                                # Update controller name if this is the first one or if multiple detected
+                                if len(self.detected_controller_names) == 1:
+                                    new_name = node_name
+                                    if new_name.startswith('/'):
+                                        new_name = new_name[1:]  # Remove leading slash
+
+                                    self.config['controller_name'] = new_name
+
+                                    # Update the parameter as well
+                                    self.set_parameters([Parameter('controller_name',
+                                                                   Parameter.Type.STRING,
+                                                                   new_name)])
+
+                                    self.get_logger().info(f"Controller name automatically updated to: {new_name}")
+
+                                elif len(self.detected_controller_names) > 1:
+                                    # Multiple controllers detected
+                                    controller_list = sorted(list(self.detected_controller_names))
+                                    combined_name = "_".join([name.lstrip('/') for name in controller_list])
+
+                                    self.config['controller_name'] = combined_name
+                                    self.set_parameters([Parameter('controller_name',
+                                                                   Parameter.Type.STRING,
+                                                                   combined_name)])
+
+                                    self.get_logger().info(
+                                        f"Multiple controllers detected. Name updated to: {combined_name}")
+
+                    except Exception as e:
+                        self.get_logger().debug(f"Could not get publisher info for {topic}: {e}")
+
+            # Stop detection after 30 seconds to avoid continuous polling
+            if (self.controller_first_detection_time and
+                    (self.get_clock().now() - self.controller_first_detection_time).nanoseconds / 1e9 > 30.0):
+
+                if self.controller_detection_timer:
+                    self.controller_detection_timer.cancel()
+                    self.controller_detection_timer = None
+                    self.get_logger().info("Controller detection stopped after 30 seconds")
+
+        except Exception as e:
+            self.get_logger().error(f"Error in controller detection: {e}")
 
     def _clicked_point_callback(self, msg: PointStamped):
         """Handle clicked point messages for manual start line setup."""
@@ -721,6 +828,35 @@ class RaceMonitor(Node):
             self.performance_monitor.save_performance_data_to_csv(
                 os.path.join(self.config['trajectory_output_directory'], 'performance_data')
             )
+
+        # Auto-shutdown after race completion if enabled
+        if self.config['auto_shutdown_on_race_complete']:
+            delay = self.config['shutdown_delay_seconds']
+            self.get_logger().info(f"Race complete! Shutting down in {delay} seconds...")
+
+            # Create a timer for delayed shutdown
+            self.shutdown_timer = self.create_timer(delay, self._shutdown_node)
+
+    def _shutdown_node(self):
+        """Shutdown the race monitor node."""
+        self.get_logger().info("🏁 Race Monitor shutting down automatically after race completion.")
+
+        # Cancel the shutdown timer
+        if hasattr(self, 'shutdown_timer'):
+            self.shutdown_timer.cancel()
+
+        # Cancel other timers if they exist
+        if hasattr(self, 'controller_detection_timer') and self.controller_detection_timer:
+            self.controller_detection_timer.cancel()
+
+        if hasattr(self, 'visualization_timer'):
+            self.visualization_timer.cancel()
+
+        if hasattr(self, 'intermediate_save_timer'):
+            self.intermediate_save_timer.cancel()
+
+        # Initiate shutdown
+        rclpy.shutdown()
 
     def _on_race_crash(self, crash_reason: str, total_time: float, lap_times: list):
         """Handle race crash event."""
