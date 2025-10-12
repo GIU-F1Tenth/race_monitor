@@ -8,6 +8,7 @@ import {
   Gauge,
   Network,
   Radio,
+  GitBranch,
   ChevronLeft,
   ChevronRight,
   Circle,
@@ -24,19 +25,13 @@ interface RosStatus {
   active_topics?: number;
 }
 
-interface NotificationCounts {
-  unread_results: number;
-  unread_analysis: number;
-}
-
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   rosStatus: RosStatus;
-  notificationCounts?: NotificationCounts;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, rosStatus, notificationCounts }) => {
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, rosStatus }) => {
   const location = useLocation();
 
   const navItems = [
@@ -56,15 +51,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, rosStatus, notif
       path: '/results', 
       label: 'Race Results', 
       icon: BarChart3,
-      group: 'race',
-      badge: notificationCounts?.unread_results
+      group: 'race'
     },
     { 
       path: '/analysis', 
       label: 'EVO Analysis', 
       icon: Activity,
-      group: 'race',
-      badge: notificationCounts?.unread_analysis
+      group: 'race'
     },
     { 
       path: '/ros-nodes', 
@@ -79,6 +72,12 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, rosStatus, notif
       icon: Radio,
       group: 'ros',
       badge: rosStatus.active_topics
+    },
+    { 
+      path: '/rqt-graph', 
+      label: 'RQT Graph', 
+      icon: GitBranch,
+      group: 'ros'
     },
     { 
       path: '/config', 
@@ -210,21 +209,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, rosStatus, notif
                   </div>
                   
                   {!collapsed && badge !== undefined && badge > 0 && (
-                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                      (path === '/results' || path === '/analysis') && notificationCounts
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
+                    <span className="px-2 py-1 text-xs rounded-full font-medium bg-blue-100 text-blue-700">
                       {badge}
                     </span>
                   )}
                   
                   {collapsed && badge !== undefined && badge > 0 && (
-                    <div className={`absolute -top-1 -right-1 h-5 w-5 rounded-full text-xs font-bold flex items-center justify-center ${
-                      (path === '/results' || path === '/analysis') && notificationCounts
-                        ? 'bg-red-500 text-white'
-                        : 'bg-blue-500 text-white'
-                    }`}>
+                    <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full text-xs font-bold flex items-center justify-center bg-blue-500 text-white">
                       {badge > 99 ? '99+' : badge}
                     </div>
                   )}
@@ -241,9 +232,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, rosStatus, notif
       {/* Footer */}
       {!collapsed && (
         <div className="p-4 border-t border-gray-200">
-          <div className="text-xs text-gray-500 text-center">
+          <div className="text-xs text-gray-500 text-center space-y-1">
             <p>ROS2 Race Monitor</p>
             <p>v1.0.0</p>
+            <div className="pt-2 border-t border-gray-100">
+              <p className="font-medium">Developed by:</p>
+              <p>Mohammed Azab</p>
+              <p>GIU F1Tenth Team</p>
+              <p className="text-blue-600">mohammed@azab.io</p>
+            </div>
           </div>
         </div>
       )}

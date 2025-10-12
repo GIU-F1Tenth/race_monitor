@@ -52,23 +52,53 @@ const Results: React.FC = () => {
     try {
       setLoading(true);
       
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       // Fetch experiments list
-      const experimentsResponse = await fetch('/api/data/experiments');
-      const experimentsData = await experimentsResponse.json();
-      setExperiments(experimentsData.experiments || []);
+      const experimentsResponse = await fetch('/api/data/experiments', { signal: controller.signal });
       
-      // Fetch summary
-      const summaryResponse = await fetch('/api/data/summary');
-      const summaryData = await summaryResponse.json();
-      setSummary(summaryData);
-      
-      // Select first experiment by default
-      if (experimentsData.experiments && experimentsData.experiments.length > 0) {
-        setSelectedExperiment(experimentsData.experiments[0].id);
+      if (experimentsResponse.ok) {
+        const experimentsData = await experimentsResponse.json();
+        setExperiments(experimentsData.experiments || []);
+        
+        // Select first experiment by default
+        if (experimentsData.experiments && experimentsData.experiments.length > 0) {
+          setSelectedExperiment(experimentsData.experiments[0].id);
+        }
+      } else {
+        // If no experiments found, set empty state
+        setExperiments([]);
+        setError('No race data found. Directory might be empty or backend not accessible.');
       }
       
-    } catch (err) {
-      setError('Failed to fetch race data');
+      // Fetch summary
+      const summaryResponse = await fetch('/api/data/summary', { signal: controller.signal });
+      
+      if (summaryResponse.ok) {
+        const summaryData = await summaryResponse.json();
+        setSummary(summaryData);
+      } else {
+        setSummary({
+          experiments_count: 0,
+          total_laps: 0
+        });
+      }
+      
+      clearTimeout(timeoutId);
+      
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setError('Request timed out. Please check your connection and try again.');
+      } else {
+        setError('Failed to connect to backend. Make sure the backend server is running.');
+      }
+      setExperiments([]);
+      setSummary({
+        experiments_count: 0,
+        total_laps: 0
+      });
       console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
@@ -142,6 +172,30 @@ const Results: React.FC = () => {
         >
           Retry
         </button>
+      </div>
+    );
+  }
+
+  // Show empty state when no experiments are found
+  if (!loading && experiments.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold text-gray-900">Race Results</h1>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+          <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Race Results Found</h3>
+          <p className="text-gray-600 mb-4">
+            No experiments or race data available yet. Start a race session to see results here.
+          </p>
+          <button 
+            onClick={fetchData}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
     );
   }

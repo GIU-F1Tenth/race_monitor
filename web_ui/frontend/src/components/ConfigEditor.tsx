@@ -124,7 +124,12 @@ race_monitor:
   const fetchConfigFiles = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/config/list');
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch('/api/config/list', { signal: controller.signal });
+      
       if (response.ok) {
         const files = await response.json();
         const configFilesData: ConfigFile[] = [];
@@ -136,7 +141,7 @@ race_monitor:
         
         for (const filename of files) {
           try {
-            const contentResponse = await fetch(`/api/config/${filename}`);
+            const contentResponse = await fetch(`/api/config/${filename}`, { signal: controller.signal });
             if (contentResponse.ok) {
               const content = await contentResponse.text();
               const params = parseYamlContent(content);
@@ -156,9 +161,19 @@ race_monitor:
         
         setConfigFiles(configFilesData);
         setError(null);
+        clearTimeout(timeoutId);
+      } else {
+        // If config API not available, show error instead of infinite loading
+        setConfigFiles([]);
+        setError('Configuration API not available. Backend may not be running.');
       }
-    } catch (err) {
-      setError('Failed to fetch config files');
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setError('Request timed out. Please check your connection.');
+      } else {
+        setError('Failed to fetch config files. Backend may not be running.');
+      }
+      setConfigFiles([]);
     } finally {
       setLoading(false);
     }
@@ -472,54 +487,62 @@ race_monitor:
 
       {/* File List */}
       <div className="space-y-1 mb-3 max-h-32 overflow-y-auto">
-        {configFiles.map((file) => (
-          <div
-            key={file.filename}
-            className={`flex items-center justify-between p-2 rounded cursor-pointer text-xs ${
-              selectedFile === file.filename
-                ? 'bg-blue-50 border border-blue-200'
-                : 'hover:bg-gray-50'
-            }`}
-            onClick={() => handleFileSelect(file.filename)}
-          >
-            <div className="flex items-center space-x-2 flex-1 min-w-0">
-              <FileText className="h-3 w-3 text-gray-500 flex-shrink-0" />
-              {file.isPinned && <Pin className="h-3 w-3 text-blue-500 flex-shrink-0" />}
-              <span className="truncate">{file.filename}</span>
-              {file.modified && (
-                <div className="h-2 w-2 bg-orange-500 rounded-full flex-shrink-0" title="Modified" />
-              )}
-            </div>
-            
-            <div className="flex space-x-1 ml-2">
-              {file.modified && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSaveFile(file.filename);
-                  }}
-                  className="p-1 rounded hover:bg-blue-100"
-                  title="Save"
-                >
-                  <Save className="h-3 w-3 text-blue-600" />
-                </button>
-              )}
-              
-              {!file.isPinned && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteFile(file.filename);
-                  }}
-                  className="p-1 rounded hover:bg-red-100"
-                  title="Delete"
-                >
-                  <Trash2 className="h-3 w-3 text-red-600" />
-                </button>
-              )}
-            </div>
+        {configFiles.length === 0 && !loading && !error ? (
+          <div className="text-center py-4">
+            <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-xs text-gray-500">No configuration files found</p>
+            <p className="text-xs text-gray-400">Backend may not be running</p>
           </div>
-        ))}
+        ) : (
+          configFiles.map((file) => (
+            <div
+              key={file.filename}
+              className={`flex items-center justify-between p-2 rounded cursor-pointer text-xs ${
+                selectedFile === file.filename
+                  ? 'bg-blue-50 border border-blue-200'
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => handleFileSelect(file.filename)}
+            >
+              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                <FileText className="h-3 w-3 text-gray-500 flex-shrink-0" />
+                {file.isPinned && <Pin className="h-3 w-3 text-blue-500 flex-shrink-0" />}
+                <span className="truncate">{file.filename}</span>
+                {file.modified && (
+                  <div className="h-2 w-2 bg-orange-500 rounded-full flex-shrink-0" title="Modified" />
+                )}
+              </div>
+              
+              <div className="flex space-x-1 ml-2">
+                {file.modified && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSaveFile(file.filename);
+                    }}
+                    className="p-1 rounded hover:bg-blue-100"
+                    title="Save"
+                  >
+                    <Save className="h-3 w-3 text-blue-600" />
+                  </button>
+                )}
+                
+                {!file.isPinned && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteFile(file.filename);
+                    }}
+                    className="p-1 rounded hover:bg-red-100"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-3 w-3 text-red-600" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Editor */}

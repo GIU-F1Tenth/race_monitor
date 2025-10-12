@@ -15,7 +15,6 @@ import {
   BarChart3,
   Monitor
 } from 'lucide-react';
-import axios from 'axios';
 import RQTGraph from '../components/LQTGraph';
 
 interface DashboardData {
@@ -49,21 +48,71 @@ const Dashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
+      setLoading(true);
+      
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const [dataResponse, statusResponse] = await Promise.all([
-        axios.get('/api/data/summary'),
-        axios.get('/api/live/status')
+        fetch('/api/data/summary', { signal: controller.signal }),
+        fetch('/api/live/status', { signal: controller.signal })
       ]);
       
-      setData(dataResponse.data);
-      setRosStatus({
-        ros_available: statusResponse.data.ros_available || false,
-        monitoring_active: statusResponse.data.monitoring_active || false,
-        active_nodes: statusResponse.data.active_nodes || 0,
-        active_topics: statusResponse.data.active_topics || 0
-      });
+      clearTimeout(timeoutId);
+      
+      // Handle data response
+      if (dataResponse.ok) {
+        const dataResult = await dataResponse.json();
+        setData(dataResult);
+      } else {
+        // If no data available, set empty state instead of keeping loading
+        setData({
+          experiments_count: 0,
+          total_laps: 0,
+          total_trajectories: 0
+        });
+      }
+      
+      // Handle status response
+      if (statusResponse.ok) {
+        const statusResult = await statusResponse.json();
+        setRosStatus({
+          ros_available: statusResult.ros_available || false,
+          monitoring_active: statusResult.monitoring_active || false,
+          active_nodes: statusResult.active_nodes || 0,
+          active_topics: statusResult.active_topics || 0
+        });
+      } else {
+        setRosStatus({
+          ros_available: false,
+          monitoring_active: false,
+          active_nodes: 0,
+          active_topics: 0
+        });
+      }
+      
       setError(null);
-    } catch (err) {
-      setError('Failed to fetch dashboard data');
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setError('Request timed out. Please check your connection and try again.');
+      } else {
+        setError('Failed to connect to backend. Make sure the backend server is running.');
+      }
+      
+      // Set default values instead of infinite loading
+      setData({
+        experiments_count: 0,
+        total_laps: 0,
+        total_trajectories: 0
+      });
+      setRosStatus({
+        ros_available: false,
+        monitoring_active: false,
+        active_nodes: 0,
+        active_topics: 0
+      });
+      
       console.error('Dashboard error:', err);
     } finally {
       setLoading(false);
