@@ -38,6 +38,7 @@ from giu_f1t_interfaces.msg import VehicleState, ConstrainedVehicleState
 
 import numpy as np
 import tf_transformations
+import math
 import os
 import sys
 from datetime import datetime
@@ -569,13 +570,17 @@ class RaceMonitor(Node):
             y = msg.pose.pose.position.y
             z = msg.pose.pose.position.z
 
+            # Extract heading from quaternion
+            orientation = msg.pose.pose.orientation
+            heading = self._quaternion_to_yaw(orientation)
+
             # Calculate velocity
             linear_velocity = (msg.twist.twist.linear.x**2 +
                                msg.twist.twist.linear.y**2 +
                                msg.twist.twist.linear.z**2) ** 0.5
 
-            # Update lap detector with position and velocity
-            self.lap_detector.update_position(x, y, msg.header.stamp, velocity=linear_velocity)
+            # Update lap detector with position, velocity, and heading
+            self.lap_detector.update_position(x, y, msg.header.stamp, velocity=linear_velocity, heading=heading)
 
             # Add point to current trajectory
             if self.lap_detector.is_race_active():
@@ -907,6 +912,21 @@ class RaceMonitor(Node):
             self.data_manager.save_race_results_to_csv(race_data)
 
         super().destroy_node()
+
+    def _quaternion_to_yaw(self, q):
+        """
+        Convert quaternion to yaw angle in radians.
+
+        Args:
+            q: Quaternion object with x, y, z, w attributes
+
+        Returns:
+            float: Yaw angle in radians
+        """
+        x, y, z, w = q.x, q.y, q.z, q.w
+        siny = 2.0 * (w * z + x * y)
+        cosy = 1.0 - 2.0 * (y * y + z * z)
+        return math.atan2(siny, cosy)
 
 
 def main(args=None):

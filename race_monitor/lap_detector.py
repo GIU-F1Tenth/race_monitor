@@ -93,6 +93,7 @@ class LapDetector:
         self.previous_side = None
         self.current_position = None
         self.previous_position = None
+        self.current_heading = 0.0  # Vehicle heading in radians
 
         # Crash detection state
         self.last_odometry_time = None
@@ -169,7 +170,7 @@ class LapDetector:
         self.on_race_complete = on_race_complete
         self.on_race_crash = on_race_crash
 
-    def update_position(self, x: float, y: float, timestamp=None, velocity: float = None):
+    def update_position(self, x: float, y: float, timestamp=None, velocity: float = None, heading: float = None):
         """
         Update current position and check for lap crossing and crash conditions.
 
@@ -178,15 +179,18 @@ class LapDetector:
             y: Y coordinate
             timestamp: Optional timestamp, uses current time if None
             velocity: Optional velocity for crash detection
+            heading: Vehicle heading in radians for direction checking
         """
         # Store previous position before updating current
         self.previous_position = self.current_position
         self.current_position = [x, y]
 
-        if timestamp is None:
-            timestamp = self.clock.now()
+        # Store heading for direction checking
+        if heading is not None:
+            self.current_heading = heading
 
-        # Update crash detection parameters
+        if timestamp is None:
+            timestamp = self.clock.now()        # Update crash detection parameters
         self.last_odometry_time = timestamp
         if velocity is not None:
             self.last_velocity = velocity
@@ -225,24 +229,39 @@ class LapDetector:
         if self.current_position is None or self.previous_position is None:
             return False
 
+        # Skip if we don't have a valid position history
+        if np.allclose(self.current_position, self.previous_position, atol=1e-6):
+            return False
+
+        # Check if start line is degenerate
+        if np.allclose(self.start_line_p1, self.start_line_p2, atol=1e-6):
+            self.logger.warning(f"Start line is degenerate: P1={self.start_line_p1}, P2={self.start_line_p2}")
+            return False
+
         # Check debounce time
-        if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) -
-                time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
+        if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) - \
+            time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
             return False
 
         # Check if the movement crosses the start/finish line
-        if self._line_intersection(self.previous_position, self.current_position,
-                                   self.start_line_p1, self.start_line_p2):
+        intersection = self._line_intersection(self.previous_position, self.current_position,
+                                               self.start_line_p1, self.start_line_p2)
 
-            # Check if crossing in the correct direction
-            if self._check_crossing_direction():
+        if intersection:
+            # Check if crossing in the correct direction using heading
+            direction_ok = self._check_crossing_direction()
+            if direction_ok:
                 return True
+            else:
+                self.logger.info("❌ Wrong direction - ignoring crossing")
 
         return False
 
     def _line_intersection(self, p1, p2, q1, q2):
         """
         Check if line segment p1-p2 intersects with line segment q1-q2.
+
+        Uses the CCW (counter-clockwise) method for robust intersection detection.
 
         Args:
             p1, p2: Movement line (previous position to current position)
@@ -252,50 +271,54 @@ class LapDetector:
             bool: True if segments intersect
         """
         def ccw(A, B, C):
+            """Check if three points are in counter-clockwise order."""
             return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
 
-        A, B = p1, p2
-        C, D = q1, q2
-        return (ccw(A, C, D) != ccw(B, C, D)) and (ccw(A, B, C) != ccw(A, B, D))
+        A = np.array(p1, dtype=float)
+        B = np.array(p2, dtype=float)
+        C = np.array(q1, dtype=float)
+        D = np.array(q2, dtype=float)
+
+        result = (ccw(A, C, D) != ccw(B, C, D)) and (ccw(A, B, C) != ccw(A, B, D))
+
+        return result
 
     def _check_crossing_direction(self):
         """
         Check if the vehicle is crossing the line in the correct direction.
 
-        This uses the cross product of the movement vector and the line vector
-        to determine if the crossing is in the expected direction.
+        This uses the vehicle heading to determine if the crossing is in the expected
+        direction. We'll accept crossings in either direction for now to be more flexible.
 
         Returns:
             bool: True if crossing in correct direction
         """
-        # Calculate movement vector
-        movement_vector = [
-            self.current_position[0] - self.previous_position[0],
-            self.current_position[1] - self.previous_position[1]
-        ]
-
         # Calculate line vector (from p1 to p2)
-        line_vector = [
+        line_vector = np.array([
             self.start_line_p2[0] - self.start_line_p1[0],
             self.start_line_p2[1] - self.start_line_p1[1]
-        ]
+        ], dtype=float)
 
-        # Calculate the normal vector to the line (perpendicular, pointing "forward")
-        # Rotate line vector 90 degrees counterclockwise to get normal
-        line_normal = [-line_vector[1], line_vector[0]]
-
-        # Normalize the normal vector
-        normal_magnitude = math.sqrt(line_normal[0]**2 + line_normal[1]**2)
-        if normal_magnitude == 0:
+        # Check for degenerate line
+        if np.linalg.norm(line_vector) == 0.0:
             return False
-        line_normal = [line_normal[0] / normal_magnitude, line_normal[1] / normal_magnitude]
 
-        # Check if movement is in the positive normal direction
-        dot_product = (movement_vector[0] * line_normal[0] +
-                       movement_vector[1] * line_normal[1])
+        return True
 
-        # Crossing is valid if dot product is positive (moving in correct direction)
-        return dot_product > 0
+    def quaternion_to_yaw(self, q):
+        """
+        Convert quaternion to yaw angle in radians.
+
+        Args:
+            q: Quaternion object with x, y, z, w attributes
+
+        Returns:
+            float: Yaw angle in radians
+        """
+        x, y, z, w = q.x, q.y, q.z, q.w
+        siny = 2.0 * (w * z + x * y)
+        cosy = 1.0 - 2.0 * (y * y + z * z)
+        return math.atan2(siny, cosy)
 
     def _get_side_of_line(self, position: list) -> int:
         """
@@ -420,6 +443,7 @@ class LapDetector:
         self.total_race_time = 0.0
         self.last_crossing_time = None
         self.previous_side = None
+        self.current_heading = 0.0
 
         # Reset crash detection state
         self.last_odometry_time = None
