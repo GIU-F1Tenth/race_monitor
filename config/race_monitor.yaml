@@ -7,7 +7,7 @@ race_monitor:
     # Start/finish line configuration
     start_line_p1: [0.0, -1.0] # Bottom point of start line [x, y]
     start_line_p2: [1.0, 0.0] # Top point of start line [x, y]
-    required_laps: 20 # Number of laps to complete race
+    required_laps: 90 # Number of laps to complete race
     debounce_time: 2.0 # Debounce time for lap detection (seconds)
     output_file: "race_results.csv" # CSV file for race results
     frame_id: "map" # Frame ID for visualization
@@ -90,16 +90,8 @@ race_monitor:
     # ========================================
 
     # File-based reference trajectory
-    reference_trajectory_file: "horizon_mapper/horizon_mapper/ref_trajectory.csv"
+    reference_trajectory_file: "/home/mohammedazab/ws/src/race_stack/horizon_mapper/horizon_mapper/optimal_trajectory.csv"
     reference_trajectory_format: "csv" # csv, tum, kitti
-
-    # Horizon mapper interface (real-time reference trajectory)
-    enable_horizon_mapper_reference: false
-    horizon_mapper_reference_topic: "/horizon_mapper/reference_trajectory"
-
-    # Use complete reference path instead of reference trajectory points
-    use_complete_reference_path: true
-    horizon_mapper_path_topic: "/horizon_mapper/reference_path"
 
     # ========================================
     # ADVANCED FILE OUTPUT FOR RESEARCH
@@ -121,7 +113,7 @@ race_monitor:
     # ========================================
 
     # Data storage
-    save_trajectories: trueref_trajectory
+    save_trajectories: true
     trajectory_output_directory: "/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results"
 
     # Metrics to calculate
@@ -174,90 +166,3 @@ race_monitor:
     enable_f1tenth_interface: true
     f1tenth_vehicle_state_topic: "/vehicle_state"
     f1tenth_constrained_state_topic: "/constrained_vehicle_state"
-
-  # ========================================
-  # F1TENTH INTERFACE SETTINGS
-  # ========================================
-
-  # Enable/disable F1Tenth vehicle state interface
-  enable_f1tenth_interface: true
-  f1tenth_vehicle_state_topic: "/vehicle_state"
-  f1tenth_constrained_state_topic: "/constrained_vehicle_state"
-
-  # ========================================
-  # COMPUTATIONAL PERFORMANCE MONITORING
-  # ========================================
-
-  # Enable/disable computational performance monitoring
-  enable_computational_monitoring: true
-
-  # Odometry input topics
-  odometry_topics:
-    - name: "car_state/odom"
-      message_type: "nav_msgs/Odometry"
-      enabled: true
-    - name: "/ekf/odometry"
-      message_type: "nav_msgs/Odometry"
-      enabled: false
-    - name: "/fusion/odom"
-      message_type: "nav_msgs/Odometry"
-      enabled: false
-    - name: "/localization/pose"
-      message_type: "geometry_msgs/PoseWithCovarianceStamped"
-      enabled: false
-
-  # Control command output topics
-  control_command_topics:
-    - name: "/drive"
-      message_type: "ackermann_msgs/AckermannDriveStamped"
-      enabled: true
-    - name: "/cmd_vel"
-      message_type: "geometry_msgs/Twist"
-      enabled: false
-    - name: "/ackermann_cmd"
-      message_type: "ackermann_msgs/AckermannDriveStamped"
-      enabled: false
-    - name: "/controller/cmd"
-      message_type: "ackermann_msgs/AckermannDriveStamped"
-      enabled: false
-    - name: "/mpc_controller/cmd"
-      message_type: "ackermann_msgs/AckermannDriveStamped"
-      enabled: false
-
-  # Performance monitoring configuration
-  monitoring_window_size: 100 # Number of samples to keep in memory
-  cpu_monitoring_interval: 0.1 # CPU monitoring interval (seconds)
-
-  # Performance logging
-  enable_performance_logging: true # Enable periodic performance logging
-  performance_log_interval: 5.0 # Performance logging interval (seconds)
-
-  # Performance thresholds for analysis
-  max_acceptable_latency_ms: 50.0 # Maximum acceptable control loop latency (ms)
-  target_control_frequency_hz: 50.0 # Target control frequency (Hz)
-  max_acceptable_cpu_usage: 80.0 # Maximum acceptable CPU usage (%)
-  max_acceptable_memory_mb: 512.0 # Maximum acceptable memory usage (MB)
-
-  # ========================================
-  # CUSTOM RACE EVALUATION SYSTEM
-  # ========================================
-
-  # Enable custom race evaluation format
-  enable_race_evaluation: true # Generate custom race evaluation files
-
-  # Race evaluation settings
-  race_evaluation:
-    enable_export: true # Export race evaluation files
-    auto_increment_experiment: true # Auto-increment experiment IDs
-    include_recommendations: true # Generate performance recommendations
-    enable_comparison: true # Compare with previous experiments
-    grading_strictness: "normal" # Grading strictness: strict, normal, lenient
-
-    # Evaluation focus areas
-    focus_on_consistency: true # Emphasize lap time consistency
-    focus_on_trajectory_accuracy: true # Emphasize trajectory following
-    focus_on_racing_efficiency: true # Emphasize racing line optimization
-
-    # Output preferences
-    include_detailed_metrics: true # Include detailed metric breakdown
-    max_recommendations: 5 # Maximum number of recommendations to generate

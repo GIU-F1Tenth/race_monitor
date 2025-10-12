@@ -148,6 +148,7 @@ class ReferenceTrajectoryManager:
 
                 timestamps = []
                 positions = []
+                has_orientation = False
 
                 for row in reader:
                     if len(row) >= 3:
@@ -160,12 +161,16 @@ class ReferenceTrajectoryManager:
                         timestamps.append(t)
                         positions.append([x, y, z])
 
-                if EVO_AVAILABLE:
+                        # Check if this row has orientation data
+                        if len(row) >= 7:
+                            has_orientation = True
+
+                if EVO_AVAILABLE and len(positions) > 0:
                     # Create EVO trajectory
                     timestamps = np.array(timestamps)
                     positions = np.array(positions)
 
-                    if len(row) >= 7:  # Has orientation data
+                    if has_orientation:  # Has orientation data
                         orientations = []
                         with open(self.reference_trajectory_file, 'r') as file:
                             reader = csv.reader(file)
@@ -173,12 +178,16 @@ class ReferenceTrajectoryManager:
                             for row in reader:
                                 if len(row) >= 7:
                                     qx, qy, qz, qw = map(float, row[3:7])
-                                    orientations.append([qx, qy, qz, qw])
+                                    orientations.append([qw, qx, qy, qz])  # EVO expects w,x,y,z format
 
-                        orientations = np.array(orientations)
-                        self.reference_trajectory = trajectory.PoseTrajectory3D(
-                            positions, orientations, timestamps
-                        )
+                        if len(orientations) > 0:
+                            orientations = np.array(orientations)
+                            self.reference_trajectory = trajectory.PoseTrajectory3D(
+                                positions, orientations, timestamps
+                            )
+                        else:
+                            # If orientation loading failed, create path without orientation
+                            self.reference_trajectory = trajectory.PosePath3D(positions, timestamps)
                     else:
                         self.reference_trajectory = trajectory.PosePath3D(positions, timestamps)
 
@@ -303,17 +312,35 @@ class ReferenceTrajectoryManager:
             # Convert EVO trajectory to point list
             points = []
             positions = self.reference_trajectory.positions_xyz
+
+            # Ensure positions is properly shaped
+            if len(positions.shape) == 1:
+                # If positions is 1D, it might be a single point
+                if len(positions) >= 3:
+                    points.append({'x': positions[0], 'y': positions[1], 'z': positions[2]})
+                return points
+
             if hasattr(self.reference_trajectory, 'orientations_quat_wxyz'):
                 orientations = self.reference_trajectory.orientations_quat_wxyz
                 for i, pos in enumerate(positions):
-                    quat = orientations[i]
-                    points.append({
-                        'x': pos[0], 'y': pos[1], 'z': pos[2],
-                        'qw': quat[0], 'qx': quat[1], 'qy': quat[2], 'qz': quat[3]
-                    })
+                    if len(pos) >= 3 and i < len(orientations):
+                        quat = orientations[i]
+                        # Ensure quat is iterable and has at least 4 elements
+                        if hasattr(quat, '__len__') and len(quat) >= 4:
+                            points.append({
+                                'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2]),
+                                'qw': float(quat[0]), 'qx': float(quat[1]), 'qy': float(quat[2]), 'qz': float(quat[3])
+                            })
+                        else:
+                            # If quaternion is not properly formatted, skip orientation
+                            points.append({'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
+                    elif len(pos) >= 3:
+                        # No orientation available for this position
+                        points.append({'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
             else:
                 for pos in positions:
-                    points.append({'x': pos[0], 'y': pos[1], 'z': pos[2]})
+                    if len(pos) >= 3:
+                        points.append({'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
             return points
         else:
             return []
