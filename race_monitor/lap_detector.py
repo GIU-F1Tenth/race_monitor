@@ -60,11 +60,11 @@ class LapDetector:
         self.start_line_p1 = [0.0, -1.0]  # Default start line points
         self.start_line_p2 = [0.0, 1.0]
         self.debounce_time = 2.0  # seconds
-        self.required_laps = 5
+        self.required_laps = 20  # Changed default to match config
 
         # Race ending configuration
         self.race_ending_mode = "lap_complete"  # "lap_complete", "crash", "manual"
-        
+
         # Crash detection configuration
         self.crash_detection_enabled = True
         self.max_stationary_time = 5.0
@@ -73,7 +73,7 @@ class LapDetector:
         self.enable_collision_detection = True
         self.collision_velocity_threshold = 2.0
         self.collision_detection_window = 0.5
-        
+
         # Manual mode configuration
         self.max_race_duration = 0  # 0 = no limit
 
@@ -92,7 +92,7 @@ class LapDetector:
         self.last_crossing_time = None
         self.previous_side = None
         self.current_position = None
-        
+
         # Crash detection state
         self.last_odometry_time = None
         self.last_velocity = 0.0
@@ -117,20 +117,23 @@ class LapDetector:
         self.start_line_p2 = config.get('start_line_p2', self.start_line_p2)
         self.debounce_time = config.get('debounce_time', self.debounce_time)
         self.required_laps = config.get('required_laps', self.required_laps)
-        
+
         # Race ending configuration
         self.race_ending_mode = config.get('race_ending_mode', self.race_ending_mode)
-        
+
         # Crash detection configuration
         crash_config = config.get('crash_detection', {})
         self.crash_detection_enabled = crash_config.get('enable_crash_detection', self.crash_detection_enabled)
         self.max_stationary_time = crash_config.get('max_stationary_time', self.max_stationary_time)
         self.min_velocity_threshold = crash_config.get('min_velocity_threshold', self.min_velocity_threshold)
         self.max_odometry_timeout = crash_config.get('max_odometry_timeout', self.max_odometry_timeout)
-        self.enable_collision_detection = crash_config.get('enable_collision_detection', self.enable_collision_detection)
-        self.collision_velocity_threshold = crash_config.get('collision_velocity_threshold', self.collision_velocity_threshold)
-        self.collision_detection_window = crash_config.get('collision_detection_window', self.collision_detection_window)
-        
+        self.enable_collision_detection = crash_config.get(
+            'enable_collision_detection', self.enable_collision_detection)
+        self.collision_velocity_threshold = crash_config.get(
+            'collision_velocity_threshold', self.collision_velocity_threshold)
+        self.collision_detection_window = crash_config.get(
+            'collision_detection_window', self.collision_detection_window)
+
         # Manual mode configuration
         manual_config = config.get('manual_mode', {})
         self.max_race_duration = manual_config.get('max_race_duration', self.max_race_duration)
@@ -144,7 +147,8 @@ class LapDetector:
             self.logger.info(f"  - Crash detection enabled: {self.crash_detection_enabled}")
             self.logger.info(f"  - Max stationary time: {self.max_stationary_time}s")
         elif self.race_ending_mode == "manual":
-            self.logger.info(f"  - Max race duration: {self.max_race_duration}s ({'no limit' if self.max_race_duration == 0 else 'limit'})")
+            self.logger.info(
+                f"  - Max race duration: {self.max_race_duration}s ({'no limit' if self.max_race_duration == 0 else 'limit'})")
 
     def set_callbacks(self, on_race_start: Callable = None,
                       on_lap_complete: Callable = None,
@@ -184,7 +188,7 @@ class LapDetector:
         if velocity is not None:
             self.last_velocity = velocity
             self._update_velocity_history(velocity, timestamp)
-        
+
         # Update position tracking
         self.last_position_update = timestamp
 
@@ -193,7 +197,7 @@ class LapDetector:
             # Check for crash conditions first (higher priority)
             if self.race_ending_mode in ["crash", "manual"] and self._check_crash_conditions(timestamp):
                 return  # Race ended due to crash
-            
+
             # Check for maximum race duration (safety feature for manual mode)
             if self.race_ending_mode == "manual" and self.max_race_duration > 0:
                 race_duration = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.race_start_time)) / 1e9
@@ -219,8 +223,8 @@ class LapDetector:
             return False
 
         # Check debounce time
-        if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) - \
-            time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
+        if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) -
+                                                     time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
             return False
 
         current_side = self._get_side_of_line(self.current_position)
@@ -360,7 +364,7 @@ class LapDetector:
         self.total_race_time = 0.0
         self.last_crossing_time = None
         self.previous_side = None
-        
+
         # Reset crash detection state
         self.last_odometry_time = None
         self.last_velocity = 0.0
@@ -409,64 +413,64 @@ class LapDetector:
         else:
             # For crash and manual modes, show lap count instead
             return float(len(self.lap_times))
-    
+
     def _update_velocity_history(self, velocity: float, timestamp):
         """
         Update velocity history for collision detection.
-        
+
         Args:
             velocity: Current velocity
             timestamp: Current timestamp
         """
         current_time_ns = time_to_nanoseconds(timestamp)
-        
+
         # Add current velocity to history
         self.velocity_history.append((current_time_ns, velocity))
-        
+
         # Remove old entries outside the detection window
         cutoff_time = current_time_ns - (self.collision_detection_window * 1e9)
         self.velocity_history = [(t, v) for t, v in self.velocity_history if t >= cutoff_time]
-    
+
     def _check_crash_conditions(self, timestamp) -> bool:
         """
         Check for crash conditions based on configured detection methods.
-        
+
         Args:
             timestamp: Current timestamp
-            
+
         Returns:
             bool: True if crash is detected
         """
         if not self.crash_detection_enabled:
             return False
-        
+
         current_time_ns = time_to_nanoseconds(timestamp)
-        
+
         # Check for odometry timeout
         if self._check_odometry_timeout(current_time_ns):
             self._end_race_by_crash("Odometry timeout - vehicle may have crashed", timestamp)
             return True
-        
+
         # Check for stationary vehicle
         if self._check_stationary_condition(current_time_ns):
             self._end_race_by_crash("Vehicle stationary for too long - possible crash", timestamp)
             return True
-        
+
         # Check for collision (sudden velocity change)
         if self.enable_collision_detection and self._check_collision_condition():
             self._end_race_by_crash("Sudden velocity change detected - possible collision", timestamp)
             return True
-        
+
         return False
-    
+
     def _check_odometry_timeout(self, current_time_ns: int) -> bool:
         """Check if odometry updates have timed out."""
         if self.last_odometry_time is None:
             return False
-        
+
         time_since_last_update = (current_time_ns - time_to_nanoseconds(self.last_odometry_time)) / 1e9
         return time_since_last_update > self.max_odometry_timeout
-    
+
     def _check_stationary_condition(self, current_time_ns: int) -> bool:
         """Check if vehicle has been stationary for too long."""
         # Check if vehicle is currently stationary
@@ -474,34 +478,34 @@ class LapDetector:
             # Vehicle is moving, reset stationary timer
             self.stationary_start_time = None
             return False
-        
+
         # Vehicle is stationary
         if self.stationary_start_time is None:
             # Start tracking stationary time
             self.stationary_start_time = current_time_ns
             return False
-        
+
         # Check if stationary for too long
         stationary_duration = (current_time_ns - self.stationary_start_time) / 1e9
         return stationary_duration > self.max_stationary_time
-    
+
     def _check_collision_condition(self) -> bool:
         """Check for collision based on sudden velocity changes."""
         if len(self.velocity_history) < 2:
             return False
-        
+
         # Find the maximum velocity change in the detection window
         max_velocity_change = 0.0
         for i in range(1, len(self.velocity_history)):
-            velocity_change = abs(self.velocity_history[i][1] - self.velocity_history[i-1][1])
+            velocity_change = abs(self.velocity_history[i][1] - self.velocity_history[i - 1][1])
             max_velocity_change = max(max_velocity_change, velocity_change)
-        
+
         return max_velocity_change > self.collision_velocity_threshold
-    
+
     def _end_race_by_crash(self, crash_reason: str, timestamp):
         """
         End race due to crash detection.
-        
+
         Args:
             crash_reason: Reason for crash detection
             timestamp: Time of crash detection
@@ -509,36 +513,36 @@ class LapDetector:
         self.race_completed = True
         self.race_ended_by_crash = True
         self.total_race_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.race_start_time)) / 1e9
-        
+
         self.logger.warning(f"🚨 Race ended due to crash: {crash_reason}")
         self.logger.info(f"   Race duration: {self.total_race_time:.3f}s")
         self.logger.info(f"   Laps completed: {len(self.lap_times)}")
         if self.lap_times:
             self.logger.info(f"   Last lap time: {self.lap_times[-1]:.3f}s")
-        
+
         # Trigger crash callback
         if self.on_race_crash:
             self.on_race_crash(crash_reason, self.total_race_time, self.lap_times)
-    
+
     def _end_race_by_timeout(self, timestamp):
         """
         End race due to maximum duration timeout (safety feature).
-        
+
         Args:
             timestamp: Time of timeout
         """
         self.race_completed = True
         self.race_ended_manually = True
         self.total_race_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.race_start_time)) / 1e9
-        
+
         self.logger.info(f"⏰ Race ended due to maximum duration limit ({self.max_race_duration}s)")
         self.logger.info(f"   Total race time: {self.total_race_time:.3f}s")
         self.logger.info(f"   Laps completed: {len(self.lap_times)}")
-        
+
         # Trigger race completion callback
         if self.on_race_complete:
             self.on_race_complete(self.total_race_time, self.lap_times)
-    
+
     def get_race_ending_reason(self) -> str:
         """Get the reason why the race ended."""
         if not self.race_completed:

@@ -65,11 +65,16 @@ class PerformanceMonitor:
         self.enable_monitoring = True
         self.monitoring_window_size = 100
         self.cpu_monitoring_interval = 0.1
+        self.enable_performance_logging = True
         self.performance_log_interval = 5.0
         self.max_acceptable_latency_ms = 50.0
         self.target_control_frequency_hz = 50.0
         self.max_acceptable_cpu_usage = 80.0
         self.max_acceptable_memory_mb = 512.0
+
+        # Topic configuration for monitoring
+        self.odometry_topics = ['car_state/odom']
+        self.control_command_topics = ['/drive']
 
         # Performance data storage
         self.cpu_usage_history = deque(maxlen=self.monitoring_window_size)
@@ -98,6 +103,40 @@ class PerformanceMonitor:
             config: Dictionary containing configuration parameters
         """
         self.enable_monitoring = config.get('enable_computational_monitoring', self.enable_monitoring)
+        self.monitoring_window_size = config.get('monitoring_window_size', self.monitoring_window_size)
+        self.cpu_monitoring_interval = config.get('cpu_monitoring_interval', self.cpu_monitoring_interval)
+        self.enable_performance_logging = config.get('enable_performance_logging', True)
+        self.performance_log_interval = config.get('performance_log_interval', self.performance_log_interval)
+
+        # Performance thresholds
+        self.max_acceptable_latency_ms = config.get('max_acceptable_latency_ms', self.max_acceptable_latency_ms)
+        self.target_control_frequency_hz = config.get('target_control_frequency_hz', self.target_control_frequency_hz)
+        self.max_acceptable_cpu_usage = config.get('max_acceptable_cpu_usage', self.max_acceptable_cpu_usage)
+        self.max_acceptable_memory_mb = config.get('max_acceptable_memory_mb', self.max_acceptable_memory_mb)
+
+        # Topic configuration for monitoring
+        self.odometry_topics = config.get('odometry_topics', ['car_state/odom'])
+        self.control_command_topics = config.get('control_command_topics', ['/drive'])
+
+        # Update deque sizes if window size changed
+        if len(self.cpu_usage_history) != self.monitoring_window_size:
+            self.cpu_usage_history = deque(maxlen=self.monitoring_window_size)
+            self.memory_usage_history = deque(maxlen=self.monitoring_window_size)
+            self.control_latency_history = deque(maxlen=self.monitoring_window_size)
+            self.control_frequency_history = deque(maxlen=self.monitoring_window_size)
+
+        self.logger.info(f"Performance monitor configured:")
+        self.logger.info(f"  - Monitoring enabled: {self.enable_monitoring}")
+        self.logger.info(f"  - Window size: {self.monitoring_window_size}")
+        self.logger.info(f"  - CPU interval: {self.cpu_monitoring_interval}s")
+        self.logger.info(f"  - Log interval: {self.performance_log_interval}s")
+        self.logger.info(f"  - Max latency: {self.max_acceptable_latency_ms}ms")
+        self.logger.info(f"  - Target frequency: {self.target_control_frequency_hz}Hz")
+        self.logger.info(f"  - Odometry topics: {self.odometry_topics}")
+        self.logger.info(f"  - Control topics: {self.control_command_topics}")
+
+        if self.enable_monitoring:
+            self.start_monitoring()
         self.monitoring_window_size = config.get('monitoring_window_size', self.monitoring_window_size)
         self.cpu_monitoring_interval = config.get('cpu_monitoring_interval', self.cpu_monitoring_interval)
         self.performance_log_interval = config.get('performance_log_interval', self.performance_log_interval)

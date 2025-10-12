@@ -132,135 +132,8 @@ class RaceMonitor(Node):
 
         self.get_logger().info('Enhanced Race Monitor node started')
 
-        # Declare parameters with defaults (only if not already declared)
-        if not self.has_parameter('start_line_p1'):
-            self.declare_parameter('start_line_p1', [0.0, -1.0])  # Bottom of vertical line
-        if not self.has_parameter('start_line_p2'):
-            self.declare_parameter('start_line_p2', [0.0, 1.0])   # Top of vertical line
-        if not self.has_parameter('required_laps'):
-            self.declare_parameter('required_laps', 5)
-        if not self.has_parameter('debounce_time'):
-            self.declare_parameter('debounce_time', 2.0)
-        if not self.has_parameter('output_file'):
-            self.declare_parameter('output_file', 'race_results.csv')
-        if not self.has_parameter('frame_id'):
-            self.declare_parameter('frame_id', 'map')
-
-        # Controller and experiment identification parameters
-        if not self.has_parameter('controller_name'):
-            self.declare_parameter('controller_name', 'unknown_controller')
-        if not self.has_parameter('experiment_id'):
-            self.declare_parameter('experiment_id', 'exp_001')
-
-        # EVO integration parameters
-        if not self.has_parameter('enable_trajectory_evaluation'):
-            self.declare_parameter('enable_trajectory_evaluation', True)
-
-        # Evaluation timing options (choose one):
-        # Option 1: Time-based evaluation (evaluate every X seconds)
-        if not self.has_parameter('evaluation_interval_seconds'):
-            self.declare_parameter('evaluation_interval_seconds', 1.0)
-
-        # Option 2: Lap-based evaluation (evaluate every X laps)
-        if not self.has_parameter('evaluation_interval_laps'):
-            self.declare_parameter('evaluation_interval_laps', 0)  # 0 = disable
-
-        # Option 3: Distance-based evaluation (evaluate every X meters)
-        if not self.has_parameter('evaluation_interval_meters'):
-            self.declare_parameter('evaluation_interval_meters', 0.0)  # 0 = disable
-
-        # Reference trajectory configuration
-        if not self.has_parameter('reference_trajectory_file'):
-            self.declare_parameter('reference_trajectory_file', 'horizon_mapper/horizon_mapper/ref_trajectory.csv')
-        if not self.has_parameter('reference_trajectory_format'):
-            self.declare_parameter('reference_trajectory_format', 'csv')
-
-        # Trajectory analysis settings
-        if not self.has_parameter('save_trajectories'):
-            self.declare_parameter('save_trajectories', True)
-        if not self.has_parameter('trajectory_output_directory'):
-            self.declare_parameter('trajectory_output_directory',
-                                   '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results')
-        if not self.has_parameter('save_horizon_reference'):
-            self.declare_parameter('save_horizon_reference', True)
-        if not self.has_parameter('evaluate_smoothness'):
-            self.declare_parameter('evaluate_smoothness', True)
-        if not self.has_parameter('evaluate_consistency'):
-            self.declare_parameter('evaluate_consistency', True)
-
-        # Graph generation settings
-        if not self.has_parameter('auto_generate_graphs'):
-            self.declare_parameter('auto_generate_graphs', True)
-        if not self.has_parameter('graph_output_directory'):
-            self.declare_parameter(
-                'graph_output_directory',
-                '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs')
-        if not self.has_parameter('graph_formats'):
-            self.declare_parameter('graph_formats', ['png', 'pdf'])
-
-        # Graph types to generate
-        if not self.has_parameter('generate_trajectory_plots'):
-            self.declare_parameter('generate_trajectory_plots', True)
-        if not self.has_parameter('generate_xyz_plots'):
-            self.declare_parameter('generate_xyz_plots', True)
-        if not self.has_parameter('generate_rpy_plots'):
-            self.declare_parameter('generate_rpy_plots', True)
-        if not self.has_parameter('generate_speed_plots'):
-            self.declare_parameter('generate_speed_plots', True)
-        if not self.has_parameter('generate_error_plots'):
-            self.declare_parameter('generate_error_plots', True)
-        if not self.has_parameter('generate_metrics_plots'):
-            self.declare_parameter('generate_metrics_plots', True)
-
-        # Plot configuration settings
-        if not self.has_parameter('plot_figsize'):
-            self.declare_parameter('plot_figsize', [12.0, 8.0])
-        if not self.has_parameter('plot_dpi'):
-            self.declare_parameter('plot_dpi', 300)
-        if not self.has_parameter('plot_style'):
-            self.declare_parameter('plot_style', 'seaborn')
-        if not self.has_parameter('plot_color_scheme'):
-            self.declare_parameter('plot_color_scheme', 'viridis')
-
-        # Computational Performance Monitoring parameters
-        if not self.has_parameter('enable_computational_monitoring'):
-            self.declare_parameter('enable_computational_monitoring', True)
-
-        # Multiple odometry topics support
-        if not self.has_parameter('odometry_topics'):
-            # Use string list instead of dict list for ROS 2 compatibility
-            self.declare_parameter('odometry_topics', ['car_state/odom'])
-
-        # Multiple control command topics support
-        if not self.has_parameter('control_command_topics'):
-            # Use string list instead of dict list for ROS 2 compatibility
-            self.declare_parameter('control_command_topics', ['/drive'])
-
-        # Legacy single topic parameters (for backward compatibility)
-        if not self.has_parameter('control_command_topic'):
-            self.declare_parameter('control_command_topic', '/drive')
-        if not self.has_parameter('control_command_type'):
-            self.declare_parameter('control_command_type', 'ackermann')  # 'ackermann' or 'twist'
-        if not self.has_parameter('monitoring_window_size'):
-            self.declare_parameter('monitoring_window_size', 100)  # Number of samples to keep
-        if not self.has_parameter('cpu_monitoring_interval'):
-            self.declare_parameter('cpu_monitoring_interval', 0.1)  # seconds
-        if not self.has_parameter('enable_performance_logging'):
-            self.declare_parameter('enable_performance_logging', True)
-        if not self.has_parameter('performance_log_interval'):
-            self.declare_parameter('performance_log_interval', 1.0)  # seconds
-
-        # Race Evaluation System parameters
-        if not self.has_parameter('enable_race_evaluation'):
-            self.declare_parameter('enable_race_evaluation', True)
-        if not self.has_parameter('grading_strictness'):
-            self.declare_parameter('grading_strictness', 'normal')  # strict, normal, lenient
-        if not self.has_parameter('enable_recommendations'):
-            self.declare_parameter('enable_recommendations', True)
-        if not self.has_parameter('enable_comparison'):
-            self.declare_parameter('enable_comparison', True)
-        if not self.has_parameter('auto_increment_experiment'):
-            self.declare_parameter('auto_increment_experiment', True)
+        # Declare all parameters matching the config file structure
+        self._declare_all_parameters()
 
         # Read parameters
         self.start_line_p1 = np.array(self.get_parameter('start_line_p1').value, dtype=float)
@@ -795,6 +668,184 @@ class RaceMonitor(Node):
 
         self.get_logger().info('Enhanced Race Monitor initialized. Use RViz Publish Point to set start/finish line (click two points).')
 
+    def _declare_all_parameters(self):
+        """Declare all parameters matching the config file structure."""
+        # ========================================
+        # RACE MONITORING PARAMETERS
+        # ========================================
+        self.declare_parameter('start_line_p1', [0.0, -1.0])
+        self.declare_parameter('start_line_p2', [1.0, 0.0])
+        self.declare_parameter('required_laps', 20)
+        self.declare_parameter('debounce_time', 2.0)
+        self.declare_parameter('output_file', 'race_results.csv')
+        self.declare_parameter('frame_id', 'map')
+
+        # ========================================
+        # RACE ENDING CONDITIONS
+        # ========================================
+        self.declare_parameter('race_ending_mode', 'lap_complete')
+
+        # Crash detection parameters
+        self.declare_parameter('crash_detection.enable_crash_detection', True)
+        self.declare_parameter('crash_detection.max_stationary_time', 5.0)
+        self.declare_parameter('crash_detection.min_velocity_threshold', 0.1)
+        self.declare_parameter('crash_detection.max_odometry_timeout', 3.0)
+        self.declare_parameter('crash_detection.enable_collision_detection', True)
+        self.declare_parameter('crash_detection.collision_velocity_threshold', 2.0)
+        self.declare_parameter('crash_detection.collision_detection_window', 0.5)
+
+        # Manual mode parameters
+        self.declare_parameter('manual_mode.save_intermediate_results', True)
+        self.declare_parameter('manual_mode.save_interval', 30.0)
+        self.declare_parameter('manual_mode.max_race_duration', 0)
+
+        # ========================================
+        # RESEARCH & ANALYSIS PARAMETERS
+        # ========================================
+        self.declare_parameter('controller_name', 'custom_controller')
+        self.declare_parameter('experiment_id', 'exp_001')
+        self.declare_parameter('test_description', 'Controller performance evaluation and analysis')
+
+        # Advanced metrics parameters
+        self.declare_parameter('enable_advanced_metrics', True)
+        self.declare_parameter('calculate_all_statistics', True)
+        self.declare_parameter('analyze_rotation_errors', True)
+        self.declare_parameter('enable_geometric_analysis', True)
+        self.declare_parameter('enable_filtering_analysis', True)
+
+        # Analysis evaluation modes
+        self.declare_parameter('detailed_lap_analysis', True)
+        self.declare_parameter('comparative_analysis', True)
+        self.declare_parameter('statistical_significance', True)
+
+        # ========================================
+        # EVO INTEGRATION PARAMETERS
+        # ========================================
+        self.declare_parameter('enable_trajectory_evaluation', True)
+        self.declare_parameter('evaluation_interval_seconds', 0)
+        self.declare_parameter('evaluation_interval_laps', 1)
+        self.declare_parameter('evaluation_interval_meters', 0.0)
+
+        # ========================================
+        # REFERENCE TRAJECTORY CONFIGURATION
+        # ========================================
+        self.declare_parameter('reference_trajectory_file', 'horizon_mapper/horizon_mapper/ref_trajectory.csv')
+        self.declare_parameter('reference_trajectory_format', 'csv')
+        self.declare_parameter('enable_horizon_mapper_reference', False)
+        self.declare_parameter('horizon_mapper_reference_topic', '/horizon_mapper/reference_trajectory')
+        self.declare_parameter('use_complete_reference_path', True)
+        self.declare_parameter('horizon_mapper_path_topic', '/horizon_mapper/reference_path')
+
+        # ========================================
+        # ADVANCED FILE OUTPUT FOR RESEARCH
+        # ========================================
+        self.declare_parameter('export_to_pandas', True)
+        self.declare_parameter('save_detailed_statistics', True)
+        self.declare_parameter('save_filtered_trajectories', True)
+        self.declare_parameter('export_research_summary', True)
+        self.declare_parameter('output_formats', ['csv', 'json', 'pickle', 'mat'])
+        self.declare_parameter('include_timestamps', True)
+        self.declare_parameter('save_intermediate_results', True)
+
+        # ========================================
+        # TRAJECTORY ANALYSIS SETTINGS
+        # ========================================
+        self.declare_parameter('save_trajectories', True)
+        self.declare_parameter('trajectory_output_directory',
+                               '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results')
+
+        # Metrics to calculate
+        self.declare_parameter('evaluate_smoothness', True)
+        self.declare_parameter('evaluate_consistency', True)
+        self.declare_parameter('evaluate_efficiency', True)
+        self.declare_parameter('evaluate_aggressiveness', True)
+        self.declare_parameter('evaluate_stability', True)
+
+        # Advanced EVO metrics
+        self.declare_parameter('pose_relations', ['translation_part', 'rotation_part', 'full_transformation'])
+        self.declare_parameter('statistics_types', ['rmse', 'mean', 'median', 'std', 'min', 'max', 'sse'])
+
+        # Filtering options
+        self.declare_parameter('apply_trajectory_filtering', True)
+        self.declare_parameter('filter_types', ['motion', 'distance', 'angle'])
+        self.declare_parameter('filter_parameters.motion_threshold', 0.1)
+        self.declare_parameter('filter_parameters.distance_threshold', 0.05)
+        self.declare_parameter('filter_parameters.angle_threshold', 0.1)
+
+        # ========================================
+        # GRAPH GENERATION SETTINGS
+        # ========================================
+        self.declare_parameter('auto_generate_graphs', True)
+        self.declare_parameter(
+            'graph_output_directory',
+            '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs')
+        self.declare_parameter('graph_formats', ['png', 'pdf'])
+
+        # Plot appearance settings
+        self.declare_parameter('plot_figsize', [12.0, 8.0])
+        self.declare_parameter('plot_dpi', 300)
+        self.declare_parameter('plot_style', 'seaborn')
+        self.declare_parameter('plot_color_scheme', 'viridis')
+
+        # Types of graphs to generate
+        self.declare_parameter('generate_trajectory_plots', True)
+        self.declare_parameter('generate_xyz_plots', True)
+        self.declare_parameter('generate_rpy_plots', True)
+        self.declare_parameter('generate_speed_plots', True)
+        self.declare_parameter('generate_error_plots', True)
+        self.declare_parameter('generate_metrics_plots', True)
+
+        # ========================================
+        # F1TENTH INTERFACE SETTINGS
+        # ========================================
+        self.declare_parameter('enable_f1tenth_interface', True)
+        self.declare_parameter('f1tenth_vehicle_state_topic', '/vehicle_state')
+        self.declare_parameter('f1tenth_constrained_state_topic', '/constrained_vehicle_state')
+
+        # ========================================
+        # COMPUTATIONAL PERFORMANCE MONITORING
+        # ========================================
+        self.declare_parameter('enable_computational_monitoring', True)
+
+        # Odometry input topics
+        self.declare_parameter('odometry_topics', ['car_state/odom'])
+
+        # Control command output topics
+        self.declare_parameter('control_command_topics', ['/drive'])
+
+        # Performance monitoring configuration
+        self.declare_parameter('monitoring_window_size', 100)
+        self.declare_parameter('cpu_monitoring_interval', 0.1)
+        self.declare_parameter('enable_performance_logging', True)
+        self.declare_parameter('performance_log_interval', 5.0)
+
+        # Performance thresholds
+        self.declare_parameter('max_acceptable_latency_ms', 50.0)
+        self.declare_parameter('target_control_frequency_hz', 50.0)
+        self.declare_parameter('max_acceptable_cpu_usage', 80.0)
+        self.declare_parameter('max_acceptable_memory_mb', 512.0)
+
+        # ========================================
+        # CUSTOM RACE EVALUATION SYSTEM
+        # ========================================
+        self.declare_parameter('enable_race_evaluation', True)
+
+        # Race evaluation settings
+        self.declare_parameter('race_evaluation.enable_export', True)
+        self.declare_parameter('race_evaluation.auto_increment_experiment', True)
+        self.declare_parameter('race_evaluation.include_recommendations', True)
+        self.declare_parameter('race_evaluation.enable_comparison', True)
+        self.declare_parameter('race_evaluation.grading_strictness', 'normal')
+
+        # Evaluation focus areas
+        self.declare_parameter('race_evaluation.focus_on_consistency', True)
+        self.declare_parameter('race_evaluation.focus_on_trajectory_accuracy', True)
+        self.declare_parameter('race_evaluation.focus_on_racing_efficiency', True)
+
+        # Output preferences
+        self.declare_parameter('race_evaluation.include_detailed_metrics', True)
+        self.declare_parameter('race_evaluation.max_recommendations', 5)
+
     def load_reference_trajectory(self):
         """Load reference trajectory from file using evo"""
         if not self.enable_trajectory_evaluation or not EVO_AVAILABLE:
@@ -1034,7 +1085,7 @@ class RaceMonitor(Node):
 
         # Debounce check
         if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) -
-                                                     time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
+                time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
             return
 
         self.last_crossing_time = current_time
