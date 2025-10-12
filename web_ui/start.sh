@@ -26,7 +26,7 @@ if [ ! -f .env ]; then
     cat > .env << EOF
 # Race Monitor Web UI Environment Variables
 COMPOSE_PROJECT_NAME=race-monitor
-BACKEND_PORT=8000
+BACKEND_PORT=8080
 FRONTEND_PORT=3000
 ENVIRONMENT=development
 
@@ -47,7 +47,7 @@ echo ""
 echo "✅ Race Monitor Web UI is starting!"
 echo ""
 echo "📊 Frontend (React): http://localhost:3000"
-echo "🔧 Backend API: http://localhost:8000"
+echo "🔧 Backend API: http://localhost:8080"
 echo "📚 API Documentation: http://localhost:8000/docs"
 echo ""
 echo "🔍 To view logs:"

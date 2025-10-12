@@ -11,6 +11,7 @@ import Analysis from './pages/Analysis';
 import LiveMonitor from './pages/LiveMonitor';
 import RosNodes from './pages/RosNodes';
 import RosTopics from './pages/RosTopics';
+import RqtGraph from './pages/RqtGraph';
 
 interface RosStatus {
   ros_available: boolean;
@@ -18,11 +19,6 @@ interface RosStatus {
   timestamp: string;
   active_nodes?: number;
   active_topics?: number;
-}
-
-interface NotificationCounts {
-  unread_results: number;
-  unread_analysis: number;
 }
 
 function App() {
@@ -36,52 +32,10 @@ function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationCounts, setNotificationCounts] = useState<NotificationCounts>({
-    unread_results: 0,
-    unread_analysis: 0
-  });
 
-  // Mock data for demonstration
+  // Fetch real data from backend instead of mock data
   useEffect(() => {
-    // Simulate some notifications and counts
-    setNotificationCounts({
-      unread_results: 2,
-      unread_analysis: 1
-    });
-
-    // Add sample notifications
-    setNotifications([
-      {
-        id: '1',
-        type: 'success',
-        title: 'Race Completed',
-        message: 'Race session finished successfully. Results are now available.',
-        timestamp: new Date(),
-        read: false,
-        actions: [
-          {
-            label: 'View Results',
-            action: () => window.location.href = '/results',
-            primary: true
-          }
-        ]
-      },
-      {
-        id: '2',
-        type: 'info',
-        title: 'EVO Analysis Ready',
-        message: 'New trajectory analysis has been completed.',
-        timestamp: new Date(Date.now() - 300000), // 5 minutes ago
-        read: false,
-        actions: [
-          {
-            label: 'View Analysis',
-            action: () => window.location.href = '/analysis',
-            primary: true
-          }
-        ]
-      }
-    ]);
+    // Remove mock notifications - get real data from backend when available
   }, []);
 
   // Check ROS2 status periodically
@@ -95,8 +49,8 @@ function App() {
             ros_available: data.ros_available || false,
             monitoring_active: data.monitoring_active || false,
             timestamp: new Date().toISOString(),
-            active_nodes: data.active_nodes || 5, // Mock data
-            active_topics: data.active_topics || 12 // Mock data
+            active_nodes: data.active_nodes || 0,
+            active_topics: data.active_topics || 0
           });
         }
       } catch (error) {
@@ -106,8 +60,8 @@ function App() {
           ros_available: false,
           monitoring_active: false,
           timestamp: new Date().toISOString(),
-          active_nodes: 5, // Mock data
-          active_topics: 12 // Mock data
+          active_nodes: 0,
+          active_topics: 0
         }));
       }
     };
@@ -144,10 +98,6 @@ function App() {
     };
 
     setNotifications(prev => [newNotification, ...prev]);
-    setNotificationCounts(prev => ({
-      unread_results: prev.unread_results + 1,
-      unread_analysis: prev.unread_analysis + 1
-    }));
 
     toast.success('Race completed! Check your results.', {
       duration: 5000,
@@ -171,7 +121,6 @@ function App() {
         collapsed={sidebarCollapsed} 
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         rosStatus={rosStatus}
-        notificationCounts={notificationCounts}
       />
       
       <div className={`flex-1 flex flex-col transition-all duration-300 ${
@@ -196,6 +145,7 @@ function App() {
             <Route path="/live" element={<LiveMonitor />} />
             <Route path="/ros-nodes" element={<RosNodes />} />
             <Route path="/ros-topics" element={<RosTopics />} />
+            <Route path="/rqt-graph" element={<RqtGraph />} />
           </Routes>
         </main>
       </div>
