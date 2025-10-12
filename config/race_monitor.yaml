@@ -12,6 +12,18 @@ race_monitor:
     output_file: "race_results.csv" # CSV file for race results
     frame_id: "map" # Frame ID for visualization
 
+    # Lap detection direction configuration
+    lap_detection:
+      # Expected crossing direction: "any", "positive", "negative"
+      # - "any": Accept crossings in any direction
+      # - "positive": Only accept crossings in positive normal direction (right for vertical line)
+      # - "negative": Only accept crossings in negative normal direction (left for vertical line)
+      expected_direction: "any"
+      # Enable direction validation based on vehicle heading
+      validate_heading_direction: false
+      # Log level for lap detection: "minimal", "normal", "debug"
+      log_level: "normal"
+
     # ========================================
     # RACE ENDING CONDITIONS
     # ========================================

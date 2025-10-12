@@ -93,7 +93,8 @@ class RaceMonitor(Node):
     def __init__(self):
         super().__init__('race_monitor')
 
-        self.get_logger().info("🏁 Starting Race Monitor with modular architecture...")
+        self.get_logger().info("Starting Race Monitor")
+        self.get_logger().info("🏁 Starting Race Monitor")
 
         # Load configuration parameters
         self._load_parameters()
@@ -113,25 +114,25 @@ class RaceMonitor(Node):
         # Start monitoring systems
         self._start_monitoring_systems()
 
-        self.get_logger().info("✅ Race Monitor initialized successfully!")
-        self.get_logger().info(f"   - Race Ending Mode: {self.config['race_ending_mode'].upper()}")
-        self.get_logger().info(f"   - Lap Detection: Enabled")
+        self.get_logger().info("Race Monitor initialized successfully!")
+        self.get_logger().info(f"  Race Ending Mode: {self.config['race_ending_mode'].upper()}")
+        self.get_logger().info(f"  Lap Detection: Enabled")
         if self.config['race_ending_mode'] == 'crash':
             self.get_logger().info(
-                f"   - Crash Detection: {'Enabled' if self.config['crash_detection']['enable_crash_detection'] else 'Disabled'}")
+                f"  Crash Detection: {'Enabled' if self.config['crash_detection']['enable_crash_detection'] else 'Disabled'}")
         elif self.config['race_ending_mode'] == 'manual':
             duration_limit = self.config['manual_mode']['max_race_duration']
             self.get_logger().info(
-                f"   - Manual Mode: Max duration = {duration_limit}s ({'no limit' if duration_limit == 0 else 'limited'})")
+                f"  Manual Mode: Max duration = {duration_limit}s ({'no limit' if duration_limit == 0 else 'limited'})")
         self.get_logger().info(
-            f"   - Reference Trajectory: {'Enabled' if self.reference_manager.is_reference_available() else 'Disabled'}")
+            f"  Reference Trajectory: {'Enabled' if self.reference_manager.is_reference_available() else 'Disabled'}")
         self.get_logger().info(
-            f"   - Performance Monitoring: {'Enabled' if self.config.get('enable_computational_monitoring', True) else 'Disabled'}")
-        self.get_logger().info(f"   - Research Evaluator: {'Enabled' if RESEARCH_EVALUATOR_AVAILABLE else 'Disabled'}")
-        self.get_logger().info(f"   - Race Evaluator: {'Enabled' if RACE_EVALUATOR_AVAILABLE else 'Disabled'}")
-        self.get_logger().info(f"   - EVO Integration: {'Enabled' if EVO_AVAILABLE else 'Disabled'}")
+            f"  Performance Monitoring: {'Enabled' if self.config.get('enable_computational_monitoring', True) else 'Disabled'}")
+        self.get_logger().info(f"  Research Evaluator: {'Enabled' if RESEARCH_EVALUATOR_AVAILABLE else 'Disabled'}")
+        self.get_logger().info(f"  Race Evaluator: {'Enabled' if RACE_EVALUATOR_AVAILABLE else 'Disabled'}")
+        self.get_logger().info(f"  EVO Integration: {'Enabled' if EVO_AVAILABLE else 'Disabled'}")
         self.get_logger().info(
-            f"   - EVO Graph Generation: {'Enabled' if self.evo_plotter is not None else 'Disabled'}")
+            f"  EVO Graph Generation: {'Enabled' if self.evo_plotter is not None else 'Disabled'}")
 
     def _load_parameters(self):
         """Load ROS2 parameters and configuration."""
@@ -664,7 +665,7 @@ class RaceMonitor(Node):
 
     def _on_lap_complete(self, lap_number: int, lap_time: float):
         """Handle lap completion event."""
-        self.get_logger().info(f"🏎️ Lap {lap_number} completed in {lap_time:.3f}s")
+        self.get_logger().info(f"Lap {lap_number} completed in {lap_time:.3f}s")
 
         # Complete current lap trajectory
         self.data_manager.complete_lap_trajectory(lap_number, lap_time)
@@ -691,7 +692,7 @@ class RaceMonitor(Node):
         race_stats = self.lap_detector.get_race_stats()
         reason = race_stats['race_ending_reason']
 
-        self.get_logger().info(f"🏆 Race completed in {total_time:.3f}s! (Reason: {reason})")
+        self.get_logger().info(f"Race completed in {total_time:.3f}s! (Reason: {reason})")
 
         # Update visualization based on ending reason
         status_text = "FINISHED" if reason == "Laps completed" else f"ENDED-{reason.upper()}"
@@ -723,8 +724,8 @@ class RaceMonitor(Node):
 
     def _on_race_crash(self, crash_reason: str, total_time: float, lap_times: list):
         """Handle race crash event."""
-        self.get_logger().warning(f"🚨 Race ended due to crash: {crash_reason}")
-        self.get_logger().info(f"   Duration: {total_time:.3f}s, Laps: {len(lap_times)}")
+        self.get_logger().warning(f"Race ended due to crash: {crash_reason}")
+        self.get_logger().info(f"  Duration: {total_time:.3f}s, Laps: {len(lap_times)}")
 
         # Update visualization
         self.visualization_publisher.publish_race_status_marker("CRASHED", len(lap_times), len(lap_times))
@@ -780,20 +781,20 @@ class RaceMonitor(Node):
 
             if self.research_evaluator and all_trajectories:
                 # Perform research-grade analysis
-                self.get_logger().info("📊 Running research trajectory evaluation...")
+                self.get_logger().info("Running research trajectory evaluation...")
                 # TODO: Implement comprehensive analysis with research evaluator
 
             if self.race_evaluator and all_trajectories:
                 # Perform custom race evaluation
-                self.get_logger().info("🏁 Running custom race evaluation...")
+                self.get_logger().info("Running custom race evaluation...")
                 # TODO: Implement race evaluation integration
 
             if self.evo_plotter and all_trajectories:
                 # Generate visualization plots
-                self.get_logger().info("📈 Generating analysis plots...")
+                self.get_logger().info("Generating analysis plots...")
                 # TODO: Implement plot generation
 
-            self.get_logger().info("✅ Comprehensive analysis completed!")
+            self.get_logger().info("Comprehensive analysis completed!")
 
         except Exception as e:
             self.get_logger().error(f"Error in comprehensive analysis: {e}")
