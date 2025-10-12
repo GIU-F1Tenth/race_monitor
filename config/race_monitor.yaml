@@ -5,8 +5,8 @@ race_monitor:
     # ========================================
 
     # Start/finish line configuration
-    start_line_p1: [0.0, -1.0] # Bottom point of start line [x, y]
-    start_line_p2: [1.0, 0.0] # Top point of start line [x, y]
+    start_line_p1: [0.0, -2.0] # Bottom point of start line [x, y]
+    start_line_p2: [0.0, 2.0] # Top point of start line [x, y]
     required_laps: 90 # Number of laps to complete race
     debounce_time: 2.0 # Debounce time for lap detection (seconds)
     output_file: "race_results.csv" # CSV file for race results
