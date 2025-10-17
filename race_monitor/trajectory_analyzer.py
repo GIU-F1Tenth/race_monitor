@@ -102,8 +102,9 @@ class ResearchTrajectoryEvaluator:
         else:
             base_dir = base_dir_config
 
-        self.controller_dir = os.path.join(base_dir, 'research_data', self.controller_name)
-        self.experiment_dir = os.path.join(self.controller_dir, self.experiment_id)
+        # Use the base_dir directly as the experiment directory (already points to the correct location)
+        self.experiment_dir = base_dir
+        self.controller_dir = os.path.dirname(base_dir)  # Parent directory for reference
 
         directories = [
             self.experiment_dir,
@@ -227,14 +228,14 @@ class ResearchTrajectoryEvaluator:
                     if poses_se3:
                         filtered_poses.append(poses_se3[0])  # Always keep first pose
                         last_pos = poses_se3[0][:3, 3]
-                        
+
                         for pose in poses_se3[1:]:
                             current_pos = pose[:3, 3]
                             distance = np.linalg.norm(current_pos - last_pos)
                             if distance >= distance_threshold:
                                 filtered_poses.append(pose)
                                 last_pos = current_pos
-                        
+
                         poses_se3 = filtered_poses
                 except Exception as e:
                     self.logger.error(f"Error applying distance filtering: {e}")
@@ -681,7 +682,7 @@ class ResearchTrajectoryEvaluator:
                         self.logger.error(f"Failed to save pickle data: {pickle_e}")
 
             self.logger.info(f"Research data exported to {self.experiment_dir}/exports/")
-        
+
         except Exception as e:
             self.logger.error(f"Failed to export research data: {e}")
 

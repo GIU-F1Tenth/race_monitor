@@ -9,7 +9,7 @@ with support for multiple file formats and data export capabilities.
 
 Features:
     - Trajectory data storage and management
-    - Multi-format file export (CSV, TUM, JSON, Pickle)
+    - Multi-format file export (CSV, TUM, JSON, Pickle, MAT)
     - Research data compilation and analysis
     - File organization and directory management
     - Data validation and error handling
@@ -26,6 +26,13 @@ import pickle
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+
+# MAT file support
+try:
+    from scipy.io import savemat
+    MAT_AVAILABLE = True
+except ImportError:
+    MAT_AVAILABLE = False
 
 
 def time_to_nanoseconds(time_obj):
@@ -328,6 +335,9 @@ class DataManager:
             if 'pickle' in self.output_formats:
                 success &= self._save_trajectory_pickle(lap_number, trajectory_data)
 
+            if 'mat' in self.output_formats:
+                success &= self._save_trajectory_mat(lap_number, trajectory_data)
+
             return success
 
         except Exception as e:
@@ -407,6 +417,61 @@ class DataManager:
 
         except Exception as e:
             self.logger.error(f"Error saving Pickle trajectory: {e}")
+            return False
+
+    def _save_trajectory_mat(self, lap_number: int, trajectory_data: Dict) -> bool:
+        """Save trajectory as MATLAB MAT file."""
+        if not MAT_AVAILABLE:
+            self.logger.warning("scipy.io not available, cannot save MAT files")
+            return False
+
+        try:
+            filename = f"lap_{lap_number:03d}_trajectory.mat"
+            filepath = os.path.join(self.trajectory_dir, filename)
+
+            # Prepare data for MAT format
+            points = trajectory_data['points']
+            mat_data = {
+                'lap_number': lap_number,
+                'lap_time': trajectory_data.get('lap_time', 0.0),
+                'point_count': len(points),
+                'timestamp': trajectory_data.get('timestamp', ''),
+                'x': np.array([p['x'] for p in points]),
+                'y': np.array([p['y'] for p in points]),
+                'z': np.array([p['z'] for p in points])
+            }
+
+            # Add timestamps if available
+            if points and 'timestamp' in points[0]:
+                mat_data['timestamps'] = np.array([p['timestamp'] for p in points])
+
+            # Add orientation data if available
+            if points and 'qx' in points[0]:
+                mat_data['qx'] = np.array([p['qx'] for p in points])
+                mat_data['qy'] = np.array([p['qy'] for p in points])
+                mat_data['qz'] = np.array([p['qz'] for p in points])
+                mat_data['qw'] = np.array([p['qw'] for p in points])
+
+            # Add any additional data fields
+            additional_fields = {}
+            for point in points:
+                for key, value in point.items():
+                    if key not in ['x', 'y', 'z', 'timestamp', 'qx', 'qy', 'qz', 'qw']:
+                        if key not in additional_fields:
+                            additional_fields[key] = []
+                        additional_fields[key].append(value)
+
+            # Convert additional fields to numpy arrays
+            for key, values in additional_fields.items():
+                mat_data[key] = np.array(values)
+
+            # Save MAT file
+            savemat(filepath, mat_data)
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error saving MAT trajectory: {e}")
             return False
 
     def save_race_results_to_csv(self, race_data: Dict, filename_override: str = None) -> bool:
@@ -573,3 +638,145 @@ class DataManager:
                 len(traj['points']) for traj in self.completed_trajectories.values()
             )
         }
+
+    def save_race_summary(self, race_summary: Dict) -> bool:
+        """
+        Save comprehensive race summary to multiple formats.
+
+        Args:
+            race_summary: Comprehensive race summary data
+
+        Returns:
+            bool: True if successfully saved
+        """
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            controller_name = race_summary.get('race_metadata', {}).get('controller_name', 'unknown')
+            experiment_id = race_summary.get('race_metadata', {}).get('experiment_id', 'exp')
+
+            # Create filename with run identification
+            base_filename = f"race_summary_{controller_name}_{experiment_id}_{timestamp}"
+
+            # Save as JSON
+            json_filepath = os.path.join(self.results_dir, f"{base_filename}.json")
+            with open(json_filepath, 'w') as f:
+                json.dump(race_summary, f, indent=2, default=str)
+
+            # Save as detailed CSV
+            csv_filepath = os.path.join(self.results_dir, f"{base_filename}.csv")
+            with open(csv_filepath, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+
+                # Write metadata section
+                writer.writerow(['=== RACE SUMMARY ==='])
+                writer.writerow(['Generated', datetime.now().isoformat()])
+                writer.writerow([])
+
+                # Write race metadata
+                writer.writerow(['=== RACE METADATA ==='])
+                metadata = race_summary.get('race_metadata', {})
+                for key, value in metadata.items():
+                    writer.writerow([key.replace('_', ' ').title(), value])
+                writer.writerow([])
+
+                # Write lap statistics
+                writer.writerow(['=== LAP STATISTICS ==='])
+                lap_stats = race_summary.get('lap_statistics', {})
+                for key, value in lap_stats.items():
+                    if key != 'lap_times':
+                        writer.writerow([key.replace('_', ' ').title(),
+                                        f"{value:.4f}" if isinstance(value, float) else value])
+
+                writer.writerow([])
+                writer.writerow(['=== INDIVIDUAL LAP TIMES ==='])
+                writer.writerow(['Lap Number', 'Lap Time (s)'])
+                for i, lap_time in enumerate(lap_stats.get('lap_times', []), 1):
+                    writer.writerow([i, f"{lap_time:.4f}"])
+
+                # Write trajectory statistics
+                writer.writerow([])
+                writer.writerow(['=== TRAJECTORY STATISTICS ==='])
+                traj_stats = race_summary.get('trajectory_statistics', {})
+                for key, value in traj_stats.items():
+                    writer.writerow([key.replace('_', ' ').title(),
+                                    f"{value:.4f}" if isinstance(value, float) else value])
+
+                # Write performance metrics
+                writer.writerow([])
+                writer.writerow(['=== PERFORMANCE METRICS ==='])
+                perf_metrics = race_summary.get('performance_metrics', {})
+                for key, value in perf_metrics.items():
+                    writer.writerow([key.replace('_', ' ').title(),
+                                    f"{value:.4f}" if isinstance(value, float) else value])
+
+            self.logger.info(f"Saved comprehensive race summary to: {json_filepath}")
+            self.logger.info(f"Saved detailed CSV summary to: {csv_filepath}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error saving race summary: {e}")
+            return False
+
+    def save_race_evaluation(self, evaluation_data: Dict) -> bool:
+        """
+        Save race evaluation results.
+
+        Args:
+            evaluation_data: Race evaluation results
+
+        Returns:
+            bool: True if successfully saved
+        """
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"race_evaluation_{timestamp}.json"
+            filepath = os.path.join(self.results_dir, filename)
+
+            with open(filepath, 'w') as f:
+                json.dump(evaluation_data, f, indent=2, default=str)
+
+            self.logger.info(f"Saved race evaluation to: {filepath}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error saving race evaluation: {e}")
+            return False
+
+    def create_run_directory(self, controller_name: str, experiment_id: str) -> str:
+        """
+        Create a dedicated directory for this run.
+
+        Args:
+            controller_name: Name of the controller
+            experiment_id: Experiment identifier
+
+        Returns:
+            str: Path to the created experiment directory
+        """
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # Create controller directory first
+            controller_dir = os.path.join(self.base_output_dir, controller_name)
+            os.makedirs(controller_dir, exist_ok=True)
+
+            # Create experiment directory inside controller directory
+            experiment_dir_name = f"{experiment_id}_{timestamp}"
+            experiment_dir = os.path.join(controller_dir, experiment_dir_name)
+
+            # Create subdirectories for all race monitor components
+            os.makedirs(os.path.join(experiment_dir, "trajectories"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "results"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "graphs"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "analysis"), exist_ok=True)
+
+            # Update paths to use experiment directory
+            self.trajectory_dir = os.path.join(experiment_dir, "trajectories")
+            self.results_dir = os.path.join(experiment_dir, "results")
+
+            self.logger.info(f"Created experiment directory: {experiment_dir}")
+            return experiment_dir
+
+        except Exception as e:
+            self.logger.error(f"Error creating run directory: {e}")
+            return self.base_output_dir

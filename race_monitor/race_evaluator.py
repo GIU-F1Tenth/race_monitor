@@ -34,9 +34,11 @@ except ImportError:
     class MockNumpy:
         @staticmethod
         def mean(data): return sum(data) / len(data) if data else 0
+
         @staticmethod
-        def std(data): 
-            if not data: return 0
+        def std(data):
+            if not data:
+                return 0
             mean_val = sum(data) / len(data)
             return (sum((x - mean_val) ** 2 for x in data) / len(data)) ** 0.5
     np = MockNumpy()
@@ -45,14 +47,14 @@ except ImportError:
 class RaceEvaluator:
     """
     Custom race evaluation system for autonomous racing performance analysis.
-    
+
     Generates focused performance reports with grades and recommendations.
     """
-    
+
     def __init__(self, config: Dict[str, Any]):
         """
         Initialize the race evaluator.
-        
+
         Args:
             config: Configuration dictionary with evaluation settings
         """
@@ -62,16 +64,16 @@ class RaceEvaluator:
         self.grading_strictness = config.get('grading_strictness', 'normal')  # strict, normal, lenient
         self.enable_recommendations = config.get('enable_recommendations', True)
         self.enable_comparison = config.get('enable_comparison', True)
-        
+
         # Setup logging
         self.logger = logging.getLogger('race_evaluator')
-        
+
         # Performance thresholds for grading (configurable strictness)
         self.setup_grading_thresholds()
-        
+
     def setup_grading_thresholds(self):
         """Setup performance thresholds based on grading strictness."""
-        
+
         if self.grading_strictness == 'strict':
             self.thresholds = {
                 'lap_consistency': {'A': 1.5, 'B': 3.0, 'C': 6.0, 'D': 10.0},  # CV%
@@ -99,52 +101,48 @@ class RaceEvaluator:
                 'smoothness': {'A': 0.01, 'B': 0.025, 'C': 0.045, 'D': 0.08},
                 'path_efficiency': {'A': 1.1, 'B': 1.2, 'C': 1.4, 'D': 1.8}
             }
-    
+
     def get_next_experiment_id(self) -> str:
         """
         Get the next available experiment ID by checking both research data and race evaluation directories.
-        
+
         Returns:
             Next experiment ID (e.g., 'exp001', 'exp002', etc.)
         """
         max_exp_num = 0
-        
-        # Check research data directory
-        research_pattern = os.path.join(self.base_output_dir, 'research_data', self.controller_name, 'exp*')
-        research_dirs = glob.glob(research_pattern)
-        
-        # Check race evaluation directory
-        evaluation_pattern = os.path.join(self.base_output_dir, 'race_evaluations', f'{self.controller_name}_exp*_race_evaluation.json')
-        evaluation_files = glob.glob(evaluation_pattern)
-        
-        # Extract experiment numbers from both sources
-        all_paths = research_dirs + evaluation_files
-        
-        for path in all_paths:
-            match = re.search(r'exp(\d+)', path)
+
+        # Check experiment directories (new structure: controller_name/exp_XXX_timestamp/)
+        controller_dir = os.path.join(self.base_output_dir, self.controller_name)
+        if os.path.exists(controller_dir):
+            exp_pattern = os.path.join(controller_dir, 'exp*')
+            exp_dirs = glob.glob(exp_pattern)
+
+            # Extract experiment numbers from experiment directories
+            for path in exp_dirs:
+                match = re.search(r'exp(\d+)', os.path.basename(path))
             if match:
                 exp_num = int(match.group(1))
                 max_exp_num = max(max_exp_num, exp_num)
-        
+
         next_exp_num = max_exp_num + 1
         return f'exp{next_exp_num:03d}'
-    
+
     def calculate_grade(self, metric_name: str, value: float) -> str:
         """
         Calculate grade (A-F) for a specific metric.
-        
+
         Args:
             metric_name: Name of the metric
             value: Metric value
-            
+
         Returns:
             Grade string (A, B, C, D, F)
         """
         if metric_name not in self.thresholds:
             return 'N/A'
-        
+
         thresholds = self.thresholds[metric_name]
-        
+
         # Handle inverted metrics (lower is better)
         if metric_name in ['ape_error', 'rpe_error', 'lap_consistency', 'speed_consistency', 'smoothness']:
             if value <= thresholds['A']:
@@ -171,21 +169,21 @@ class RaceEvaluator:
                     return 'D'
                 else:
                     return 'F'
-        
+
         return 'F'
-    
+
     def calculate_overall_grade(self, individual_grades: Dict[str, str]) -> Tuple[str, float]:
         """
         Calculate overall grade from individual metric grades.
-        
+
         Args:
             individual_grades: Dictionary of metric grades
-            
+
         Returns:
             Tuple of (overall_grade, numerical_score)
         """
         grade_points = {'A': 4.0, 'B': 3.0, 'C': 2.0, 'D': 1.0, 'F': 0.0, 'N/A': 2.0}
-        
+
         # Weighted importance of different metrics
         weights = {
             'lap_consistency': 0.25,
@@ -194,24 +192,24 @@ class RaceEvaluator:
             'speed_performance': 0.15,
             'path_efficiency': 0.15
         }
-        
+
         # Calculate weighted average
         total_points = 0.0
         total_weight = 0.0
-        
+
         for category, weight in weights.items():
             if category in individual_grades:
                 grade = individual_grades[category]
                 if grade in grade_points:
                     total_points += grade_points[grade] * weight
                     total_weight += weight
-        
+
         if total_weight == 0:
             return 'N/A', 0.0
-        
+
         avg_points = total_points / total_weight
         numerical_score = avg_points * 25  # Convert to 0-100 scale
-        
+
         # Convert back to letter grade
         if avg_points >= 3.7:
             return 'A', numerical_score
@@ -233,23 +231,23 @@ class RaceEvaluator:
             return 'D', numerical_score
         else:
             return 'F', numerical_score
-    
+
     def generate_recommendations(self, metrics: Dict[str, Any], grades: Dict[str, str]) -> List[str]:
         """
         Generate intelligent recommendations for improvement.
-        
+
         Args:
             metrics: Performance metrics dictionary
             grades: Individual grades dictionary
-            
+
         Returns:
             List of recommendation strings
         """
         if not self.enable_recommendations:
             return []
-        
+
         recommendations = []
-        
+
         # Lap consistency recommendations
         if grades.get('lap_consistency', 'C') in ['D', 'F']:
             lap_cv = metrics.get('lap_times', {}).get('consistency_cv', 0) * 100
@@ -257,25 +255,26 @@ class RaceEvaluator:
                 recommendations.append("Focus on consistent driving patterns - lap time variation is excessive")
             else:
                 recommendations.append("Work on reproducible racing lines for better lap consistency")
-        
+
         # Trajectory quality recommendations
         if grades.get('trajectory_quality', 'C') in ['C', 'D', 'F']:
             ape = metrics.get('trajectory_evaluation', {}).get('ape_analysis', {}).get('rmse', 0)
             if ape > 0.5:
-                recommendations.append("Improve path following accuracy - significant deviation from optimal trajectory")
+                recommendations.append(
+                    "Improve path following accuracy - significant deviation from optimal trajectory")
             else:
                 recommendations.append("Fine-tune trajectory tracking for smoother path following")
-        
+
         # Control quality recommendations
         if grades.get('control_quality', 'C') in ['D', 'F']:
             steering_grade = grades.get('steering_smoothness', 'C')
             speed_grade = grades.get('speed_consistency', 'C')
-            
+
             if steering_grade in ['D', 'F']:
                 recommendations.append("Reduce steering aggressiveness - smoother inputs will improve lap times")
             if speed_grade in ['D', 'F']:
                 recommendations.append("Work on throttle control consistency - avoid sudden acceleration changes")
-        
+
         # Speed performance recommendations
         if grades.get('speed_performance', 'C') in ['D', 'F']:
             avg_speed = metrics.get('performance_summary', {}).get('speed_analysis', {}).get('average', 0)
@@ -283,7 +282,7 @@ class RaceEvaluator:
                 recommendations.append("Increase overall speed - current pace is conservative")
             else:
                 recommendations.append("Optimize corner exit speeds for better straight-line performance")
-        
+
         # Path efficiency recommendations
         if grades.get('path_efficiency', 'C') in ['D', 'F']:
             efficiency = metrics.get('racing_line_analysis', {}).get('path_efficiency', 1.0)
@@ -291,35 +290,39 @@ class RaceEvaluator:
                 recommendations.append("Optimize racing line - taking longer path than necessary")
             else:
                 recommendations.append("Study racing line theory - focus on late apex, early throttle technique")
-        
+
         # Reference trajectory recommendations
         ref_available = metrics.get('trajectory_evaluation', {}).get('reference_comparison', {}).get('available', False)
         if ref_available:
             ref_grade = grades.get('reference_deviation', 'C')
             if ref_grade in ['D', 'F']:
-                recommendations.append("Study reference trajectory more closely - significant deviation from optimal path")
-        
+                recommendations.append(
+                    "Study reference trajectory more closely - significant deviation from optimal path")
+
         # Add general recommendations if overall grade is poor
         overall_grade = grades.get('overall', 'C')
         if overall_grade in ['D', 'F'] and len(recommendations) < 2:
             recommendations.append("Focus on consistent, smooth driving before attempting to increase speed")
             recommendations.append("Analyze successful laps to understand what techniques work best")
-        
+
         return recommendations[:5]  # Limit to top 5 recommendations
-    
+
     def load_previous_experiments(self) -> List[Dict[str, Any]]:
         """
         Load previous race evaluations for the same controller.
-        
+
         Returns:
             List of previous evaluation data
         """
         if not self.enable_comparison:
             return []
-        
-        pattern = os.path.join(self.base_output_dir, 'race_evaluations', f'{self.controller_name}_exp*_race_evaluation.json')
+
+        pattern = os.path.join(
+            self.base_output_dir,
+            'race_evaluations',
+            f'{self.controller_name}_exp*_race_evaluation.json')
         evaluation_files = glob.glob(pattern)
-        
+
         previous_experiments = []
         for file_path in sorted(evaluation_files):
             try:
@@ -328,56 +331,71 @@ class RaceEvaluator:
                     previous_experiments.append(data)
             except Exception as e:
                 self.logger.warning(f"Could not load previous experiment {file_path}: {e}")
-        
+
         return previous_experiments
-    
-    def compare_with_previous(self, current_metrics: Dict[str, Any], previous_experiments: List[Dict[str, Any]]) -> Dict[str, Any]:
+
+    def compare_with_previous(self, current_metrics: Dict[str, Any],
+                              previous_experiments: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Compare current performance with previous experiments.
-        
+
         Args:
             current_metrics: Current experiment metrics
             previous_experiments: List of previous experiment data
-            
+
         Returns:
             Comparison analysis dictionary
         """
         if not previous_experiments:
             return {'available': False, 'message': 'No previous experiments found for comparison'}
-        
+
         # Extract key metrics for comparison
         current_lap_time = current_metrics.get('performance_summary', {}).get('lap_times', {}).get('average', 0)
-        current_consistency = current_metrics.get('performance_summary', {}).get('lap_times', {}).get('consistency_cv', 0)
+        current_consistency = current_metrics.get(
+            'performance_summary',
+            {}).get(
+            'lap_times',
+            {}).get(
+            'consistency_cv',
+            0)
         current_grade = current_metrics.get('performance_summary', {}).get('overall_grade', 'N/A')
-        
+
         # Get previous best performance
         best_lap_time = float('inf')
         best_consistency = float('inf')
         best_grade = 'F'
         best_experiment = None
-        
+
         grade_order = {'A': 8, 'A-': 7, 'B+': 6, 'B': 5, 'B-': 4, 'C+': 3, 'C': 2, 'C-': 1, 'D': 0.5, 'F': 0}
-        
+
         for exp in previous_experiments:
             exp_data = exp.get('race_evaluation', {})
             exp_lap_time = exp_data.get('performance_summary', {}).get('lap_times', {}).get('average', float('inf'))
-            exp_consistency = exp_data.get('performance_summary', {}).get('lap_times', {}).get('consistency_cv', float('inf'))
+            exp_consistency = exp_data.get(
+                'performance_summary',
+                {}).get(
+                'lap_times',
+                {}).get(
+                'consistency_cv',
+                float('inf'))
             exp_grade = exp_data.get('performance_summary', {}).get('overall_grade', 'F')
-            
+
             if exp_lap_time < best_lap_time:
                 best_lap_time = exp_lap_time
                 best_consistency = exp_consistency
                 best_grade = exp_grade
                 best_experiment = exp_data.get('metadata', {}).get('experiment_id', 'unknown')
-        
+
         # Calculate improvements/regressions
-        lap_time_change = ((current_lap_time - best_lap_time) / best_lap_time * 100) if best_lap_time != float('inf') else 0
-        consistency_change = ((current_consistency - best_consistency) / best_consistency * 100) if best_consistency != float('inf') else 0
-        
+        lap_time_change = ((current_lap_time - best_lap_time) / best_lap_time *
+                           100) if best_lap_time != float('inf') else 0
+        consistency_change = ((current_consistency - best_consistency) / best_consistency *
+                              100) if best_consistency != float('inf') else 0
+
         current_grade_score = grade_order.get(current_grade, 0)
         best_grade_score = grade_order.get(best_grade, 0)
         grade_improved = current_grade_score > best_grade_score
-        
+
         return {
             'available': True,
             'total_previous_experiments': len(previous_experiments),
@@ -395,62 +413,70 @@ class RaceEvaluator:
             },
             'ranking': self._calculate_ranking(current_metrics, previous_experiments)
         }
-    
-    def _calculate_ranking(self, current_metrics: Dict[str, Any], previous_experiments: List[Dict[str, Any]]) -> Dict[str, Any]:
+
+    def _calculate_ranking(self, current_metrics: Dict[str, Any],
+                           previous_experiments: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate ranking among all experiments."""
         all_experiments = previous_experiments + [{'race_evaluation': current_metrics}]
-        
+
         # Sort by lap time
         lap_times = []
         for exp in all_experiments:
             exp_data = exp.get('race_evaluation', {})
             lap_time = exp_data.get('performance_summary', {}).get('lap_times', {}).get('average', float('inf'))
             lap_times.append(lap_time)
-        
+
         sorted_times = sorted(lap_times)
-        current_lap_time = current_metrics.get('performance_summary', {}).get('lap_times', {}).get('average', float('inf'))
-        
+        current_lap_time = current_metrics.get(
+            'performance_summary',
+            {}).get(
+            'lap_times',
+            {}).get(
+            'average',
+            float('inf'))
+
         rank = sorted_times.index(current_lap_time) + 1 if current_lap_time in sorted_times else len(sorted_times)
-        
+
         return {
             'current_rank': rank,
             'total_experiments': len(all_experiments),
             'percentile': ((len(all_experiments) - rank) / len(all_experiments)) * 100
         }
-    
-    def create_race_evaluation(self, research_data: Dict[str, Any], evo_metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+
+    def create_race_evaluation(self, research_data: Dict[str, Any],
+                               evo_metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Create the custom race evaluation from research data and EVO metrics.
-        
+
         Args:
             research_data: Comprehensive research data from trajectory analyzer
             evo_metrics: EVO trajectory evaluation metrics (APE/RPE)
-            
+
         Returns:
             Custom race evaluation dictionary
         """
         experiment_id = self.get_next_experiment_id()
-        
+
         # Extract key metrics from research data
         aggregate_stats = research_data.get('aggregate_statistics', {})
         lap_analysis = research_data.get('lap_by_lap_analysis', {})
-        
+
         # Performance summary
         lap_times_data = {
             'best': aggregate_stats.get('duration', {}).get('min', 0),
             'average': aggregate_stats.get('duration', {}).get('mean', 0),
             'worst': aggregate_stats.get('duration', {}).get('max', 0),
-            'consistency_cv': (aggregate_stats.get('duration', {}).get('std', 0) / 
-                             aggregate_stats.get('duration', {}).get('mean', 1)) * 100,
+            'consistency_cv': (aggregate_stats.get('duration', {}).get('std', 0) /
+                               aggregate_stats.get('duration', {}).get('mean', 1)) * 100,
             'total_laps': len(lap_analysis)
         }
-        
+
         speed_analysis = {
             'average': aggregate_stats.get('avg_speed', {}).get('mean', 0),
             'max_achieved': aggregate_stats.get('velocity_max', {}).get('max', 0),
             'consistency_cv': aggregate_stats.get('velocity_consistency', {}).get('mean', 0) * 100
         }
-        
+
         # Trajectory evaluation (include EVO metrics if available)
         trajectory_eval = {}
         if evo_metrics:
@@ -472,7 +498,7 @@ class RaceEvaluator:
                     'deviation_score': evo_metrics.get('reference_deviation', 0)
                 }
             }
-        
+
         # Control quality assessment
         control_quality = {
             'smoothness_score': 1.0 / (1.0 + aggregate_stats.get('curvature_variation', {}).get('mean', 1)),
@@ -480,29 +506,31 @@ class RaceEvaluator:
             'velocity_consistency': 1.0 / (1.0 + aggregate_stats.get('velocity_consistency', {}).get('mean', 0.5)),
             'acceleration_smoothness': 1.0 / (1.0 + aggregate_stats.get('jerk', {}).get('mean', 100) / 100)
         }
-        
+
         # Racing line analysis
         racing_line = {
             'path_efficiency': aggregate_stats.get('path_efficiency', {}).get('mean', 1.0),
             'mean_curvature': aggregate_stats.get('mean_curvature', {}).get('mean', 0),
-            'path_length_consistency': (aggregate_stats.get('path_length', {}).get('std', 0) / 
-                                       aggregate_stats.get('path_length', {}).get('mean', 1)) * 100
+            'path_length_consistency': (aggregate_stats.get('path_length', {}).get('std', 0) /
+                                        aggregate_stats.get('path_length', {}).get('mean', 1)) * 100
         }
-        
+
         # Calculate individual grades
         individual_grades = {
-            'lap_consistency': self.calculate_grade('lap_consistency', lap_times_data['consistency_cv']),
-            'speed_consistency': self.calculate_grade('speed_consistency', speed_analysis['consistency_cv']),
-            'path_efficiency': self.calculate_grade('path_efficiency', racing_line['path_efficiency']),
-            'smoothness': self.calculate_grade('smoothness', aggregate_stats.get('curvature_variation', {}).get('mean', 0.1))
-        }
-        
+            'lap_consistency': self.calculate_grade(
+                'lap_consistency', lap_times_data['consistency_cv']), 'speed_consistency': self.calculate_grade(
+                'speed_consistency', speed_analysis['consistency_cv']), 'path_efficiency': self.calculate_grade(
+                'path_efficiency', racing_line['path_efficiency']), 'smoothness': self.calculate_grade(
+                    'smoothness', aggregate_stats.get(
+                        'curvature_variation', {}).get(
+                            'mean', 0.1))}
+
         # Add APE/RPE grades if available
         if trajectory_eval.get('ape_analysis'):
             individual_grades['ape_error'] = self.calculate_grade('ape_error', trajectory_eval['ape_analysis']['rmse'])
         if trajectory_eval.get('rpe_analysis'):
             individual_grades['rpe_error'] = self.calculate_grade('rpe_error', trajectory_eval['rpe_analysis']['rmse'])
-        
+
         # Calculate category grades
         category_grades = {
             'trajectory_quality': individual_grades.get('ape_error', individual_grades.get('smoothness', 'C')),
@@ -511,10 +539,10 @@ class RaceEvaluator:
             'path_efficiency': individual_grades['path_efficiency'],
             'lap_consistency': individual_grades['lap_consistency']
         }
-        
+
         # Calculate overall grade
         overall_grade, numerical_score = self.calculate_overall_grade(category_grades)
-        
+
         # Build the evaluation structure
         race_evaluation = {
             'metadata': {
@@ -557,51 +585,51 @@ class RaceEvaluator:
                 'individual_grades': individual_grades
             }
         }
-        
+
         # Load previous experiments and add comparison
         previous_experiments = self.load_previous_experiments()
         comparison = self.compare_with_previous(race_evaluation, previous_experiments)
         race_evaluation['comparison_analysis'] = comparison
-        
+
         # Generate recommendations
         recommendations = self.generate_recommendations(race_evaluation, category_grades)
         race_evaluation['recommendations'] = recommendations
-        
+
         return {'race_evaluation': race_evaluation}
-    
+
     def save_race_evaluation(self, evaluation_data: Dict[str, Any]) -> str:
         """
         Save the race evaluation to file.
-        
+
         Args:
             evaluation_data: Race evaluation data dictionary
-            
+
         Returns:
             Path to saved file
         """
         # Create race evaluations directory
         eval_dir = os.path.join(self.base_output_dir, 'race_evaluations')
         os.makedirs(eval_dir, exist_ok=True)
-        
+
         # Generate filename
         experiment_id = evaluation_data['race_evaluation']['metadata']['experiment_id']
         filename = f'{self.controller_name}_{experiment_id}_race_evaluation.json'
         filepath = os.path.join(eval_dir, filename)
-        
+
         # Save the file
         with open(filepath, 'w') as f:
             json.dump(evaluation_data, f, indent=2)
-        
+
         return filepath
 
 
 def create_race_evaluator(config: Dict[str, Any]) -> RaceEvaluator:
     """
     Factory function to create a RaceEvaluator instance.
-    
+
     Args:
         config: Configuration dictionary
-        
+
     Returns:
         RaceEvaluator instance
     """

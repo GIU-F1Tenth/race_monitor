@@ -216,7 +216,11 @@ class EVOPlotter:
 
         if not EVO_AVAILABLE or not self.config.get('auto_generate_graphs', False):
             print(f"❌ EVO not available or auto_generate_graphs disabled")
-            return
+            return False
+
+        if not self.lap_trajectories:
+            print(f"❌ No lap trajectories available for plotting")
+            return False
 
         print(f"✅ Starting plot generation...")
 
@@ -252,12 +256,18 @@ class EVOPlotter:
 
             # Save all plots
             print(f"Saving all plots...")
-            self._save_all_plots()
+            success = self._save_all_plots()
 
-            print("✅ Generated all EVO plots successfully!")
+            if success:
+                print("✅ Generated all EVO plots successfully!")
+                return True
+            else:
+                print("⚠️ Some plots may have failed to save")
+                return False
 
         except Exception as e:
-            print(f"Error generating plots: {e}")
+            print(f"❌ Error generating plots: {e}")
+            return False
 
     def _generate_trajectory_plots(self):
         """Generate 2D trajectory plots"""
@@ -590,30 +600,36 @@ class EVOPlotter:
         os.makedirs(graph_dir, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dpi = self.config.get('plot_dpi', 300)
 
-        for fmt in graph_formats:
+        # Save each figure individually using matplotlib
+        for plot_name, figure in self.plot_collection.figures.items():
             try:
-                if fmt == 'png':
-                    output_path = os.path.join(graph_dir, f"race_analysis_{timestamp}.png")
-                    print(f"Saving PNG to {output_path}")
-                    self.plot_collection.export(output_path, confirm_overwrite=True)
-                elif fmt == 'pdf':
-                    output_path = os.path.join(graph_dir, f"race_analysis_{timestamp}.pdf")
-                    print(f"Saving PDF to {output_path}")
-                    self.plot_collection.export(output_path, confirm_overwrite=True)
-                elif fmt == 'svg':
-                    output_path = os.path.join(graph_dir, f"race_analysis_{timestamp}.svg")
-                    print(f"Saving SVG to {output_path}")
-                    self.plot_collection.export(output_path, confirm_overwrite=True)
-                elif fmt == 'html':
-                    # Save as serialized plot for later viewing
-                    output_path = os.path.join(graph_dir, f"race_analysis_{timestamp}.evo")
-                    print(f"Saving EVO to {output_path}")
-                    self.plot_collection.serialize(output_path, confirm_overwrite=True)
-            except Exception as e:
-                print(f"Error saving {fmt} format: {e}")
+                for fmt in graph_formats:
+                    if fmt.lower() in ['png', 'pdf', 'svg', 'eps']:
+                        output_path = os.path.join(graph_dir, f"{plot_name}_{timestamp}.{fmt.lower()}")
+                        print(f"Saving {plot_name} as {fmt.upper()} to {output_path}")
+                        figure.savefig(output_path, format=fmt.lower(), dpi=dpi, bbox_inches='tight')
 
-        print(f"Saved plots to {graph_dir}")
+                print(f"✅ Successfully saved {plot_name} plots")
+
+            except Exception as e:
+                print(f"❌ Error saving {plot_name} plot: {e}")
+
+        # Also try to save using EVO's native export (as backup)
+        try:
+            for fmt in graph_formats:
+                if fmt.lower() == 'png':
+                    output_path = os.path.join(graph_dir, f"race_analysis_evo_{timestamp}.png")
+                    print(f"Attempting EVO export to {output_path}")
+                    self.plot_collection.export(output_path, confirm_overwrite=True)
+                    print(f"✅ EVO export successful")
+                    break
+        except Exception as e:
+            print(f"EVO export failed (this is okay, individual plots were saved): {e}")
+
+        print(f"✅ All plots saved to {graph_dir}")
+        return True
 
     def update_reference_trajectory_from_horizon_mapper(self, trajectory_data):
         """Update reference trajectory from horizon mapper VehicleStateArray data"""

@@ -468,35 +468,10 @@ class RaceMonitor(Node):
         self.controller_detection_timer = None
         self.controller_first_detection_time = None
 
-        # Analysis components (if available)
+        # Analysis components (will be initialized after run directory is created)
         self.research_evaluator = None
         self.race_evaluator = None
         self.evo_plotter = None
-
-        if RESEARCH_EVALUATOR_AVAILABLE and self.config['enable_trajectory_evaluation']:
-            try:
-                self.research_evaluator = create_research_evaluator(self.config)
-                self.get_logger().info("Research evaluator initialized")
-            except Exception as e:
-                self.get_logger().error(f"Failed to initialize research evaluator: {e}")
-
-        if RACE_EVALUATOR_AVAILABLE and self.config['enable_race_evaluation']:
-            try:
-                self.race_evaluator = create_race_evaluator(self.config)
-                self.get_logger().info("Race evaluator initialized")
-            except Exception as e:
-                self.get_logger().error(f"Failed to initialize race evaluator: {e}")
-
-        if EVO_PLOTTER_AVAILABLE and self.config['auto_generate_graphs']:
-            try:
-                self.evo_plotter = EVOPlotter(self.config)
-                self.get_logger().info("EVO plotter initialized")
-            except Exception as e:
-                self.get_logger().warn(f"EVO plotter initialization failed: {e}")
-                self.get_logger().warn("Graph generation will be disabled. Race monitoring will continue normally.")
-                self.evo_plotter = None
-                # Disable auto_generate_graphs to prevent further attempts
-                self.config['auto_generate_graphs'] = False
 
     def _setup_ros_interfaces(self):
         """Set up ROS2 publishers, subscribers, and services."""
@@ -540,11 +515,62 @@ class RaceMonitor(Node):
         self.reference_manager.configure(self.config)
         self.performance_monitor.configure(self.config)
         self.visualization_publisher.configure(self.config)
+
+        # Configure data manager and create run directory
         self.data_manager.configure(self.config)
+
+        # Create dedicated run directory for this session
+        controller_name = self.config.get('controller_name', 'unknown_controller')
+        experiment_id = self.config.get('experiment_id', 'exp_001')
+
+        if controller_name and experiment_id:
+            run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
+            self.get_logger().info(f"Created dedicated run directory: {run_directory}")
+
+            # Update configuration paths for all components to use the run directory
+            if self.config.get('auto_generate_graphs', False):
+                self.config['graph_output_directory'] = os.path.join(run_directory, "graphs")
+                self.get_logger().info(f"Graph output directory: {self.config['graph_output_directory']}")
+
+            # Update trajectory output directory for research evaluator to use analysis subdirectory
+            self.config['trajectory_output_directory'] = os.path.join(run_directory, "analysis")
+
+            # Store run directory for other components
+            self.run_directory = run_directory
+
+        # Initialize analysis components now that paths are configured
+        self._initialize_analysis_components()
 
         # Load reference trajectory if specified
         if self.config['reference_trajectory_file']:
             self.reference_manager.load_reference_trajectory()
+
+    def _initialize_analysis_components(self):
+        """Initialize analysis components after run directory is configured."""
+        if RESEARCH_EVALUATOR_AVAILABLE and self.config['enable_trajectory_evaluation']:
+            try:
+                self.research_evaluator = create_research_evaluator(self.config)
+                self.get_logger().info("Research evaluator initialized")
+            except Exception as e:
+                self.get_logger().error(f"Failed to initialize research evaluator: {e}")
+
+        if RACE_EVALUATOR_AVAILABLE and self.config.get('enable_race_evaluation', True):
+            try:
+                self.race_evaluator = create_race_evaluator(self.config)
+                self.get_logger().info("Race evaluator initialized")
+            except Exception as e:
+                self.get_logger().error(f"Failed to initialize race evaluator: {e}")
+
+        if EVO_PLOTTER_AVAILABLE and self.config['auto_generate_graphs']:
+            try:
+                self.evo_plotter = EVOPlotter(self.config)
+                self.get_logger().info("EVO plotter initialized")
+            except Exception as e:
+                self.get_logger().warn(f"EVO plotter initialization failed: {e}")
+                self.get_logger().warn("Graph generation will be disabled. Race monitoring will continue normally.")
+                self.evo_plotter = None
+                # Disable auto_generate_graphs to prevent further attempts
+                self.config['auto_generate_graphs'] = False
 
     def _setup_component_callbacks(self):
         """Set up callbacks between components."""
@@ -760,6 +786,29 @@ class RaceMonitor(Node):
         """Handle race start event."""
         self.get_logger().info("🏁 Race started!")
 
+        # Create run directory if not created yet (in case controller was detected after initialization)
+        controller_name = self.config.get('controller_name', '')
+        experiment_id = self.config.get('experiment_id', 'exp_001')
+
+        # If no controller name, it might be detected now by smart detection
+        if not controller_name and hasattr(self, 'detected_controller_names') and self.detected_controller_names:
+            controller_name = list(self.detected_controller_names)[0]
+            self.config['controller_name'] = controller_name
+            self.get_logger().info(f"Using detected controller: {controller_name}")
+
+        # Create experiment directory if we have a controller name and haven't created one yet
+        if controller_name and not hasattr(self.data_manager, 'run_directory_created'):
+            run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
+            self.data_manager.run_directory_created = True
+            # self.get_logger().info(f"Created experiment directory for {controller_name}: {run_directory}")
+
+            # Update graph output directory for this run
+            if self.config.get('auto_generate_graphs', False):
+                self.config['graph_output_directory'] = os.path.join(run_directory, "graphs")
+
+            # Initialize analysis components now that we have the run directory
+            self._initialize_analysis_components()
+
         # Start new lap trajectory
         self.data_manager.start_new_lap_trajectory(1)
 
@@ -915,25 +964,219 @@ class RaceMonitor(Node):
             # Compile all trajectory data for analysis
             all_trajectories = self.data_manager.get_trajectory_data()
 
+            # Generate comprehensive race summary
+            race_summary = self._generate_race_summary(race_data, all_trajectories)
+
+            # Save comprehensive race summary
+            self.data_manager.save_race_summary(race_summary)
+
             if self.research_evaluator and all_trajectories:
                 # Perform research-grade analysis
                 self.get_logger().info("Running research trajectory evaluation...")
-                # TODO: Implement comprehensive analysis with research evaluator
+                try:
+                    # Add trajectory data to research evaluator
+                    for lap_num, trajectory_data in all_trajectories.items():
+                        if 'points' in trajectory_data and 'lap_time' in trajectory_data:
+                            # Convert data format for research evaluator
+                            converted_points = []
+                            for i, point in enumerate(trajectory_data['points']):
+                                # Convert to nested dictionary format that research evaluator expects
+                                converted_point = {
+                                    'pose': {
+                                        'position': {
+                                            'x': point['x'],
+                                            'y': point['y'],
+                                            'z': point.get('z', 0.0)
+                                        },
+                                        'orientation': {
+                                            'x': point.get('qx', 0.0),
+                                            'y': point.get('qy', 0.0),
+                                            'z': point.get('qz', 0.0),
+                                            'w': point.get('qw', 1.0)
+                                        }
+                                    },
+                                    'header': {
+                                        'stamp': {
+                                            'sec': int(point.get('timestamp', i * 0.1)),
+                                            'nanosec': int((point.get('timestamp', i * 0.1) - int(point.get('timestamp', i * 0.1))) * 1e9)
+                                        }
+                                    }
+                                }
+                                converted_points.append(converted_point)
+
+                            self.research_evaluator.add_trajectory(
+                                lap_num,
+                                converted_points,
+                                trajectory_data['lap_time']
+                            )
+
+                    # Generate research summary
+                    evaluation_results = self.research_evaluator.generate_research_summary()
+                    if evaluation_results:
+                        self.data_manager.save_evaluation_summary(evaluation_results)
+                        self.get_logger().info("Research evaluation completed successfully")
+                except Exception as e:
+                    self.get_logger().error(f"Research evaluation failed: {e}")
 
             if self.race_evaluator and all_trajectories:
                 # Perform custom race evaluation
                 self.get_logger().info("Running custom race evaluation...")
-                # TODO: Implement race evaluation integration
+                try:
+                    # Create research data summary for race evaluator
+                    research_summary = self._generate_race_summary(race_data, all_trajectories)
+                    race_evaluation = self.race_evaluator.create_race_evaluation(research_summary)
+                    if race_evaluation:
+                        self.data_manager.save_race_evaluation(race_evaluation)
+                        self.get_logger().info("Custom race evaluation completed successfully")
+                except Exception as e:
+                    self.get_logger().error(f"Custom race evaluation failed: {e}")
 
             if self.evo_plotter and all_trajectories:
                 # Generate visualization plots
                 self.get_logger().info("Generating analysis plots...")
-                # TODO: Implement plot generation
+                try:
+                    # Add trajectory data to the plotter
+                    for lap_num, trajectory_data in all_trajectories.items():
+                        if 'points' in trajectory_data:
+                            # Convert trajectory points to proper format for plotting
+                            poses = []
+                            for i, point in enumerate(trajectory_data['points']):
+                                # Create a simple object-like structure that the visualization engine expects
+                                class MockPose:
+                                    def __init__(self, x, y, z, qx, qy, qz, qw, theta=None):
+                                        self.x = x
+                                        self.y = y
+                                        self.z = z
+                                        if theta is not None:
+                                            self.theta = theta
+                                        # Also store quaternion data if available
+                                        if qx is not None:
+                                            self.qx = qx
+                                            self.qy = qy
+                                            self.qz = qz
+                                            self.qw = qw
+
+                                class MockHeader:
+                                    def __init__(self, timestamp):
+                                        # Create a proper stamp object that the visualization engine expects
+                                        class MockStamp:
+                                            def __init__(self, ts):
+                                                if ts is not None:
+                                                    self.sec = int(ts)
+                                                    self.nanosec = int((ts - int(ts)) * 1e9)
+                                                else:
+                                                    self.sec = 0
+                                                    self.nanosec = 0
+
+                                        self.stamp = MockStamp(timestamp)
+                                        self.timestamp = timestamp
+
+                                # Calculate theta from quaternion if not provided
+                                qz = point.get('qz', 0.0)
+                                qw = point.get('qw', 1.0)
+                                theta = 2.0 * np.arctan2(qz, qw) if qw != 0 else 0.0
+
+                                pose_data = {
+                                    'pose': MockPose(
+                                        x=point['x'],
+                                        y=point['y'],
+                                        z=point.get('z', 0.0),
+                                        qx=point.get('qx', 0.0),
+                                        qy=point.get('qy', 0.0),
+                                        qz=point.get('qz', 0.0),
+                                        qw=point.get('qw', 1.0),
+                                        theta=theta
+                                    ),
+                                    'header': MockHeader(point.get('timestamp', i * 0.1))
+                                }
+                                poses.append(pose_data)
+
+                            if poses:
+                                self.evo_plotter.add_lap_trajectory(lap_num, poses)
+
+                    # Generate all plots
+                    plot_success = self.evo_plotter.generate_all_plots()
+                    if plot_success:
+                        self.get_logger().info("Visualization plots generated successfully")
+                    else:
+                        self.get_logger().warning("Some visualization plots failed to generate")
+                except Exception as e:
+                    self.get_logger().error(f"Plot generation failed: {e}")
 
             self.get_logger().info("Comprehensive analysis completed!")
 
         except Exception as e:
             self.get_logger().error(f"Error in comprehensive analysis: {e}")
+
+    def _generate_race_summary(self, race_data: dict, trajectory_data: dict) -> dict:
+        """Generate comprehensive race summary with detailed statistics."""
+        try:
+            lap_times = race_data.get('lap_times', [])
+
+            # Basic race statistics
+            summary = {
+                'race_metadata': {
+                    'timestamp': datetime.now().isoformat(),
+                    'controller_name': self.config['controller_name'],
+                    'experiment_id': self.config['experiment_id'],
+                    'test_description': self.config.get('test_description', ''),
+                    'total_race_time': race_data.get('total_race_time', 0.0),
+                    'laps_completed': len(lap_times),
+                    'race_ending_reason': race_data.get('race_ending_reason', 'Unknown'),
+                    'crashed': race_data.get('crashed', False)
+                },
+                'lap_statistics': {
+                    'lap_times': lap_times,
+                    'best_lap_time': min(lap_times) if lap_times else 0.0,
+                    'worst_lap_time': max(lap_times) if lap_times else 0.0,
+                    'average_lap_time': np.mean(lap_times) if lap_times else 0.0,
+                    'median_lap_time': np.median(lap_times) if lap_times else 0.0,
+                    'lap_time_std': np.std(lap_times) if lap_times else 0.0,
+                    'consistency_score': 1.0 - (np.std(lap_times) / np.mean(lap_times)) if lap_times and np.mean(lap_times) > 0 else 0.0
+                },
+                'trajectory_statistics': {},
+                'performance_metrics': {}
+            }
+
+            # Calculate trajectory statistics if available
+            if trajectory_data:
+                total_distance = 0.0
+                total_points = 0
+
+                for lap_num, traj_data in trajectory_data.items():
+                    if 'points' in traj_data:
+                        points = traj_data['points']
+                        total_points += len(points)
+
+                        # Calculate lap distance
+                        lap_distance = 0.0
+                        for i in range(1, len(points)):
+                            dx = points[i]['x'] - points[i - 1]['x']
+                            dy = points[i]['y'] - points[i - 1]['y']
+                            lap_distance += np.sqrt(dx * dx + dy * dy)
+
+                        total_distance += lap_distance
+
+                summary['trajectory_statistics'] = {
+                    'total_distance': total_distance,
+                    'average_lap_distance': total_distance / len(trajectory_data) if trajectory_data else 0.0,
+                    'total_trajectory_points': total_points,
+                    'average_points_per_lap': total_points / len(trajectory_data) if trajectory_data else 0.0
+                }
+
+                # Calculate performance metrics
+                if lap_times and total_distance > 0:
+                    summary['performance_metrics'] = {
+                        'average_speed': total_distance / race_data.get('total_race_time', 1.0),
+                        'best_lap_speed': (total_distance / len(trajectory_data)) / min(lap_times) if lap_times else 0.0,
+                        'distance_per_second': total_distance / race_data.get('total_race_time', 1.0)
+                    }
+
+            return summary
+
+        except Exception as e:
+            self.get_logger().error(f"Error generating race summary: {e}")
+            return {}
 
     def _publish_race_status(self):
         """Publish current race status."""
