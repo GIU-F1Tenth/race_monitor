@@ -42,6 +42,7 @@ import tf_transformations
 import math
 import os
 import sys
+import json
 from datetime import datetime
 
 # Import our modular components
@@ -1010,6 +1011,24 @@ class RaceMonitor(Node):
             # Save comprehensive race summary
             self.data_manager.save_race_summary(race_summary)
 
+            # Save APE/RPE metrics as individual files and generate plots
+            advanced_metrics = race_summary.get('advanced_metrics', {})
+            if advanced_metrics:
+                try:
+                    # Save APE/RPE metrics files in metrics directory
+                    if self.data_manager.save_ape_rpe_metrics_files(advanced_metrics):
+                        self.get_logger().info("APE/RPE metrics files saved successfully")
+                    else:
+                        self.get_logger().warning("Failed to save APE/RPE metrics files")
+
+                    # Generate APE/RPE plots
+                    if self.data_manager.generate_ape_rpe_plots(advanced_metrics):
+                        self.get_logger().info("APE/RPE plots generated successfully")
+                    else:
+                        self.get_logger().warning("Failed to generate APE/RPE plots")
+                except Exception as e:
+                    self.get_logger().error(f"Error generating APE/RPE metrics files and plots: {e}")
+
             # Initialize variables for consolidated save
             race_evaluation = None
 
@@ -1267,19 +1286,33 @@ class RaceMonitor(Node):
     def _calculate_averaged_metrics(self) -> dict:
         """Calculate averaged metrics from all lap measurements."""
         try:
-            if not hasattr(self.research_evaluator, 'detailed_metrics') or not self.research_evaluator.detailed_metrics:
-                self.get_logger().warn("No detailed metrics available from research evaluator")
+            detailed_metrics = {}
+
+            # First try to get metrics from research evaluator in-memory storage
+            if hasattr(self.research_evaluator, 'detailed_metrics') and self.research_evaluator.detailed_metrics:
+                detailed_metrics = self.research_evaluator.detailed_metrics
+                self.get_logger().info(
+                    f"Using in-memory detailed metrics from research evaluator: {len(detailed_metrics)} laps")
+            else:
+                # Fallback: Load metrics from saved lap files
+                self.get_logger().warn("No in-memory detailed metrics, loading from saved lap files")
+                detailed_metrics = self._load_metrics_from_files()
+
+            if not detailed_metrics:
+                self.get_logger().warn("No detailed metrics available from research evaluator or saved files")
                 return {}
 
             # Collect all metrics from all laps
             all_metrics = {}
-            lap_count = len(self.research_evaluator.detailed_metrics)
+            lap_count = len(detailed_metrics)
 
             if lap_count == 0:
                 return {}
 
+            self.get_logger().info(f"Processing {lap_count} laps for advanced metrics calculation")
+
             # Aggregate metrics across all laps
-            for lap_num, lap_metrics in self.research_evaluator.detailed_metrics.items():
+            for lap_num, lap_metrics in detailed_metrics.items():
                 for metric_name, metric_value in lap_metrics.items():
                     if isinstance(metric_value, (int, float)) and not math.isnan(metric_value):
                         if metric_name not in all_metrics:
@@ -1331,6 +1364,54 @@ class RaceMonitor(Node):
 
         except Exception as e:
             self.get_logger().error(f"Error calculating averaged metrics: {e}")
+            return {}
+
+    def _load_metrics_from_files(self) -> dict:
+        """Load detailed metrics from saved lap files as fallback."""
+        try:
+            detailed_metrics = {}
+
+            # Get the metrics directory path
+            if hasattr(self.research_evaluator, 'experiment_dir') and self.research_evaluator.experiment_dir:
+                metrics_dir = os.path.join(self.research_evaluator.experiment_dir, 'metrics')
+                self.get_logger().debug(f"Using research evaluator experiment_dir for metrics: {metrics_dir}")
+            else:
+                # Fallback to data manager's path
+                metrics_dir = self.data_manager.get_metrics_directory()
+                self.get_logger().debug(f"Using data manager metrics directory: {metrics_dir}")
+
+            if not os.path.exists(metrics_dir):
+                self.get_logger().warn(f"Metrics directory not found: {metrics_dir}")
+                return {}
+
+            # Load all lap metric files
+            lap_files = [f for f in os.listdir(metrics_dir) if f.startswith('lap_') and f.endswith('_metrics.json')]
+            lap_files.sort()
+
+            self.get_logger().info(f"Found {len(lap_files)} lap metric files in {metrics_dir}")
+
+            for lap_file in lap_files:
+                try:
+                    # Extract lap number from filename like "lap_001_metrics.json"
+                    lap_num_str = lap_file.split('_')[1]
+                    lap_num = int(lap_num_str)
+
+                    file_path = os.path.join(metrics_dir, lap_file)
+                    with open(file_path, 'r') as f:
+                        lap_metrics = json.load(f)
+
+                    detailed_metrics[lap_num] = lap_metrics
+                    self.get_logger().debug(f"Loaded {len(lap_metrics)} metrics for lap {lap_num}")
+
+                except Exception as e:
+                    self.get_logger().warn(f"Error loading lap file {lap_file}: {e}")
+                    continue
+
+            self.get_logger().info(f"Successfully loaded metrics for {len(detailed_metrics)} laps from files")
+            return detailed_metrics
+
+        except Exception as e:
+            self.get_logger().error(f"Error loading metrics from files: {e}")
             return {}
 
     def _experiment_directory_exists(self, controller_name: str, experiment_id: str) -> bool:

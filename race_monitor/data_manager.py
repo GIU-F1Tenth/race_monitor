@@ -718,6 +718,10 @@ class DataManager:
         os.makedirs(graphs_dir, exist_ok=True)
         return graphs_dir
 
+    def get_current_trajectory_directory(self) -> str:
+        """Get the current trajectory base directory path."""
+        return self.base_output_dir
+
     def _is_in_experiment_directory(self) -> bool:
         """Check if base_output_dir points to a controller/experiment directory."""
         # Check if the path contains a controller name and experiment pattern
@@ -824,6 +828,44 @@ class DataManager:
                 for key, value in perf_metrics.items():
                     writer.writerow([key.replace('_', ' ').title(),
                                     f"{value:.4f}" if isinstance(value, float) else value])
+
+                # Write advanced metrics (including APE/RPE metrics)
+                advanced_metrics = race_summary.get('advanced_metrics', {})
+                if advanced_metrics:
+                    writer.writerow([])
+                    writer.writerow(['=== ADVANCED METRICS ==='])
+
+                    # Group APE metrics first
+                    ape_metrics = {k: v for k, v in advanced_metrics.items() if 'ape_' in k}
+                    if ape_metrics:
+                        writer.writerow(['--- Absolute Pose Error (APE) Metrics ---'])
+                        for key, value in sorted(ape_metrics.items()):
+                            formatted_key = key.replace('_', ' ').replace('ape ', 'APE ').title()
+                            writer.writerow([formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
+
+                    # Group RPE metrics second
+                    rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
+                    if rpe_metrics:
+                        writer.writerow(['--- Relative Pose Error (RPE) Metrics ---'])
+                        for key, value in sorted(rpe_metrics.items()):
+                            formatted_key = key.replace('_', ' ').replace('rpe ', 'RPE ').title()
+                            writer.writerow([formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
+
+                    # Add other important advanced metrics
+                    other_important_metrics = {
+                        k: v for k,
+                        v in advanced_metrics.items() if any(
+                            keyword in k for keyword in [
+                                'overall_',
+                                'consistency',
+                                'speed',
+                                'path_length',
+                                'duration']) and 'ape_' not in k and 'rpe_' not in k}
+                    if other_important_metrics:
+                        writer.writerow(['--- Other Advanced Metrics ---'])
+                        for key, value in sorted(other_important_metrics.items()):
+                            formatted_key = key.replace('_', ' ').title()
+                            writer.writerow([formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
 
             self.logger.info(f"Saved comprehensive race summary to: {json_filepath}")
             self.logger.info(f"Saved detailed CSV summary to: {csv_filepath}")
@@ -947,3 +989,270 @@ class DataManager:
         except Exception as e:
             self.logger.error(f"Error creating run directory: {e}")
             return self.base_output_dir
+
+    def save_ape_rpe_metrics_files(self, advanced_metrics: Dict) -> bool:
+        """
+        Save APE and RPE metrics as separate files in the metrics directory.
+
+        Args:
+            advanced_metrics: Dictionary containing all advanced metrics
+
+        Returns:
+            bool: True if successfully saved
+        """
+        try:
+            if not advanced_metrics:
+                self.logger.warn("No advanced metrics provided for APE/RPE file generation")
+                return False
+
+            metrics_dir = self.get_metrics_directory()
+
+            # Extract APE metrics
+            ape_metrics = {k: v for k, v in advanced_metrics.items() if 'ape_' in k}
+            if ape_metrics:
+                ape_filepath = os.path.join(metrics_dir, 'ape_metrics_summary.json')
+                with open(ape_filepath, 'w') as f:
+                    json.dump(ape_metrics, f, indent=2, default=str)
+                self.logger.info(f"Saved APE metrics summary to: {ape_filepath}")
+
+                # Also save as CSV for easy analysis
+                ape_csv_filepath = os.path.join(metrics_dir, 'ape_metrics_summary.csv')
+                with open(ape_csv_filepath, 'w', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(['APE Metric', 'Value'])
+                    for key, value in sorted(ape_metrics.items()):
+                        formatted_key = key.replace('_', ' ').replace('ape ', 'APE ').title()
+                        writer.writerow([formatted_key, f"{value:.6f}" if isinstance(value, float) else value])
+                self.logger.info(f"Saved APE metrics CSV to: {ape_csv_filepath}")
+
+            # Extract RPE metrics
+            rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
+            if rpe_metrics:
+                rpe_filepath = os.path.join(metrics_dir, 'rpe_metrics_summary.json')
+                with open(rpe_filepath, 'w') as f:
+                    json.dump(rpe_metrics, f, indent=2, default=str)
+                self.logger.info(f"Saved RPE metrics summary to: {rpe_filepath}")
+
+                # Also save as CSV for easy analysis
+                rpe_csv_filepath = os.path.join(metrics_dir, 'rpe_metrics_summary.csv')
+                with open(rpe_csv_filepath, 'w', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(['RPE Metric', 'Value'])
+                    for key, value in sorted(rpe_metrics.items()):
+                        formatted_key = key.replace('_', ' ').replace('rpe ', 'RPE ').title()
+                        writer.writerow([formatted_key, f"{value:.6f}" if isinstance(value, float) else value])
+                self.logger.info(f"Saved RPE metrics CSV to: {rpe_csv_filepath}")
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error saving APE/RPE metrics files: {e}")
+            return False
+
+    def generate_ape_rpe_plots(self, advanced_metrics: Dict) -> bool:
+        """
+        Generate plots for APE and RPE metrics.
+
+        Args:
+            advanced_metrics: Dictionary containing all advanced metrics
+
+        Returns:
+            bool: True if successfully generated
+        """
+        try:
+            # Check if matplotlib is available
+            try:
+                import matplotlib.pyplot as plt
+                import numpy as np
+            except ImportError:
+                self.logger.warn("Matplotlib not available - skipping APE/RPE plot generation")
+                return False
+
+            if not advanced_metrics:
+                self.logger.warn("No advanced metrics provided for APE/RPE plot generation")
+                return False
+
+            plots_dir = self.get_plots_directory()
+
+            # Extract APE metrics for plotting
+            ape_metrics = {k: v for k, v in advanced_metrics.items() if 'ape_' in k}
+            rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
+
+            if ape_metrics:
+                # Create APE metrics plot
+                plt.figure(figsize=(12, 8))
+
+                # Group by metric type (mean, std, min, max, median, cv)
+                ape_types = {}
+                for key, value in ape_metrics.items():
+                    # Extract the last part after the final underscore (metric type)
+                    parts = key.split('_')
+                    if len(parts) >= 2:
+                        metric_type = parts[-1]  # mean, std, min, max, etc.
+                        metric_name = '_'.join(parts[:-1])  # everything before the type
+
+                        if metric_type not in ape_types:
+                            ape_types[metric_type] = {}
+                        ape_types[metric_type][metric_name] = value
+
+                # Create subplots for different APE metric types
+                fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+                axes = axes.flatten()
+
+                for idx, (metric_type, metrics) in enumerate(ape_types.items()):
+                    if idx >= 6:  # Limit to 6 subplots
+                        break
+
+                    ax = axes[idx]
+                    names = list(metrics.keys())
+                    values = list(metrics.values())
+
+                    # Create bar plot
+                    bars = ax.bar(range(len(names)), values)
+                    ax.set_title(f'APE {metric_type.upper()} Metrics', fontsize=12, fontweight='bold')
+                    ax.set_xlabel('Metric Type')
+                    ax.set_ylabel(f'{metric_type.capitalize()} Value')
+
+                    # Rotate x-axis labels for better readability
+                    ax.set_xticks(range(len(names)))
+                    ax.set_xticklabels([name.replace('ape_', '').replace('_', ' ').title() for name in names],
+                                       rotation=45, ha='right')
+
+                    # Add value labels on bars
+                    for bar, value in zip(bars, values):
+                        height = bar.get_height()
+                        ax.text(bar.get_x() + bar.get_width() / 2., height,
+                                f'{value:.3f}', ha='center', va='bottom', fontsize=8)
+
+                    ax.grid(True, alpha=0.3)
+
+                # Hide unused subplots
+                for idx in range(len(ape_types), 6):
+                    axes[idx].set_visible(False)
+
+                plt.tight_layout()
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                ape_plot_path = os.path.join(plots_dir, f'ape_metrics_analysis_{timestamp}.png')
+                plt.savefig(ape_plot_path, dpi=300, bbox_inches='tight')
+                plt.close()
+                self.logger.info(f"Saved APE metrics plot to: {ape_plot_path}")
+
+            if rpe_metrics:
+                # Create RPE metrics plot
+                plt.figure(figsize=(12, 8))
+
+                # Group by metric type (mean, std, min, max, median, cv)
+                rpe_types = {}
+                for key, value in rpe_metrics.items():
+                    # Extract the last part after the final underscore (metric type)
+                    parts = key.split('_')
+                    if len(parts) >= 2:
+                        metric_type = parts[-1]  # mean, std, min, max, etc.
+                        metric_name = '_'.join(parts[:-1])  # everything before the type
+
+                        if metric_type not in rpe_types:
+                            rpe_types[metric_type] = {}
+                        rpe_types[metric_type][metric_name] = value
+
+                # Create subplots for different RPE metric types
+                fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+                axes = axes.flatten()
+
+                for idx, (metric_type, metrics) in enumerate(rpe_types.items()):
+                    if idx >= 6:  # Limit to 6 subplots
+                        break
+
+                    ax = axes[idx]
+                    names = list(metrics.keys())
+                    values = list(metrics.values())
+
+                    # Create bar plot
+                    bars = ax.bar(range(len(names)), values, color='orange')
+                    ax.set_title(f'RPE {metric_type.upper()} Metrics', fontsize=12, fontweight='bold')
+                    ax.set_xlabel('Metric Type')
+                    ax.set_ylabel(f'{metric_type.capitalize()} Value')
+
+                    # Rotate x-axis labels for better readability
+                    ax.set_xticks(range(len(names)))
+                    ax.set_xticklabels([name.replace('rpe_', '').replace('_', ' ').title() for name in names],
+                                       rotation=45, ha='right')
+
+                    # Add value labels on bars
+                    for bar, value in zip(bars, values):
+                        height = bar.get_height()
+                        ax.text(bar.get_x() + bar.get_width() / 2., height,
+                                f'{value:.3f}', ha='center', va='bottom', fontsize=8)
+
+                    ax.grid(True, alpha=0.3)
+
+                # Hide unused subplots
+                for idx in range(len(rpe_types), 6):
+                    axes[idx].set_visible(False)
+
+                plt.tight_layout()
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                rpe_plot_path = os.path.join(plots_dir, f'rpe_metrics_analysis_{timestamp}.png')
+                plt.savefig(rpe_plot_path, dpi=300, bbox_inches='tight')
+                plt.close()
+                self.logger.info(f"Saved RPE metrics plot to: {rpe_plot_path}")
+
+            # Create a combined APE vs RPE comparison plot
+            if ape_metrics and rpe_metrics:
+                plt.figure(figsize=(14, 8))
+
+                # Extract mean values for comparison
+                ape_means = {k: v for k, v in ape_metrics.items() if k.endswith('_mean')}
+                rpe_means = {k: v for k, v in rpe_metrics.items() if k.endswith('_mean')}
+
+                if ape_means and rpe_means:
+                    # Create side-by-side comparison
+                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+                    # APE means
+                    ape_names = [name.replace('ape_', '').replace('_mean', '').replace('_', ' ').title()
+                                 for name in ape_means.keys()]
+                    ape_values = list(ape_means.values())
+
+                    bars1 = ax1.bar(range(len(ape_names)), ape_values, color='skyblue')
+                    ax1.set_title('APE Mean Values Comparison', fontsize=14, fontweight='bold')
+                    ax1.set_xlabel('Metric Type')
+                    ax1.set_ylabel('APE Mean Value (meters)')
+                    ax1.set_xticks(range(len(ape_names)))
+                    ax1.set_xticklabels(ape_names, rotation=45, ha='right')
+
+                    for bar, value in zip(bars1, ape_values):
+                        height = bar.get_height()
+                        ax1.text(bar.get_x() + bar.get_width() / 2., height,
+                                 f'{value:.3f}', ha='center', va='bottom', fontsize=9)
+                    ax1.grid(True, alpha=0.3)
+
+                    # RPE means
+                    rpe_names = [name.replace('rpe_', '').replace('_mean', '').replace('_', ' ').title()
+                                 for name in rpe_means.keys()]
+                    rpe_values = list(rpe_means.values())
+
+                    bars2 = ax2.bar(range(len(rpe_names)), rpe_values, color='lightcoral')
+                    ax2.set_title('RPE Mean Values Comparison', fontsize=14, fontweight='bold')
+                    ax2.set_xlabel('Metric Type')
+                    ax2.set_ylabel('RPE Mean Value (meters)')
+                    ax2.set_xticks(range(len(rpe_names)))
+                    ax2.set_xticklabels(rpe_names, rotation=45, ha='right')
+
+                    for bar, value in zip(bars2, rpe_values):
+                        height = bar.get_height()
+                        ax2.text(bar.get_x() + bar.get_width() / 2., height,
+                                 f'{value:.3f}', ha='center', va='bottom', fontsize=9)
+                    ax2.grid(True, alpha=0.3)
+
+                    plt.tight_layout()
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    comparison_plot_path = os.path.join(plots_dir, f'ape_vs_rpe_comparison_{timestamp}.png')
+                    plt.savefig(comparison_plot_path, dpi=300, bbox_inches='tight')
+                    plt.close()
+                    self.logger.info(f"Saved APE vs RPE comparison plot to: {comparison_plot_path}")
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error generating APE/RPE plots: {e}")
+            return False
