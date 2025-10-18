@@ -1708,9 +1708,8 @@ class RaceMonitor(Node):
             perf_dir = os.path.join(self.trajectory_output_directory, 'performance_data')
             os.makedirs(perf_dir, exist_ok=True)
 
-            # Generate filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(perf_dir, f'computational_performance_{timestamp}.csv')
+            # Generate clean filename
+            filename = os.path.join(perf_dir, 'computational_performance.csv')
 
             # Write CSV
             with open(filename, 'w', newline='') as csvfile:

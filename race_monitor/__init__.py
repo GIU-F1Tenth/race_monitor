@@ -13,6 +13,7 @@ Core Modules:
     - lap_detector: Lap detection and timing algorithms
     - performance_monitor: Computational performance tracking
     - data_manager: Data storage and file management
+    - metadata_manager: Experiment metadata and system information management
     - visualization_publisher: RViz visualization components
     - reference_trajectory_manager: Reference trajectory handling
     - visualization_engine: Advanced plotting and graphing
@@ -39,7 +40,7 @@ from .data_manager import DataManager
 
 __all__ = [
     "RaceMonitor",
-    "ResearchTrajectoryEvaluator", 
+    "ResearchTrajectoryEvaluator",
     "create_research_evaluator",
     "RaceEvaluator",
     "create_race_evaluator",

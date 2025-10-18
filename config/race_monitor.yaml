@@ -9,7 +9,7 @@ race_monitor:
     start_line_p2: [0.0, 2.0] # Top point of start line [x, y]
     required_laps: 7 # Number of laps to complete race
     debounce_time: 2.0 # Debounce time for lap detection (seconds)
-    output_file: "race_results.csv" # CSV file for race results
+    output_file: "race_results.json" # CSV file for race results
     frame_id: "map" # Frame ID for visualization
 
     # Lap detection direction configuration
@@ -189,7 +189,7 @@ race_monitor:
     # ========================================
 
     # Enable/disable CPU performance monitoring
-    enable_computational_monitoring: false
+    enable_computational_monitoring: true
 
     # ========================================
     # F1TENTH INTERFACE SETTINGS

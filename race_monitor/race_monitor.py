@@ -1511,9 +1511,8 @@ class RaceMonitor(Node):
                 'timestamp': datetime.now().isoformat()
             }
 
-            # Save with timestamp suffix to avoid overwriting
-            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"intermediate_results_{timestamp_str}.csv"
+            # Save intermediate results with clean filename
+            filename = "intermediate_results.csv"
             self.data_manager.save_race_results_to_csv(race_data, filename_override=filename)
 
     def destroy_node(self):

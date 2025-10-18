@@ -36,6 +36,7 @@ import numpy as np
 import gzip
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+from .metadata_manager import MetadataManager
 
 # MAT file support
 try:
@@ -226,6 +227,9 @@ class DataManager:
         # Set up directory structure
         if self.trajectory_output_directory:
             self._setup_directories()
+
+        # Initialize metadata manager
+        self.metadata_manager = MetadataManager(self.trajectory_output_directory, self.logger)
 
         self.logger.info(f"Data manager configured with {len(self.output_formats)} format(s)")
         if self.enable_advanced_metrics:
@@ -983,6 +987,31 @@ class DataManager:
             self.results_dir = os.path.join(experiment_dir, "results")
             self.base_output_dir = experiment_dir
 
+            # Create and save experiment metadata
+            if hasattr(self, 'metadata_manager'):
+                custom_data = {
+                    'experiment_setup': {
+                        'output_formats': self.output_formats,
+                        'advanced_metrics_enabled': self.enable_advanced_metrics,
+                        'trajectory_filtering_enabled': self.apply_trajectory_filtering,
+                        'auto_graph_generation': self.auto_generate_graphs
+                    }
+                }
+                self.metadata_manager.create_experiment_metadata(
+                    experiment_id=experiment_id,
+                    controller_name=controller_name,
+                    custom_data=custom_data
+                )
+                # Update metadata manager output directory to the experiment directory
+                self.metadata_manager.output_directory = experiment_dir
+
+                # Save both text and JSON metadata files
+                self.metadata_manager.save_metadata_file('experiment_metadata.txt')
+                self.metadata_manager.save_metadata_json('experiment_metadata.json')
+
+                # Log experiment summary
+                self.logger.info(f"Experiment setup: {self.metadata_manager.get_experiment_summary()}")
+
             return experiment_dir
 
         except Exception as e:
@@ -1110,7 +1139,6 @@ class DataManager:
                     axes[idx].set_visible(False)
 
                 plt.tight_layout()
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 ape_plot_path = os.path.join(plots_dir, f'ape_metrics_analysis.png')
                 plt.savefig(ape_plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
@@ -1169,7 +1197,6 @@ class DataManager:
                     axes[idx].set_visible(False)
 
                 plt.tight_layout()
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 rpe_plot_path = os.path.join(plots_dir, f'rpe_metrics_analysis.png')
                 plt.savefig(rpe_plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
@@ -1224,7 +1251,6 @@ class DataManager:
                     ax2.grid(True, alpha=0.3)
 
                     plt.tight_layout()
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     comparison_plot_path = os.path.join(plots_dir, f'ape_vs_rpe_comparison.png')
                     plt.savefig(comparison_plot_path, dpi=300, bbox_inches='tight')
                     plt.close()

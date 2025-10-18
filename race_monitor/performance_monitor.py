@@ -56,7 +56,7 @@ def time_to_nanoseconds(time_obj):
 class PerformanceMonitor:
     """
     Computational performance monitoring for racing operations.
-    
+
     Tracks CPU usage, memory consumption, control loop timing,
     and other performance metrics with configurable thresholds.
     """
@@ -333,8 +333,7 @@ class PerformanceMonitor:
 
         try:
             os.makedirs(output_dir, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{filename_prefix}_{timestamp}.csv"
+            filename = f"{filename_prefix}.csv"
             filepath = os.path.join(output_dir, filename)
 
             with open(filepath, 'w', newline='') as csvfile:

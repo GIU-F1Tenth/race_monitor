@@ -6,7 +6,6 @@ Integrates EVO's plotting capabilities for automatic graph generation
 """
 
 import json
-from datetime import datetime
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import os
@@ -599,7 +598,6 @@ class EVOPlotter:
         # Ensure directory exists
         os.makedirs(graph_dir, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         dpi = self.config.get('plot_dpi', 300)
 
         # Save each figure individually using matplotlib
@@ -607,7 +605,7 @@ class EVOPlotter:
             try:
                 for fmt in graph_formats:
                     if fmt.lower() in ['png', 'pdf', 'svg', 'eps']:
-                        output_path = os.path.join(graph_dir, f"{plot_name}_{timestamp}.{fmt.lower()}")
+                        output_path = os.path.join(graph_dir, f"{plot_name}.{fmt.lower()}")
                         print(f"Saving {plot_name} as {fmt.upper()} to {output_path}")
                         figure.savefig(output_path, format=fmt.lower(), dpi=dpi, bbox_inches='tight')
 
