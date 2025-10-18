@@ -197,7 +197,7 @@ class RaceMonitor(Node):
         # EVO INTEGRATION PARAMETERS
         # ========================================
         self.declare_parameter('enable_trajectory_evaluation', True)
-        self.declare_parameter('evaluation_interval_seconds', 0)
+        self.declare_parameter('evaluation_interval_seconds', 0.0)
         self.declare_parameter('evaluation_interval_laps', 1)
         self.declare_parameter('evaluation_interval_meters', 0.0)
 
@@ -218,7 +218,7 @@ class RaceMonitor(Node):
         self.declare_parameter('save_detailed_statistics', True)
         self.declare_parameter('save_filtered_trajectories', True)
         self.declare_parameter('export_research_summary', True)
-        self.declare_parameter('output_formats', ['csv', 'json', 'pickle', 'mat'])
+        self.declare_parameter('output_formats', ['csv', 'tum', 'json', 'pickle', 'mat'])
         self.declare_parameter('include_timestamps', True)
         self.declare_parameter('save_intermediate_results', True)
 
@@ -532,14 +532,17 @@ class RaceMonitor(Node):
                 self.config['graph_output_directory'] = os.path.join(run_directory, "graphs")
                 self.get_logger().info(f"Graph output directory: {self.config['graph_output_directory']}")
 
-            # Update trajectory output directory for research evaluator to use analysis subdirectory
-            self.config['trajectory_output_directory'] = os.path.join(run_directory, "analysis")
+            # Update trajectory output directory for research evaluator to use the run directory directly
+            self.config['trajectory_output_directory'] = run_directory
 
             # Store run directory for other components
             self.run_directory = run_directory
 
-        # Initialize analysis components now that paths are configured
-        self._initialize_analysis_components()
+            # Initialize analysis components now that paths are configured
+            self._initialize_analysis_components()
+        else:
+            # No controller name yet, delay analysis components initialization until race start
+            self.get_logger().info("Delaying analysis components initialization until controller is detected")
 
         # Load reference trajectory if specified
         if self.config['reference_trajectory_file']:
@@ -802,7 +805,8 @@ class RaceMonitor(Node):
             self.data_manager.run_directory_created = True
             # self.get_logger().info(f"Created experiment directory for {controller_name}: {run_directory}")
 
-            # Update graph output directory for this run
+            # Update config paths to point to the experiment directory
+            self.config['trajectory_output_directory'] = run_directory
             if self.config.get('auto_generate_graphs', False):
                 self.config['graph_output_directory'] = os.path.join(run_directory, "graphs")
 

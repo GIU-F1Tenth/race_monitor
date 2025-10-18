@@ -89,26 +89,49 @@ class ResearchTrajectoryEvaluator:
         self.controller_comparisons = {}
 
         # Output directories
-        self.setup_output_directories()
+        self._setup_research_environment()
 
-    def setup_output_directories(self):
+    def _setup_research_environment(self):
         """Setup directory structure for research outputs"""
         # Get base directory - save relative to the race_monitor package directory
         base_dir_config = self.config.get('trajectory_output_directory', 'evaluation_results')
+
+        # Debug: Log the config value being used
+        self.logger.info(f"trajectory_output_directory from config: {base_dir_config}")
+
         if not os.path.isabs(base_dir_config):
             # Go up from race_monitor/race_monitor/ to race_monitor/ (the repo root)
             repo_root = os.path.dirname(os.path.dirname(__file__))
             base_dir = os.path.join(repo_root, base_dir_config)
+            self.logger.info(f"Relative path detected. repo_root: {repo_root}")
+            self.logger.info(f"Constructed base_dir: {base_dir}")
         else:
             base_dir = base_dir_config
+            self.logger.info(f"Absolute path detected. Using: {base_dir}")
 
         # Use the base_dir directly as the experiment directory (already points to the correct location)
         self.experiment_dir = base_dir
         self.controller_dir = os.path.dirname(base_dir)  # Parent directory for reference
 
-        directories = [
-            self.experiment_dir,
-            os.path.join(self.experiment_dir, 'trajectories'),
+        # Debug: Log the directory structure being used
+        self.logger.info(f"Trajectory analyzer experiment_dir: {self.experiment_dir}")
+        self.logger.info(f"Trajectory analyzer controller_dir: {self.controller_dir}")
+
+        # Check if the experiment directory already has the proper structure
+        # If it ends with a timestamp pattern, it's already an experiment directory
+        import re
+        if re.search(r'exp_\d{3}_\d{8}_\d{6}$', base_dir):
+            self.logger.info("Detected experiment directory structure - using as-is")
+            # Don't create subdirectories here, they should already exist from data_manager
+            self.logger.info("Skipping directory creation - should be handled by data_manager")
+            return
+        else:
+            self.logger.warning(f"Unexpected directory structure: {base_dir}")
+            self.logger.warning("Will create directories to ensure functionality")
+
+        # Create additional directories needed for research analysis
+        # Note: trajectories, results, graphs are already created by data_manager.create_run_directory()
+        additional_directories = [
             os.path.join(self.experiment_dir, 'filtered'),
             os.path.join(self.experiment_dir, 'metrics'),
             os.path.join(self.experiment_dir, 'statistics'),
@@ -117,8 +140,9 @@ class ResearchTrajectoryEvaluator:
             os.path.join(self.experiment_dir, 'exports')
         ]
 
-        for directory in directories:
+        for directory in additional_directories:
             os.makedirs(directory, exist_ok=True)
+            self.logger.debug(f"Created directory: {directory}")
 
     def add_trajectory(self, lap_number: int, trajectory_data: List[Dict], lap_time: float):
         """Add trajectory data for comprehensive analysis"""
@@ -542,28 +566,8 @@ class ResearchTrajectoryEvaluator:
         except Exception as e:
             self.logger.error(f"Failed to save metrics for lap {lap_number}: {e}")
 
-        # Save trajectory as TUM format using EVO
-        if lap_number in self.lap_trajectories:
-            traj_file = os.path.join(self.experiment_dir, 'trajectories', f'lap_{lap_number:03d}_trajectory.tum')
-            self.logger.info(f"Saving trajectory to: {traj_file}")
-            try:
-                file_interface.write_tum_trajectory_file(traj_file, self.lap_trajectories[lap_number]['trajectory'])
-                self.logger.info(f"Successfully saved trajectory for lap {lap_number} using EVO interface")
-            except Exception as e:
-                self.logger.warning(f"EVO trajectory writing failed: {e}, using fallback method")
-                # Fallback to manual writing
-                try:
-                    with open(traj_file, 'w') as f:
-                        traj = self.lap_trajectories[lap_number]['trajectory']
-                        for i in range(len(traj.positions_xyz)):
-                            timestamp = traj.timestamps[i]
-                            pos = traj.positions_xyz[i]
-                            quat = traj.orientations_quat_wxyz[i]
-                            f.write(f"{timestamp:.6f} {pos[0]:.6f} {pos[1]:.6f} {pos[2]:.6f} "
-                                    f"{quat[1]:.6f} {quat[2]:.6f} {quat[3]:.6f} {quat[0]:.6f}\n")
-                    self.logger.info(f"Successfully saved trajectory for lap {lap_number} using fallback method")
-                except Exception as fallback_e:
-                    self.logger.error(f"Failed to save trajectory for lap {lap_number}: {fallback_e}")
+        # Note: Trajectory files are saved by data_manager, not here
+        # This avoids duplicate trajectory files in different locations
 
         # Save filtered trajectory if available
         if lap_number in self.filtered_trajectories:

@@ -151,7 +151,11 @@ class DataManager:
             config: Dictionary containing configuration parameters
         """
         # Core data storage configuration
-        self.trajectory_output_directory = config.get('trajectory_output_directory', "")
+        raw_trajectory_dir = config.get('trajectory_output_directory', "")
+
+        # Use the trajectory_output_directory directly (absolute paths are used as-is)
+        self.trajectory_output_directory = raw_trajectory_dir
+
         self.save_trajectories = config.get('save_trajectories', self.save_trajectories)
         self.save_intermediate_results = config.get('save_intermediate_results', self.save_intermediate_results)
 
@@ -220,17 +224,19 @@ class DataManager:
                          f"graphs={self.auto_generate_graphs}, filtering={self.apply_trajectory_filtering}")
 
     def _setup_directories(self):
-        """Create directory structure for data storage."""
+        """Create base directory structure for data storage."""
         try:
             self.base_output_dir = self.trajectory_output_directory
-            self.trajectory_dir = self.base_output_dir
-            self.results_dir = os.path.join(self.base_output_dir, "results")
 
-            # Create directories
-            os.makedirs(self.trajectory_dir, exist_ok=True)
-            os.makedirs(self.results_dir, exist_ok=True)
+            # Only create base output directory initially
+            # Specific experiment directories will be created by create_run_directory()
+            os.makedirs(self.base_output_dir, exist_ok=True)
 
-            self.logger.info(f"Data directories created: {self.base_output_dir}")
+            # Initialize trajectory and results dirs as None - they will be set when run directory is created
+            self.trajectory_dir = None
+            self.results_dir = None
+
+            self.logger.info(f"Base data directory created: {self.base_output_dir}")
 
         except Exception as e:
             self.logger.error(f"Error setting up directories: {e}")
@@ -316,6 +322,11 @@ class DataManager:
         Returns:
             bool: True if successfully saved
         """
+        # Ensure trajectory directory is set up
+        if self.trajectory_dir is None:
+            self.logger.warning("Trajectory directory not set up yet - cannot save trajectory")
+            return False
+
         lap_number = trajectory_data['lap_number']
         points = trajectory_data['points']
 
@@ -545,7 +556,8 @@ class DataManager:
         """
         try:
             filename = "evaluation_summary.csv"
-            filepath = os.path.join(self.base_output_dir, filename)
+            # Save evaluation summary in the results directory
+            filepath = os.path.join(self.results_dir, filename)
 
             # Store evaluation data
             self.evaluation_summaries.append(evaluation_data)
@@ -638,6 +650,110 @@ class DataManager:
                 len(traj['points']) for traj in self.completed_trajectories.values()
             )
         }
+
+    def get_metrics_directory(self) -> str:
+        """Get the metrics directory path."""
+        # Only create directories if we're in a controller/experiment directory
+        if not self._is_in_experiment_directory():
+            self.logger.info(f"get_metrics_directory: SKIPPING creation at base level: {self.base_output_dir}")
+            return os.path.join(self.base_output_dir, "metrics")  # Return path but don't create
+
+        metrics_dir = os.path.join(self.base_output_dir, "metrics")
+        self.logger.info(f"get_metrics_directory: CREATING in experiment dir: {metrics_dir}")
+        os.makedirs(metrics_dir, exist_ok=True)
+        return metrics_dir
+
+    def get_filtered_directory(self) -> str:
+        """Get the filtered trajectories directory path."""
+        # Only create directories if we're in a controller/experiment directory
+        if not self._is_in_experiment_directory():
+            return os.path.join(self.base_output_dir, "filtered")  # Return path but don't create
+
+        filtered_dir = os.path.join(self.base_output_dir, "filtered")
+        self.logger.info(f"get_filtered_directory called: {filtered_dir} (base_output_dir: {self.base_output_dir})")
+        os.makedirs(filtered_dir, exist_ok=True)
+        return filtered_dir
+
+    def get_exports_directory(self) -> str:
+        """Get the exports directory path."""
+        # Only create directories if we're in a controller/experiment directory
+        if not self._is_in_experiment_directory():
+            return os.path.join(self.base_output_dir, "exports")  # Return path but don't create
+
+        exports_dir = os.path.join(self.base_output_dir, "exports")
+        self.logger.info(f"get_exports_directory called: {exports_dir} (base_output_dir: {self.base_output_dir})")
+        os.makedirs(exports_dir, exist_ok=True)
+        return exports_dir
+
+    def get_plots_directory(self) -> str:
+        """Get the plots directory path."""
+        # Only create directories if we're in a controller/experiment directory
+        if not self._is_in_experiment_directory():
+            return os.path.join(self.base_output_dir, "plots")  # Return path but don't create
+
+        plots_dir = os.path.join(self.base_output_dir, "plots")
+        self.logger.info(f"get_plots_directory called: {plots_dir} (base_output_dir: {self.base_output_dir})")
+        os.makedirs(plots_dir, exist_ok=True)
+        return plots_dir
+
+    def get_statistics_directory(self) -> str:
+        """Get the statistics directory path."""
+        # Only create directories if we're in a controller/experiment directory
+        if not self._is_in_experiment_directory():
+            return os.path.join(self.base_output_dir, "statistics")  # Return path but don't create
+
+        stats_dir = os.path.join(self.base_output_dir, "statistics")
+        self.logger.info(f"get_statistics_directory called: {stats_dir} (base_output_dir: {self.base_output_dir})")
+        os.makedirs(stats_dir, exist_ok=True)
+        return stats_dir
+
+    def get_graphs_directory(self) -> str:
+        """Get the graphs directory path."""
+        # Only create directories if we're in a controller/experiment directory
+        if not self._is_in_experiment_directory():
+            return os.path.join(self.base_output_dir, "graphs")  # Return path but don't create
+
+        graphs_dir = os.path.join(self.base_output_dir, "graphs")
+        self.logger.info(f"get_graphs_directory called: {graphs_dir} (base_output_dir: {self.base_output_dir})")
+        os.makedirs(graphs_dir, exist_ok=True)
+        return graphs_dir
+
+    def _is_in_experiment_directory(self) -> bool:
+        """Check if base_output_dir points to a controller/experiment directory."""
+        # Check if the path contains a controller name and experiment pattern
+        path_parts = self.base_output_dir.split(os.sep)
+
+        # Look for experiment pattern (exp_xxx_timestamp)
+        has_experiment = any('exp_' in part and len(part) > 15 for part in path_parts)
+
+        # Also check if we have a controller name set and it's not empty
+        has_controller = hasattr(self, 'controller_name') and self.controller_name and self.controller_name.strip()
+
+        # Additional check: make sure we're not at the base level
+        is_base_level = self.base_output_dir.endswith('evaluation_results')
+
+        result = has_experiment and has_controller and not is_base_level
+        return result
+
+    def get_comparisons_directory(self) -> str:
+        """Get the comparisons directory path (at controller level, not experiment level)."""
+        # Comparisons should be at the controller level, not experiment level
+        # To get controller level, we need to go up from the experiment directory
+        controller_name = self.controller_name if hasattr(self, 'controller_name') else 'unknown_controller'
+
+        # If we're in an experiment directory, get its parent's parent (controller dir)
+        if os.path.basename(os.path.dirname(self.base_output_dir)) == controller_name:
+            # base_output_dir is an experiment dir inside controller dir
+            controller_dir = os.path.dirname(self.base_output_dir)
+        else:
+            # Fallback: try to find controller dir relative to original base
+            original_base = self.trajectory_output_directory if self.trajectory_output_directory else os.path.dirname(
+                self.base_output_dir)
+            controller_dir = os.path.join(original_base, controller_name)
+
+        comparisons_dir = os.path.join(controller_dir, "comparisons")
+        os.makedirs(comparisons_dir, exist_ok=True)
+        return comparisons_dir
 
     def save_race_summary(self, race_summary: Dict) -> bool:
         """
@@ -756,6 +872,10 @@ class DataManager:
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+            self.logger.info(f"Creating run directory - controller: {controller_name}, experiment: {experiment_id}")
+            self.logger.info(f"Current base_output_dir before update: {self.base_output_dir}")
+
+            # Create controller-based hierarchy structure
             # Create controller directory first
             controller_dir = os.path.join(self.base_output_dir, controller_name)
             os.makedirs(controller_dir, exist_ok=True)
@@ -764,17 +884,28 @@ class DataManager:
             experiment_dir_name = f"{experiment_id}_{timestamp}"
             experiment_dir = os.path.join(controller_dir, experiment_dir_name)
 
-            # Create subdirectories for all race monitor components
+            self.logger.info(f"Creating experiment directory: {experiment_dir}")
+
+            # Create subdirectories for all race monitor components under the experiment directory
             os.makedirs(os.path.join(experiment_dir, "trajectories"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "results"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "graphs"), exist_ok=True)
-            os.makedirs(os.path.join(experiment_dir, "analysis"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "metrics"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "filtered"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "exports"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "plots"), exist_ok=True)
+            os.makedirs(os.path.join(experiment_dir, "statistics"), exist_ok=True)
 
             # Update paths to use experiment directory
             self.trajectory_dir = os.path.join(experiment_dir, "trajectories")
             self.results_dir = os.path.join(experiment_dir, "results")
 
+            # Update base_output_dir to point to the experiment directory
+            # This ensures all other components save to the controller-specific structure
+            self.base_output_dir = experiment_dir
+
             self.logger.info(f"Created experiment directory: {experiment_dir}")
+            self.logger.info(f"Updated base output directory to: {self.base_output_dir}")
             return experiment_dir
 
         except Exception as e:

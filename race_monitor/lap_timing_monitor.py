@@ -1153,6 +1153,9 @@ class RaceMonitor(Node):
                                 if hasattr(self, 'research_evaluator') and self.research_evaluator:
                                     research_data = self.research_evaluator.generate_research_summary()
 
+                                # Pass actual lap times to the race evaluator
+                                self.race_evaluator.lap_times_from_monitor = self.lap_times
+
                                 # Get EVO metrics if available
                                 evo_metrics = {}
                                 if hasattr(self, 'lap_metrics') and self.lap_metrics:
