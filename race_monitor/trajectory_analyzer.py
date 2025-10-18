@@ -3,38 +3,35 @@
 """
 Research Trajectory Evaluator
 
-A comprehensive trajectory analysis system for autonomous racing research.
-Utilizes the full functionality of the EVO trajectory evaluation library to provide
-advanced metrics calculation, statistical analysis, and research-ready data export.
+Advanced trajectory analysis system for autonomous racing research using the EVO
+trajectory evaluation library. Provides comprehensive metrics calculation,
+statistical analysis, and research-ready data export capabilities.
 
-Features:
-    - Comprehensive trajectory analysis using full EVO library capabilities
-    - 40+ performance metrics calculation per lap
-    - Advanced filtering and smoothing algorithms
-    - Multi-format data export (JSON, CSV, Pickle, TUM)
-    - Statistical analysis with confidence intervals
+This module implements sophisticated trajectory analysis algorithms to evaluate
+controller performance across multiple dimensions including accuracy, smoothness,
+efficiency, and consistency.
+
+Key Features:
+    - 40+ performance metrics per lap using EVO library
+    - Advanced statistical analysis with confidence intervals
+    - Multi-format export (JSON, CSV, Pickle, TUM formats)
+    - Trajectory filtering and smoothing algorithms
+    - Controller comparison and benchmarking tools
     - Research-grade documentation and metadata
 
-Metrics Calculated:
-    - Basic: Path length, duration, average speed
-    - Velocity: Mean/std/max velocity, consistency analysis
-    - Acceleration: Mean/std/max acceleration, jerk (smoothness)
-    - Steering: Angular velocity analysis, aggressiveness metrics
-    - Geometric: Curvature analysis, path efficiency
-    - Statistical: Complete statistical breakdown for all metrics
+Core Metrics:
+    - Pose accuracy (APE/RPE analysis)
+    - Velocity and acceleration profiles
+    - Steering aggressiveness and smoothness
+    - Path efficiency and geometric analysis
+    - Statistical consistency measures
 
-Usage:
-    config = {
-        'controller_name': 'my_controller',
-        'experiment_id': 'session_001',
-        'enable_advanced_metrics': True,
-        'output_formats': ['json', 'csv']
-    }
-    evaluator = create_research_evaluator(config)
-    evaluator.add_trajectory(lap_number, trajectory_data, lap_time)
-    evaluator.export_research_data()
+Output Formats:
+    - Research-ready JSON with complete metadata
+    - CSV exports for statistical analysis
+    - EVO-compatible trajectory formats
+    - Visualization plots and comparison charts
 
-Author: Race Monitor Development Team
 License: MIT
 """
 
@@ -92,57 +89,31 @@ class ResearchTrajectoryEvaluator:
         self._setup_research_environment()
 
     def _setup_research_environment(self):
-        """Setup directory structure for research outputs"""
-        # Get base directory - save relative to the race_monitor package directory
-        base_dir_config = self.config.get('trajectory_output_directory', 'evaluation_results')
+        """Setup directories and environment for research trajectory analysis"""
+        base_dir_config = self.config.get('trajectory_output_directory', 'data/experiments')
 
-        # Debug: Log the config value being used
-        self.logger.info(f"trajectory_output_directory from config: {base_dir_config}")
-
+        # Handle relative paths
         if not os.path.isabs(base_dir_config):
-            # Go up from race_monitor/race_monitor/ to race_monitor/ (the repo root)
-            repo_root = os.path.dirname(os.path.dirname(__file__))
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
             base_dir = os.path.join(repo_root, base_dir_config)
-            self.logger.info(f"Relative path detected. repo_root: {repo_root}")
-            self.logger.info(f"Constructed base_dir: {base_dir}")
         else:
             base_dir = base_dir_config
-            self.logger.info(f"Absolute path detected. Using: {base_dir}")
 
-        # Use the base_dir directly as the experiment directory (already points to the correct location)
-        self.experiment_dir = base_dir
-        self.controller_dir = os.path.dirname(base_dir)  # Parent directory for reference
+        # Setup experiment directory structure
+        experiment_id = self.config.get('experiment_id', 'default_experiment')
+        controller_name = self.config.get('controller_name', 'unknown_controller')
 
-        # Debug: Log the directory structure being used
-        self.logger.info(f"Trajectory analyzer experiment_dir: {self.experiment_dir}")
-        self.logger.info(f"Trajectory analyzer controller_dir: {self.controller_dir}")
+        self.experiment_dir = os.path.join(base_dir, experiment_id)
+        self.controller_dir = os.path.join(self.experiment_dir, controller_name)
 
-        # Check if the experiment directory already has the proper structure
-        # If it ends with a timestamp pattern, it's already an experiment directory
-        import re
-        if re.search(r'exp_\d{3}_\d{8}_\d{6}$', base_dir):
-            self.logger.info("Detected experiment directory structure - using as-is")
-            # Don't create subdirectories here, they should already exist from data_manager
-            self.logger.info("Skipping directory creation - should be handled by data_manager")
-            return
+        # Create directories based on detection of existing structure
+        if os.path.exists(self.experiment_dir) and os.path.exists(self.controller_dir):
+            pass  # Directories exist, data_manager should handle
+        elif os.path.exists(base_dir):
+            self._create_directory_structure()
         else:
             self.logger.warning(f"Unexpected directory structure: {base_dir}")
-            self.logger.warning("Will create directories to ensure functionality")
-
-        # Create additional directories needed for research analysis
-        # Note: trajectories, results, graphs are already created by data_manager.create_run_directory()
-        additional_directories = [
-            os.path.join(self.experiment_dir, 'filtered'),
-            os.path.join(self.experiment_dir, 'metrics'),
-            os.path.join(self.experiment_dir, 'statistics'),
-            os.path.join(self.experiment_dir, 'comparisons'),
-            os.path.join(self.experiment_dir, 'plots'),
-            os.path.join(self.experiment_dir, 'exports')
-        ]
-
-        for directory in additional_directories:
-            os.makedirs(directory, exist_ok=True)
-            self.logger.debug(f"Created directory: {directory}")
+            self._create_directory_structure()
 
     def add_trajectory(self, lap_number: int, trajectory_data: List[Dict], lap_time: float):
         """Add trajectory data for comprehensive analysis"""
@@ -584,29 +555,21 @@ class ResearchTrajectoryEvaluator:
     def _save_lap_results(self, lap_number: int):
         """Save intermediate results for a single lap"""
         if lap_number not in self.detailed_metrics:
-            self.logger.warning(f"No metrics found for lap {lap_number}")
             return
 
         try:
             # Save metrics as JSON
             metrics_file = os.path.join(self.experiment_dir, 'metrics', f'lap_{lap_number:03d}_metrics.json')
-            self.logger.info(f"Saving metrics to: {metrics_file}")
             with open(metrics_file, 'w') as f:
                 json.dump(self.detailed_metrics[lap_number], f, indent=2)
-            self.logger.info(f"Successfully saved metrics for lap {lap_number}")
         except Exception as e:
             self.logger.error(f"Failed to save metrics for lap {lap_number}: {e}")
-
-        # Note: Trajectory files are saved by data_manager, not here
-        # This avoids duplicate trajectory files in different locations
 
         # Save filtered trajectory if available
         if lap_number in self.filtered_trajectories:
             filtered_file = os.path.join(self.experiment_dir, 'filtered', f'lap_{lap_number:03d}_filtered.tum')
-            self.logger.info(f"Saving filtered trajectory to: {filtered_file}")
             try:
                 file_interface.write_tum_trajectory_file(filtered_file, self.filtered_trajectories[lap_number])
-                self.logger.info(f"Successfully saved filtered trajectory for lap {lap_number}")
             except Exception as e:
                 self.logger.error(f"Failed to save filtered trajectory for lap {lap_number}: {e}")
 
@@ -670,11 +633,9 @@ class ResearchTrajectoryEvaluator:
         try:
             # Generate comprehensive summary
             summary = self.generate_research_summary()
-            self.logger.info(f"Generated research summary with {len(self.detailed_metrics)} laps")
 
             # Save summary in multiple formats
             output_formats = self.config.get('output_formats', ['json', 'csv'])
-            self.logger.info(f"Exporting research data in formats: {output_formats}")
 
             for fmt in output_formats:
                 if fmt == 'json':
@@ -682,10 +643,8 @@ class ResearchTrajectoryEvaluator:
                         self.experiment_dir,
                         'exports',
                         f'{self.controller_name}_{self.experiment_id}_summary.json')
-                    self.logger.info(f"Saving JSON summary to: {summary_file}")
                     with open(summary_file, 'w') as f:
                         json.dump(summary, f, indent=2)
-                    self.logger.info(f"Successfully saved JSON summary")
 
                 elif fmt == 'csv':
                     # Export lap-by-lap metrics as CSV
@@ -693,9 +652,7 @@ class ResearchTrajectoryEvaluator:
                         self.experiment_dir,
                         'exports',
                         f'{self.controller_name}_{self.experiment_id}_metrics.csv')
-                    self.logger.info(f"Saving CSV metrics to: {csv_file}")
                     self._export_metrics_csv(csv_file)
-                    self.logger.info(f"Successfully saved CSV metrics")
 
                 elif fmt == 'pickle' and EVO_AVAILABLE:
                     # Export using pandas bridge
@@ -705,18 +662,14 @@ class ResearchTrajectoryEvaluator:
                             self.experiment_dir,
                             'exports',
                             f'{self.controller_name}_{self.experiment_id}_data.pkl')
-                        self.logger.info(f"Saving pickle data to: {pickle_file}")
                         with open(pickle_file, 'wb') as f:
                             pickle.dump({
                                 'trajectories': self.lap_trajectories,
                                 'metrics': self.detailed_metrics,
                                 'summary': summary
                             }, f)
-                        self.logger.info(f"Successfully saved pickle data")
                     except Exception as pickle_e:
                         self.logger.error(f"Failed to save pickle data: {pickle_e}")
-
-            self.logger.info(f"Research data exported to {self.experiment_dir}/exports/")
 
         except Exception as e:
             self.logger.error(f"Failed to export research data: {e}")
