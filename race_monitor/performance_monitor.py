@@ -3,19 +3,30 @@
 """
 Performance Monitor
 
-Handles computational performance monitoring for the race monitor system.
-Tracks CPU usage, memory consumption, control loop latency, and other
-performance metrics during racing operations.
+Computational performance monitoring system for race monitoring operations.
+Tracks CPU usage, memory consumption, control loop latency, and performance
+metrics during autonomous racing with configurable thresholds and logging.
 
-Features:
+Core Features:
     - Real-time CPU and memory monitoring
     - Control loop latency tracking
     - Performance data logging and analysis
     - Configurable performance thresholds
-    - CSV data export for analysis
+    - Multi-format data export capabilities
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License
+Monitoring Capabilities:
+    - System resource utilization (CPU/Memory)
+    - Control loop timing and frequency analysis
+    - Topic message timing and latency
+    - Performance threshold violations
+    - Statistical performance analysis
+
+Output Formats:
+    - CSV data export for analysis
+    - Real-time performance logging
+    - Statistical summaries
+
+License: MIT
 """
 
 import os
@@ -44,10 +55,10 @@ def time_to_nanoseconds(time_obj):
 
 class PerformanceMonitor:
     """
-    Monitors computational performance during racing operations.
-
-    Tracks various performance metrics including CPU usage, memory consumption,
-    control loop timing, and topic frequencies for performance analysis.
+    Computational performance monitoring for racing operations.
+    
+    Tracks CPU usage, memory consumption, control loop timing,
+    and other performance metrics with configurable thresholds.
     """
 
     def __init__(self, logger, clock):
@@ -125,34 +136,8 @@ class PerformanceMonitor:
             self.control_latency_history = deque(maxlen=self.monitoring_window_size)
             self.control_frequency_history = deque(maxlen=self.monitoring_window_size)
 
-        self.logger.info(f"Performance monitor configured:")
-        self.logger.info(f"  - Monitoring enabled: {self.enable_monitoring}")
-        self.logger.info(f"  - Window size: {self.monitoring_window_size}")
-        self.logger.info(f"  - CPU interval: {self.cpu_monitoring_interval}s")
-        self.logger.info(f"  - Log interval: {self.performance_log_interval}s")
-        self.logger.info(f"  - Max latency: {self.max_acceptable_latency_ms}ms")
-        self.logger.info(f"  - Target frequency: {self.target_control_frequency_hz}Hz")
-        self.logger.info(f"  - Odometry topics: {self.odometry_topics}")
-        self.logger.info(f"  - Control topics: {self.control_command_topics}")
-
         if self.enable_monitoring:
             self.start_monitoring()
-        self.monitoring_window_size = config.get('monitoring_window_size', self.monitoring_window_size)
-        self.cpu_monitoring_interval = config.get('cpu_monitoring_interval', self.cpu_monitoring_interval)
-        self.performance_log_interval = config.get('performance_log_interval', self.performance_log_interval)
-        self.max_acceptable_latency_ms = config.get('max_acceptable_latency_ms', self.max_acceptable_latency_ms)
-        self.target_control_frequency_hz = config.get('target_control_frequency_hz', self.target_control_frequency_hz)
-        self.max_acceptable_cpu_usage = config.get('max_acceptable_cpu_usage', self.max_acceptable_cpu_usage)
-        self.max_acceptable_memory_mb = config.get('max_acceptable_memory_mb', self.max_acceptable_memory_mb)
-
-        # Update deque sizes
-        self.cpu_usage_history = deque(maxlen=self.monitoring_window_size)
-        self.memory_usage_history = deque(maxlen=self.monitoring_window_size)
-        self.control_latency_history = deque(maxlen=self.monitoring_window_size)
-        self.control_frequency_history = deque(maxlen=self.monitoring_window_size)
-
-        self.logger.info(f"Performance monitor configured: monitoring={self.enable_monitoring}, "
-                         f"window_size={self.monitoring_window_size}, interval={self.cpu_monitoring_interval}s")
 
     def start_monitoring(self):
         """Start the performance monitoring thread."""
@@ -165,14 +150,12 @@ class PerformanceMonitor:
         self.monitoring_active = True
         self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
         self.monitoring_thread.start()
-        self.logger.info("Performance monitoring started")
 
     def stop_monitoring(self):
         """Stop the performance monitoring thread."""
         self.monitoring_active = False
         if self.monitoring_thread and self.monitoring_thread.is_alive():
             self.monitoring_thread.join(timeout=1.0)
-        self.logger.info("Performance monitoring stopped")
 
     def _monitoring_loop(self):
         """Main monitoring loop running in separate thread."""
@@ -280,9 +263,6 @@ class PerformanceMonitor:
         avg_memory = sum(recent_memory) / len(recent_memory)
         avg_latency = sum(recent_latency) / len(recent_latency) if recent_latency else 0.0
 
-        self.logger.info(f"Performance Stats - CPU: {avg_cpu:.1f}%, Memory: {avg_memory:.1f}MB, "
-                         f"Latency: {avg_latency:.1f}ms")
-
         # Store for CSV export
         self.performance_data.append({
             'timestamp': datetime.now().isoformat(),
@@ -366,8 +346,6 @@ class PerformanceMonitor:
                 for data in self.performance_data:
                     writer.writerow(data)
 
-            self.logger.info(f"Saved performance data to: {filepath}")
-
         except Exception as e:
             self.logger.error(f"Error saving performance data: {e}")
 
@@ -380,7 +358,6 @@ class PerformanceMonitor:
         self.performance_data.clear()
         self.odometry_timestamps.clear()
         self.control_command_timestamps.clear()
-        self.logger.info("Performance monitoring data reset")
 
     def is_monitoring_active(self) -> bool:
         """Check if performance monitoring is active."""
