@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 
 """
-Data Manager
+Race Monitor Data Manager
 
-Handles data storage, file I/O operations, and trajectory management
-for the race monitor system. Provides centralized data management
-with support for multiple file formats and data export capabilities.
+Centralized data management system for race monitoring with comprehensive
+file I/O operations, trajectory storage, and multi-format export capabilities.
 
-Features:
-    - Trajectory data storage and management
-    - Multi-format file export (CSV, TUM, JSON, Pickle, MAT)
-    - Research data compilation and analysis
-    - File organization and directory management
-    - Data validation and error handling
+This module provides the core data storage infrastructure for the race monitor,
+handling everything from real-time trajectory recording to advanced metrics
+export and research data compilation.
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License
+Key Features:
+    - Real-time trajectory recording and storage
+    - Multi-format export (CSV, TUM, JSON, Pickle, MAT, compressed)
+    - Advanced metrics compilation (APE/RPE analysis)
+    - Intelligent directory management and organization
+    - Race evaluation data handling with fallback mechanisms
+    - Research-ready data export with filtering capabilities
+
+Output Formats:
+    - Stable filenames without timestamps for consistent access
+    - Compressed .rsum format for efficient storage
+    - Consolidated JSON results for easy parsing
+    - EVO-compatible trajectory formats for analysis
+
+License: MIT
 """
 
 import rclpy
@@ -218,11 +227,9 @@ class DataManager:
         if self.trajectory_output_directory:
             self._setup_directories()
 
-        self.logger.info(f"Data manager configured: output_dir={self.trajectory_output_directory}, "
-                         f"formats={self.output_formats}, controller={self.controller_name}, "
-                         f"experiment={self.experiment_id}")
-        self.logger.info(f"Advanced features: pandas_export={self.export_to_pandas}, "
-                         f"graphs={self.auto_generate_graphs}, filtering={self.apply_trajectory_filtering}")
+        self.logger.info(f"Data manager configured with {len(self.output_formats)} format(s)")
+        if self.enable_advanced_metrics:
+            self.logger.info("Advanced metrics and plotting enabled")
 
     def _setup_directories(self):
         """Create base directory structure for data storage."""
@@ -232,25 +239,15 @@ class DataManager:
             # Only create base output directory initially
             # Specific experiment directories will be created by create_run_directory()
             os.makedirs(self.base_output_dir, exist_ok=True)
-
-            # Initialize trajectory and results dirs as None - they will be set when run directory is created
             self.trajectory_dir = None
             self.results_dir = None
-
-            self.logger.info(f"Base data directory created: {self.base_output_dir}")
 
         except Exception as e:
             self.logger.error(f"Error setting up directories: {e}")
 
     def start_new_lap_trajectory(self, lap_number: int):
-        """
-        Start recording a new lap trajectory.
-
-        Args:
-            lap_number: Lap number to start recording
-        """
+        """Start recording a new lap trajectory."""
         self.current_lap_trajectory = []
-        self.logger.debug(f"Started recording trajectory for lap {lap_number}")
 
     def add_trajectory_point(self, x: float, y: float, z: float = 0.0,
                              timestamp=None, additional_data: Dict = None):
@@ -304,11 +301,8 @@ class DataManager:
 
         self.completed_trajectories[lap_number] = trajectory_data
 
-        # Save to file if enabled
         if self.save_trajectories:
             success = self.save_trajectory_to_file(trajectory_data)
-            if success:
-                self.logger.info(f"Saved trajectory for lap {lap_number} ({len(self.current_lap_trajectory)} points)")
             return success
 
         return True
@@ -541,10 +535,8 @@ class DataManager:
                 self.logger.info(f"Saved race results CSV to: {filepath}")
                 return True
 
-            # No filename override: create/refresh consolidated JSON instead and skip CSV
             try:
                 self.save_consolidated_race_results(race_data)
-                self.logger.info("Skipping creation of timestamped race_results CSV; consolidated JSON saved instead")
                 return True
             except Exception as e:
                 self.logger.error(f"Failed to save consolidated results as fallback: {e}")
@@ -565,11 +557,7 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            # The evaluation_summary.csv file was found to be noisy/misleading in experiments.
-            # Keep the evaluation in-memory and do not write a CSV by default. If callers really
-            # need a CSV, they should pass a filename and use save_race_results_to_csv(filename_override=...).
             self.evaluation_summaries.append(evaluation_data)
-            self.logger.info("Stored evaluation summary in-memory; CSV output disabled by default")
             return True
 
         except Exception as e:
@@ -601,7 +589,6 @@ class DataManager:
         self.completed_trajectories.clear()
         self.evaluation_summaries.clear()
         self.race_results.clear()
-        self.logger.info("Cleared all trajectory data")
 
     def create_evo_trajectory(self, lap_number: int):
         """
@@ -652,68 +639,55 @@ class DataManager:
 
     def get_metrics_directory(self) -> str:
         """Get the metrics directory path."""
-        # Only create directories if we're in a controller/experiment directory
         if not self._is_in_experiment_directory():
-            self.logger.info(f"get_metrics_directory: SKIPPING creation at base level: {self.base_output_dir}")
-            return os.path.join(self.base_output_dir, "metrics")  # Return path but don't create
+            return os.path.join(self.base_output_dir, "metrics")
 
         metrics_dir = os.path.join(self.base_output_dir, "metrics")
-        self.logger.info(f"get_metrics_directory: CREATING in experiment dir: {metrics_dir}")
         os.makedirs(metrics_dir, exist_ok=True)
         return metrics_dir
 
     def get_filtered_directory(self) -> str:
         """Get the filtered trajectories directory path."""
-        # Only create directories if we're in a controller/experiment directory
         if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "filtered")  # Return path but don't create
+            return os.path.join(self.base_output_dir, "filtered")
 
         filtered_dir = os.path.join(self.base_output_dir, "filtered")
-        self.logger.info(f"get_filtered_directory called: {filtered_dir} (base_output_dir: {self.base_output_dir})")
         os.makedirs(filtered_dir, exist_ok=True)
         return filtered_dir
 
     def get_exports_directory(self) -> str:
         """Get the exports directory path."""
-        # Only create directories if we're in a controller/experiment directory
         if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "exports")  # Return path but don't create
+            return os.path.join(self.base_output_dir, "exports")
 
         exports_dir = os.path.join(self.base_output_dir, "exports")
-        self.logger.info(f"get_exports_directory called: {exports_dir} (base_output_dir: {self.base_output_dir})")
         os.makedirs(exports_dir, exist_ok=True)
         return exports_dir
 
     def get_plots_directory(self) -> str:
         """Get the plots directory path."""
-        # Only create directories if we're in a controller/experiment directory
         if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "plots")  # Return path but don't create
+            return os.path.join(self.base_output_dir, "plots")
 
         plots_dir = os.path.join(self.base_output_dir, "plots")
-        self.logger.info(f"get_plots_directory called: {plots_dir} (base_output_dir: {self.base_output_dir})")
         os.makedirs(plots_dir, exist_ok=True)
         return plots_dir
 
     def get_statistics_directory(self) -> str:
         """Get the statistics directory path."""
-        # Only create directories if we're in a controller/experiment directory
         if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "statistics")  # Return path but don't create
+            return os.path.join(self.base_output_dir, "statistics")
 
         stats_dir = os.path.join(self.base_output_dir, "statistics")
-        self.logger.info(f"get_statistics_directory called: {stats_dir} (base_output_dir: {self.base_output_dir})")
         os.makedirs(stats_dir, exist_ok=True)
         return stats_dir
 
     def get_graphs_directory(self) -> str:
         """Get the graphs directory path."""
-        # Only create directories if we're in a controller/experiment directory
         if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "graphs")  # Return path but don't create
+            return os.path.join(self.base_output_dir, "graphs")
 
         graphs_dir = os.path.join(self.base_output_dir, "graphs")
-        self.logger.info(f"get_graphs_directory called: {graphs_dir} (base_output_dir: {self.base_output_dir})")
         os.makedirs(graphs_dir, exist_ok=True)
         return graphs_dir
 
@@ -723,20 +697,12 @@ class DataManager:
 
     def _is_in_experiment_directory(self) -> bool:
         """Check if base_output_dir points to a controller/experiment directory."""
-        # Check if the path contains a controller name and experiment pattern
         path_parts = self.base_output_dir.split(os.sep)
-
-        # Look for experiment pattern (exp_xxx_timestamp)
         has_experiment = any('exp_' in part and len(part) > 15 for part in path_parts)
-
-        # Also check if we have a controller name set and it's not empty
         has_controller = hasattr(self, 'controller_name') and self.controller_name and self.controller_name.strip()
-
-        # Additional check: make sure we're not at the base level
         is_base_level = self.base_output_dir.endswith('evaluation_results')
 
-        result = has_experiment and has_controller and not is_base_level
-        return result
+        return has_experiment and has_controller and not is_base_level
 
     def get_comparisons_directory(self) -> str:
         """Get the comparisons directory path (at controller level, not experiment level)."""
@@ -783,10 +749,8 @@ class DataManager:
                 rsum_path = os.path.join(self.results_dir, "race_summary.rsum")
                 with gzip.open(rsum_path, 'wt', encoding='utf-8') as gz:
                     json.dump(race_summary, gz, separators=(',', ':'), default=str)
-                self.logger.info(f"Saved compact race summary to: {rsum_path}")
             except Exception:
-                # Not critical; continue if gzip fails
-                self.logger.debug("Failed to write compact .rsum file for race summary")
+                pass
 
             # For backward compatibility keep a detailed CSV if explicitly requested via config
             if 'csv' in self.output_formats:
@@ -880,85 +844,13 @@ class DataManager:
 
                     self.logger.info(f"Saved detailed CSV summary to: {csv_filepath}")
                 except Exception as e:
-                    self.logger.debug(f"Failed to write detailed CSV summary: {e}")
+                    pass
 
-            self.logger.info(f"Saved race summary JSON to: {json_filepath}")
-            return True
-
-             # Write lap statistics
-             writer.writerow(['=== LAP STATISTICS ==='])
-              lap_stats = race_summary.get('lap_statistics', {})
-               for key, value in lap_stats.items():
-                    if key != 'lap_times':
-                        writer.writerow([key.replace('_', ' ').title(),
-                                        f"{value:.4f}" if isinstance(value, float) else value])
-
-                writer.writerow([])
-                writer.writerow(['=== INDIVIDUAL LAP TIMES ==='])
-                writer.writerow(['Lap Number', 'Lap Time (s)'])
-                for i, lap_time in enumerate(lap_stats.get('lap_times', []), 1):
-                    writer.writerow([i, f"{lap_time:.4f}"])
-
-                # Write trajectory statistics
-                writer.writerow([])
-                writer.writerow(['=== TRAJECTORY STATISTICS ==='])
-                traj_stats = race_summary.get('trajectory_statistics', {})
-                for key, value in traj_stats.items():
-                    writer.writerow([key.replace('_', ' ').title(),
-                                    f"{value:.4f}" if isinstance(value, float) else value])
-
-                # Write performance metrics
-                writer.writerow([])
-                writer.writerow(['=== PERFORMANCE METRICS ==='])
-                perf_metrics = race_summary.get('performance_metrics', {})
-                for key, value in perf_metrics.items():
-                    writer.writerow([key.replace('_', ' ').title(),
-                                    f"{value:.4f}" if isinstance(value, float) else value])
-
-                # Write advanced metrics (including APE/RPE metrics)
-                advanced_metrics = race_summary.get('advanced_metrics', {})
-                if advanced_metrics:
-                    writer.writerow([])
-                    writer.writerow(['=== ADVANCED METRICS ==='])
-
-                    # Group APE metrics first
-                    ape_metrics = {k: v for k, v in advanced_metrics.items() if 'ape_' in k}
-                    if ape_metrics:
-                        writer.writerow(['--- Absolute Pose Error (APE) Metrics ---'])
-                        for key, value in sorted(ape_metrics.items()):
-                            formatted_key = key.replace('_', ' ').replace('ape ', 'APE ').title()
-                            writer.writerow([formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
-
-                    # Group RPE metrics second
-                    rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
-                    if rpe_metrics:
-                        writer.writerow(['--- Relative Pose Error (RPE) Metrics ---'])
-                        for key, value in sorted(rpe_metrics.items()):
-                            formatted_key = key.replace('_', ' ').replace('rpe ', 'RPE ').title()
-                            writer.writerow([formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
-
-                    # Add other important advanced metrics
-                    other_important_metrics = {
-                        k: v for k,
-                        v in advanced_metrics.items() if any(
-                            keyword in k for keyword in [
-                                'overall_',
-                                'consistency',
-                                'speed',
-                                'path_length',
-                                'duration']) and 'ape_' not in k and 'rpe_' not in k}
-                    if other_important_metrics:
-                        writer.writerow(['--- Other Advanced Metrics ---'])
-                        for key, value in sorted(other_important_metrics.items()):
-                            formatted_key = key.replace('_', ' ').title()
-                            writer.writerow([formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
-
-            self.logger.info(f"Saved comprehensive race summary to: {json_filepath}")
-            self.logger.info(f"Saved detailed CSV summary to: {csv_filepath}")
             return True
 
         except Exception as e:
             self.logger.error(f"Error saving race summary: {e}")
+            return False
             return False
 
     def save_consolidated_race_results(self, race_summary: Dict, race_evaluation: Dict = None) -> bool:
@@ -990,7 +882,6 @@ class DataManager:
             with open(results_filepath, 'w') as f:
                 json.dump(consolidated_results, f, indent=2, default=str)
 
-            self.logger.info(f"Saved consolidated race results to: {results_filepath}")
             return True
 
         except Exception as e:
@@ -1035,31 +926,25 @@ class DataManager:
                 return not any_nonzero(d)
 
             if _is_empty_or_all_zero(evaluation_data):
-                # Try to load consolidated results if available
                 try:
                     consolidated_path = os.path.join(self.results_dir, 'race_results.json')
                     if os.path.exists(consolidated_path):
                         with open(consolidated_path, 'r') as f:
                             loaded = json.load(f)
-                            # Map to evaluation format if possible
-                            evaluation_data = loaded.get('race_evaluation', loaded)
-                            self.logger.info('Populated empty evaluation_data from race_results.json')
+                        evaluation_data = loaded.get('race_evaluation', loaded)
                 except Exception:
-                    # Try race_summary
                     try:
                         summary_path = os.path.join(self.results_dir, 'race_summary.json')
                         if os.path.exists(summary_path):
                             with open(summary_path, 'r') as f:
                                 loaded = json.load(f)
-                                evaluation_data = loaded
-                                self.logger.info('Populated empty evaluation_data from race_summary.json')
+                            evaluation_data = loaded
                     except Exception:
-                        self.logger.debug('No fallback evaluation data available')
+                        pass
 
             with open(filepath, 'w') as f:
                 json.dump(evaluation_data, f, indent=2, default=str)
 
-            self.logger.info(f"Saved race evaluation to: {filepath}")
             return True
 
         except Exception as e:
@@ -1080,21 +965,13 @@ class DataManager:
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-            self.logger.info(f"Creating run directory - controller: {controller_name}, experiment: {experiment_id}")
-            self.logger.info(f"Current base_output_dir before update: {self.base_output_dir}")
-
-            # Create controller-based hierarchy structure
-            # Create controller directory first
             controller_dir = os.path.join(self.base_output_dir, controller_name)
             os.makedirs(controller_dir, exist_ok=True)
 
-            # Create experiment directory inside controller directory
             experiment_dir_name = f"{experiment_id}_{timestamp}"
             experiment_dir = os.path.join(controller_dir, experiment_dir_name)
 
-            self.logger.info(f"Creating experiment directory: {experiment_dir}")
-
-            # Create subdirectories for all race monitor components under the experiment directory
+            # Create subdirectories for race monitor components
             os.makedirs(os.path.join(experiment_dir, "trajectories"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "results"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "graphs"), exist_ok=True)
@@ -1104,16 +981,10 @@ class DataManager:
             os.makedirs(os.path.join(experiment_dir, "plots"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "statistics"), exist_ok=True)
 
-            # Update paths to use experiment directory
             self.trajectory_dir = os.path.join(experiment_dir, "trajectories")
             self.results_dir = os.path.join(experiment_dir, "results")
-
-            # Update base_output_dir to point to the experiment directory
-            # This ensures all other components save to the controller-specific structure
             self.base_output_dir = experiment_dir
 
-            self.logger.info(f"Created experiment directory: {experiment_dir}")
-            self.logger.info(f"Updated base output directory to: {self.base_output_dir}")
             return experiment_dir
 
         except Exception as e:
