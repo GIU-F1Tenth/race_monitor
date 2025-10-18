@@ -202,7 +202,7 @@ class RaceMonitor(Node):
         self.declare_parameter('save_filtered_trajectories', True)
         self.declare_parameter('export_research_summary', True)
         self.declare_parameter('output_formats', ['csv', 'tum', 'json', 'pickle', 'mat'])
-        self.declare_parameter('include_timestamps', True)
+        self.declare_parameter('include_timestamps', False)
         self.declare_parameter('save_intermediate_results', True)
 
         # ========================================

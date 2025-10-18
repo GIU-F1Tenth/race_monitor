@@ -620,7 +620,7 @@ class EVOPlotter:
         try:
             for fmt in graph_formats:
                 if fmt.lower() == 'png':
-                    output_path = os.path.join(graph_dir, f"race_analysis_evo_{timestamp}.png")
+                    output_path = os.path.join(graph_dir, f"race_analysis_evo.png")
                     print(f"Attempting EVO export to {output_path}")
                     self.plot_collection.export(output_path, confirm_overwrite=True)
                     print(f"✅ EVO export successful")

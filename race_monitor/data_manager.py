@@ -963,12 +963,10 @@ class DataManager:
             str: Path to the created experiment directory
         """
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
             controller_dir = os.path.join(self.base_output_dir, controller_name)
             os.makedirs(controller_dir, exist_ok=True)
 
-            experiment_dir_name = f"{experiment_id}_{timestamp}"
+            experiment_dir_name = experiment_id
             experiment_dir = os.path.join(controller_dir, experiment_dir_name)
 
             # Create subdirectories for race monitor components
@@ -1016,16 +1014,6 @@ class DataManager:
                     json.dump(ape_metrics, f, indent=2, default=str)
                 self.logger.info(f"Saved APE metrics summary to: {ape_filepath}")
 
-                # Also save as CSV for easy analysis
-                ape_csv_filepath = os.path.join(metrics_dir, 'ape_metrics_summary.csv')
-                with open(ape_csv_filepath, 'w', newline='') as csvfile:
-                    writer = csv.writer(csvfile)
-                    writer.writerow(['APE Metric', 'Value'])
-                    for key, value in sorted(ape_metrics.items()):
-                        formatted_key = key.replace('_', ' ').replace('ape ', 'APE ').title()
-                        writer.writerow([formatted_key, f"{value:.6f}" if isinstance(value, float) else value])
-                self.logger.info(f"Saved APE metrics CSV to: {ape_csv_filepath}")
-
             # Extract RPE metrics
             rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
             if rpe_metrics:
@@ -1033,16 +1021,6 @@ class DataManager:
                 with open(rpe_filepath, 'w') as f:
                     json.dump(rpe_metrics, f, indent=2, default=str)
                 self.logger.info(f"Saved RPE metrics summary to: {rpe_filepath}")
-
-                # Also save as CSV for easy analysis
-                rpe_csv_filepath = os.path.join(metrics_dir, 'rpe_metrics_summary.csv')
-                with open(rpe_csv_filepath, 'w', newline='') as csvfile:
-                    writer = csv.writer(csvfile)
-                    writer.writerow(['RPE Metric', 'Value'])
-                    for key, value in sorted(rpe_metrics.items()):
-                        formatted_key = key.replace('_', ' ').replace('rpe ', 'RPE ').title()
-                        writer.writerow([formatted_key, f"{value:.6f}" if isinstance(value, float) else value])
-                self.logger.info(f"Saved RPE metrics CSV to: {rpe_csv_filepath}")
 
             return True
 
@@ -1133,7 +1111,7 @@ class DataManager:
 
                 plt.tight_layout()
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                ape_plot_path = os.path.join(plots_dir, f'ape_metrics_analysis_{timestamp}.png')
+                ape_plot_path = os.path.join(plots_dir, f'ape_metrics_analysis.png')
                 plt.savefig(ape_plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
                 self.logger.info(f"Saved APE metrics plot to: {ape_plot_path}")
@@ -1192,7 +1170,7 @@ class DataManager:
 
                 plt.tight_layout()
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                rpe_plot_path = os.path.join(plots_dir, f'rpe_metrics_analysis_{timestamp}.png')
+                rpe_plot_path = os.path.join(plots_dir, f'rpe_metrics_analysis.png')
                 plt.savefig(rpe_plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
                 self.logger.info(f"Saved RPE metrics plot to: {rpe_plot_path}")
@@ -1247,7 +1225,7 @@ class DataManager:
 
                     plt.tight_layout()
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    comparison_plot_path = os.path.join(plots_dir, f'ape_vs_rpe_comparison_{timestamp}.png')
+                    comparison_plot_path = os.path.join(plots_dir, f'ape_vs_rpe_comparison.png')
                     plt.savefig(comparison_plot_path, dpi=300, bbox_inches='tight')
                     plt.close()
                     self.logger.info(f"Saved APE vs RPE comparison plot to: {comparison_plot_path}")

@@ -103,17 +103,19 @@ class ResearchTrajectoryEvaluator:
         experiment_id = self.config.get('experiment_id', 'default_experiment')
         controller_name = self.config.get('controller_name', 'unknown_controller')
 
-        self.experiment_dir = os.path.join(base_dir, experiment_id)
-        self.controller_dir = os.path.join(self.experiment_dir, controller_name)
-
-        # Create directories based on detection of existing structure
-        if os.path.exists(self.experiment_dir) and os.path.exists(self.controller_dir):
-            pass  # Directories exist, data_manager should handle
-        elif os.path.exists(base_dir):
-            self._create_directory_structure()
+        # Check if base_dir is already the full experiment directory path
+        # This happens when data_manager passes the full experiment path as trajectory_output_directory
+        if os.path.basename(base_dir) == experiment_id and controller_name in base_dir:
+            # The path is already the full experiment directory
+            self.experiment_dir = base_dir
+            self.controller_dir = os.path.dirname(base_dir)
         else:
-            self.logger.warning(f"Unexpected directory structure: {base_dir}")
-            self._create_directory_structure()
+            # Traditional behavior: build path from base directory
+            self.controller_dir = os.path.join(base_dir, controller_name)
+            self.experiment_dir = os.path.join(self.controller_dir, experiment_id)
+
+        # Do not create directories here - let the data_manager handle all directory creation
+        # This prevents duplication of directory structures
 
     def add_trajectory(self, lap_number: int, trajectory_data: List[Dict], lap_time: float):
         """Add trajectory data for comprehensive analysis"""

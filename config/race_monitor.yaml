@@ -133,7 +133,7 @@ race_monitor:
 
     # Research file formats
     output_formats: ["csv", "json", "pickle", "mat"] # Multiple formats for analysis tools
-    include_timestamps: true # Include detailed timestamp information
+    include_timestamps: false # Include detailed timestamp information
     save_intermediate_results: true # Save results after each lap
 
     # ========================================
