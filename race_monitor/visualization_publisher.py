@@ -83,8 +83,6 @@ class VisualizationPublisher:
         self.start_line_p1 = config.get('start_line_p1', self.start_line_p1)
         self.start_line_p2 = config.get('start_line_p2', self.start_line_p2)
 
-        self.logger.info(f"Visualization publisher configured: frame_id={self.frame_id}")
-
     def publish_start_line_marker(self):
         """Publish enhanced start/finish line marker for RViz visualization with endpoint markers."""
         try:

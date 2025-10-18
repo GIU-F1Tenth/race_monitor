@@ -152,21 +152,6 @@ class LapDetector:
         manual_config = config.get('manual_mode', {})
         self.max_race_duration = manual_config.get('max_race_duration', self.max_race_duration)
 
-        self.logger.info(f"Lap detector configuration:")
-        self.logger.info(f"  Start line: P1={self.start_line_p1}, P2={self.start_line_p2}")
-        self.logger.info(f"  Required laps: {self.required_laps}")
-        self.logger.info(f"  Debounce time: {self.debounce_time}s")
-        self.logger.info(f"  Race ending mode: {self.race_ending_mode}")
-        self.logger.info(f"  Expected direction: {self.expected_direction}")
-        self.logger.info(f"  Validate heading: {self.validate_heading_direction}")
-        self.logger.info(f"  Log level: {self.log_level}")
-        if self.race_ending_mode == "crash":
-            self.logger.info(f"  Crash detection enabled: {self.crash_detection_enabled}")
-            self.logger.info(f"  Max stationary time: {self.max_stationary_time}s")
-        elif self.race_ending_mode == "manual":
-            self.logger.info(
-                f"  Max race duration: {self.max_race_duration}s ({'no limit' if self.max_race_duration == 0 else 'limit'})")
-
     def set_callbacks(self, on_race_start: Callable = None,
                       on_lap_complete: Callable = None,
                       on_race_complete: Callable = None,
