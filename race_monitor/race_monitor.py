@@ -519,17 +519,22 @@ class RaceMonitor(Node):
         # Configure data manager and create run directory
         self.data_manager.configure(self.config)
 
+        # Store the original base directory before it gets modified
+        self.original_base_output_dir = self.config.get('trajectory_output_directory', 'evaluation_results')
+
         # Create dedicated run directory for this session
         controller_name = self.config.get('controller_name', 'unknown_controller')
         experiment_id = self.config.get('experiment_id', 'exp_001')
 
-        # Auto-generate next experiment ID if using default or if experiment already exists
-        if experiment_id == 'exp_001' or self._experiment_directory_exists(controller_name, experiment_id):
-            experiment_id = self._get_next_experiment_id(controller_name)
-            self.config['experiment_id'] = experiment_id  # Update config with new experiment ID
-            self.get_logger().info(f"Auto-generated experiment ID: {experiment_id}")
+        # Only auto-generate experiment ID if we have a valid controller name
+        # If controller name is empty, smart detection will handle this in _on_race_start
+        if controller_name and controller_name.strip() and controller_name != 'unknown_controller':
+            # Auto-generate next experiment ID if using default or if experiment already exists
+            if experiment_id == 'exp_001' or self._experiment_directory_exists(controller_name, experiment_id):
+                experiment_id = self._get_next_experiment_id(controller_name)
+                self.config['experiment_id'] = experiment_id  # Update config with new experiment ID
+                self.get_logger().info(f"Auto-generated experiment ID: {experiment_id}")
 
-        if controller_name and experiment_id:
             run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
             self.get_logger().info(f"Created dedicated run directory: {run_directory}")
 
@@ -548,7 +553,8 @@ class RaceMonitor(Node):
             self._initialize_analysis_components()
         else:
             # No controller name yet, delay analysis components initialization until race start
-            self.get_logger().info("Delaying analysis components initialization until controller is detected")
+            self.get_logger().info(
+                f"Controller name not set yet ('{controller_name}'), will create experiment directory after controller detection")
 
         # Load reference trajectory if specified
         if self.config['reference_trajectory_file']:
@@ -1318,16 +1324,22 @@ class RaceMonitor(Node):
     def _experiment_directory_exists(self, controller_name: str, experiment_id: str) -> bool:
         """Check if an experiment directory already exists for this controller and experiment ID."""
         try:
-            base_output_dir = self.config.get('trajectory_output_directory', 'evaluation_results')
+            # Use the original base directory, not the current trajectory_output_directory
+            base_output_dir = getattr(self, 'original_base_output_dir', 'evaluation_results')
             controller_dir = os.path.join(base_output_dir, controller_name)
 
             if not os.path.exists(controller_dir):
+                self.get_logger().info(f"Controller directory does not exist: {controller_dir}")
                 return False
 
             # Look for any directory that starts with the experiment_id
             import glob
             exp_pattern = os.path.join(controller_dir, f'{experiment_id}_*')
             existing_dirs = glob.glob(exp_pattern)
+
+            self.get_logger().info(f"Checking for existing experiment {experiment_id} in {controller_dir}")
+            self.get_logger().info(f"Pattern: {exp_pattern}")
+            self.get_logger().info(f"Found: {existing_dirs}")
 
             return len(existing_dirs) > 0
         except Exception as e:
@@ -1340,7 +1352,8 @@ class RaceMonitor(Node):
             import re
             import glob
 
-            base_output_dir = self.config.get('trajectory_output_directory', 'evaluation_results')
+            # Use the original base directory, not the current trajectory_output_directory
+            base_output_dir = getattr(self, 'original_base_output_dir', 'evaluation_results')
             controller_dir = os.path.join(base_output_dir, controller_name)
 
             max_exp_num = 0
