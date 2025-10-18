@@ -86,7 +86,7 @@ except ImportError:
 class RaceMonitor(Node):
     """
     Main race monitoring node that orchestrates all components.
-    
+
     Provides modular architecture for race monitoring with
     clear separation of concerns and easy extensibility.
     """

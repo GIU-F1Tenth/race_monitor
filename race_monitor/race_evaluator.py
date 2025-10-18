@@ -18,7 +18,7 @@ Core Features:
 Grading Criteria:
     - Lap time consistency and repeatability
     - Trajectory accuracy (APE/RPE metrics)
-    - Speed profile consistency  
+    - Speed profile consistency
     - Path smoothness and efficiency
     - Overall racing performance
 
@@ -58,7 +58,7 @@ except ImportError:
 class RaceEvaluator:
     """
     Professional race evaluation system for autonomous racing performance analysis.
-    
+
     Provides A-F grading, recommendations, and comparative analysis.
     """
 

@@ -9,7 +9,7 @@ recording, and research-grade performance metrics using the EVO library.
 
 Core Features:
     - Real-time lap detection and precise timing
-    - Comprehensive trajectory recording and analysis  
+    - Comprehensive trajectory recording and analysis
     - Advanced metrics calculation using EVO library
     - Multi-format data export (JSON, CSV, TUM, Pickle)
     - Research-ready statistical analysis
@@ -110,8 +110,8 @@ except ImportError:
 
 
 class RaceMonitor(Node):
-    """Professional race monitoring node with integrated trajectory evaluation
-    
+    """Race monitoring node with integrated trajectory evaluation
+
     Provides lap counting, timing, and comprehensive trajectory analysis
     for autonomous racing systems using the EVO library.
     """
@@ -1049,7 +1049,7 @@ class RaceMonitor(Node):
 
         # Debounce check
         if (self.last_crossing_time is not None and (time_to_nanoseconds(current_time) -
-                time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
+                                                     time_to_nanoseconds(self.last_crossing_time)) / 1e9 < self.debounce_time):
             return
 
         self.last_crossing_time = current_time
