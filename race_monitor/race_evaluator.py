@@ -1,22 +1,33 @@
 #!/usr/bin/env python3
 
 """
-Race Evaluator Module
+Race Evaluator
 
-Custom race evaluation system that generates focused performance reports with grades,
-recommendations, and comparisons. This module creates a simplified, racing-focused
-evaluation format alongside the comprehensive research data.
+Professional race evaluation system that generates focused performance reports
+with A-F grading, intelligent recommendations, and comparative analysis for
+autonomous racing applications.
 
-Features:
-    - A-F performance grading system
-    - Intelligent recommendations engine
-    - Auto-incrementing experiment IDs
+Core Features:
+    - A-F performance grading system with configurable strictness
+    - Intelligent recommendations engine for performance improvement
+    - Auto-incrementing experiment management
     - Comparison with previous experiments
     - Reference trajectory analysis
     - Racing-specific metrics focus
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License
+Grading Criteria:
+    - Lap time consistency and repeatability
+    - Trajectory accuracy (APE/RPE metrics)
+    - Speed profile consistency  
+    - Path smoothness and efficiency
+    - Overall racing performance
+
+Output Formats:
+    - Structured JSON evaluation reports
+    - Comparative analysis summaries
+    - Performance improvement recommendations
+
+License: MIT
 """
 
 import os
@@ -46,9 +57,9 @@ except ImportError:
 
 class RaceEvaluator:
     """
-    Custom race evaluation system for autonomous racing performance analysis.
-
-    Generates focused performance reports with grades and recommendations.
+    Professional race evaluation system for autonomous racing performance analysis.
+    
+    Provides A-F grading, recommendations, and comparative analysis.
     """
 
     def __init__(self, config: Dict[str, Any]):
