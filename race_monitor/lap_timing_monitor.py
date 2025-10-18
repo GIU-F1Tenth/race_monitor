@@ -1,41 +1,41 @@
 #!/usr/bin/env python3
 
 """
-Race Monitor Node
+Lap Timing Monitor
 
-A comprehensive ROS2 node for autonomous racing trajectory analysis and performance evaluation.
-Integrates with the EVO library to provide advanced trajectory evaluation, real-time lap timing,
-and research-grade performance metrics calculation.
+Professional race monitoring system for autonomous vehicle trajectory analysis and
+performance evaluation. Provides real-time lap timing, comprehensive trajectory
+recording, and research-grade performance metrics using the EVO library.
 
-Features:
-    - Real-time lap detection and timing
-    - Comprehensive trajectory recording and analysis
+Core Features:
+    - Real-time lap detection and precise timing
+    - Comprehensive trajectory recording and analysis  
     - Advanced metrics calculation using EVO library
     - Multi-format data export (JSON, CSV, TUM, Pickle)
     - Research-ready statistical analysis
-    - Support for trajectory filtering and smoothing
+    - Computational performance monitoring
+    - Trajectory filtering and smoothing algorithms
 
-Topics:
-    Subscribed:
-        /car_state/odom (nav_msgs/Odometry): Vehicle odometry data
-        /clicked_point (geometry_msgs/PointStamped): Manual start/finish line setup
+ROS2 Interface:
+    Subscribed Topics:
+        - /car_state/odom (nav_msgs/Odometry): Vehicle odometry data
+        - /clicked_point (geometry_msgs/PointStamped): Manual start/finish line setup
 
-    Published:
-        /race_monitor/lap_count (std_msgs/Int32): Current lap number
-        /race_monitor/lap_time (std_msgs/Float32): Last completed lap time
-        /race_monitor/race_status (std_msgs/String): Current race status
-        /race_monitor/race_running (std_msgs/Bool): Race active status
-        /visualization_marker (visualization_msgs/Marker): RViz visualization
+    Published Topics:
+        - /race_monitor/lap_count (std_msgs/Int32): Current lap number
+        - /race_monitor/lap_time (std_msgs/Float32): Last completed lap time
+        - /race_monitor/race_status (std_msgs/String): Current race status
+        - /race_monitor/race_running (std_msgs/Bool): Race active status
+        - /visualization_marker (visualization_msgs/Marker): RViz visualization
 
-Parameters:
-    controller_name (string): Name of the controller being tested
-    experiment_id (string): Unique identifier for this experiment session
-    enable_trajectory_evaluation (bool): Enable/disable trajectory analysis
-    enable_advanced_metrics (bool): Enable comprehensive metric calculation
-    save_trajectories (bool): Save trajectory data to files
+Key Parameters:
+    - controller_name (string): Controller identifier for experiments
+    - experiment_id (string): Unique experiment session identifier
+    - enable_trajectory_evaluation (bool): Enable/disable trajectory analysis
+    - enable_advanced_metrics (bool): Enable comprehensive metric calculation
+    - save_trajectories (bool): Save trajectory data to files
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License
+License: MIT
 """
 
 import rclpy
@@ -86,10 +86,8 @@ try:
     from evo.tools import file_interface, pandas_bridge, settings
     from evo.core.units import Unit, METER_SCALE_FACTORS, ANGLE_UNITS
     EVO_AVAILABLE = True
-    print("EVO library loaded with full functionality for research analysis")
 except ImportError:
     EVO_AVAILABLE = False
-    print("Warning: evo not available. Trajectory evaluation features will be disabled.")
 
 # Import our enhanced EVO plotter and research evaluator
 try:
@@ -103,26 +101,19 @@ try:
     RESEARCH_EVALUATOR_AVAILABLE = True
 except ImportError:
     RESEARCH_EVALUATOR_AVAILABLE = False
-    print("Warning: Research evaluator not available. Advanced analysis will be disabled.")
 
 try:
     from .race_evaluator import RaceEvaluator, create_race_evaluator
     RACE_EVALUATOR_AVAILABLE = True
 except ImportError:
     RACE_EVALUATOR_AVAILABLE = False
-    print("Warning: Race evaluator not available. Custom race evaluation will be disabled.")
 
 
 class RaceMonitor(Node):
-    """Enhanced Race Monitor node with integrated trajectory evaluation
-
-    - Counts laps using a start/finish line set in parameters or by clicking two points in RViz
-    - Tracks lap times, best/worst/average, total race time
-    - Publishes live lap count and race_running flag
-    - Saves results to CSV when race completes (or on shutdown)
-    - Publishes a nicer visualization of the start/finish line (checkered pattern + center line)
-    - INTEGRATED: Trajectory evaluation using evo library (APE, RPE, smoothness, consistency)
-    - INTEGRATED: Trajectory export in TUM format for further analysis
+    """Professional race monitoring node with integrated trajectory evaluation
+    
+    Provides lap counting, timing, and comprehensive trajectory analysis
+    for autonomous racing systems using the EVO library.
     """
 
     def __init__(self):
@@ -130,7 +121,7 @@ class RaceMonitor(Node):
                          allow_undeclared_parameters=True,
                          automatically_declare_parameters_from_overrides=True)
 
-        self.get_logger().info('Enhanced Race Monitor node started')
+        self.get_logger().info('Race Monitor node started')
 
         # Declare all parameters matching the config file structure
         self._declare_all_parameters()
@@ -162,7 +153,6 @@ class RaceMonitor(Node):
         # Trajectory analysis settings
         self.save_trajectories = self.get_parameter('save_trajectories').value
         self.trajectory_output_directory = str(self.get_parameter('trajectory_output_directory').value)
-        self.get_logger().info(f"Trajectory output directory: {self.trajectory_output_directory}")
 
         self.save_horizon_reference = self.get_parameter('save_horizon_reference').value
         self.evaluate_smoothness = self.get_parameter('evaluate_smoothness').value
@@ -171,7 +161,6 @@ class RaceMonitor(Node):
         # Graph generation settings
         self.auto_generate_graphs = self.get_parameter('auto_generate_graphs').value
         self.graph_output_directory = str(self.get_parameter('graph_output_directory').value)
-        self.get_logger().info(f"Graph output directory: {self.graph_output_directory}")
         self.graph_formats = self.get_parameter('graph_formats').value
 
         # Graph types to generate
@@ -296,17 +285,11 @@ class RaceMonitor(Node):
         self.performance_log_interval = float(self.get_parameter('performance_log_interval').value)
 
         self.get_logger().info(f"Initial start line: P1={self.start_line_p1}, P2={self.start_line_p2}")
-        self.get_logger().info(f"Required laps: {self.required_laps}, Debounce: {self.debounce_time}s")
 
         if self.enable_trajectory_evaluation:
-            self.get_logger().info("Trajectory evaluation ENABLED with evo integration")
-            if EVO_AVAILABLE:
-                self.get_logger().info("EVO library loaded successfully")
-            else:
+            if not EVO_AVAILABLE:
                 self.get_logger().warn("EVO library not available - trajectory evaluation disabled")
                 self.enable_trajectory_evaluation = False
-        else:
-            self.get_logger().info("Trajectory evaluation DISABLED")
 
         # Race state
         self.lap_count = 0
@@ -328,7 +311,6 @@ class RaceMonitor(Node):
         # Computational Performance Monitoring (only if enabled)
         self.computational_monitoring_initialized = False
         if self.enable_computational_monitoring:
-            self.get_logger().info("Computational Performance Monitoring ENABLED")
             try:
                 # Initialize computational monitoring variables
                 self.odom_receive_times = deque(maxlen=self.monitoring_window_size)
@@ -362,14 +344,10 @@ class RaceMonitor(Node):
                 self.active_control_topics = []
 
                 self.computational_monitoring_initialized = True
-                self.get_logger().info(
-                    f"Window size: {self.monitoring_window_size}, CPU monitoring: {self.cpu_monitoring_interval}s")
 
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize computational monitoring: {e}")
                 self.enable_computational_monitoring = False
-        else:
-            self.get_logger().info("Computational Performance Monitoring DISABLED")
 
         # EVO trajectory tracking (only if enabled)
         if self.enable_trajectory_evaluation and EVO_AVAILABLE:
@@ -405,10 +383,7 @@ class RaceMonitor(Node):
                     'plot_color_scheme': self.plot_color_scheme
                 }
                 self.evo_plotter = EVOPlotter(plotter_config)
-                self.get_logger().info("EVO plotter initialized successfully")
             else:
-                self.get_logger().warn(
-                    f"EVO plotter not available: EVO_PLOTTER_AVAILABLE={EVO_PLOTTER_AVAILABLE}, auto_generate_graphs={self.auto_generate_graphs}")
                 self.evo_plotter = None
 
             # Load reference trajectory if provided (regardless of plotter availability)
@@ -423,7 +398,6 @@ class RaceMonitor(Node):
 
             # Initialize Research Evaluator for comprehensive analysis
             if RESEARCH_EVALUATOR_AVAILABLE:
-                self.get_logger().info("Initializing Research Trajectory Evaluator...")
                 research_config = {
                     'controller_name': self.get_parameter('controller_name').get_parameter_value().string_value if self.has_parameter('controller_name') else 'unknown_controller',
                     'experiment_id': self.get_parameter('experiment_id').get_parameter_value().string_value if self.has_parameter('experiment_id') else 'exp_001',
@@ -443,7 +417,6 @@ class RaceMonitor(Node):
 
                 try:
                     self.research_evaluator = create_research_evaluator(research_config)
-                    self.get_logger().info("Research Trajectory Evaluator initialized successfully")
 
                     # Set reference trajectory if available
                     if self.reference_trajectory_file and os.path.exists(self.reference_trajectory_file):
@@ -455,13 +428,11 @@ class RaceMonitor(Node):
                     self.get_logger().error(f"Failed to initialize Research Evaluator: {e}")
                     self.research_evaluator = None
             else:
-                self.get_logger().warn("Research Evaluator not available")
                 self.research_evaluator = None
 
         # Initialize Race Evaluator (only if enabled)
         self.race_evaluator = None
         if self.enable_race_evaluation and RACE_EVALUATOR_AVAILABLE:
-            self.get_logger().info("Initializing Custom Race Evaluator...")
             race_eval_config = {
                 'controller_name': self.controller_name,
                 'trajectory_output_directory': self.trajectory_output_directory,
@@ -473,15 +444,9 @@ class RaceMonitor(Node):
 
             try:
                 self.race_evaluator = create_race_evaluator(race_eval_config)
-                self.get_logger().info(f"Race Evaluator initialized with {self.grading_strictness} grading")
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize Race Evaluator: {e}")
                 self.race_evaluator = None
-        else:
-            if not self.enable_race_evaluation:
-                self.get_logger().info("Race Evaluation DISABLED")
-            else:
-                self.get_logger().warn("Race Evaluator not available")
 
         # Clicked point handling
         self.pending_point = None  # holds first clicked point until second is given
@@ -916,7 +881,6 @@ class RaceMonitor(Node):
 
             # Update the reference trajectory in EVO plotter
             self.evo_plotter.update_reference_trajectory_from_horizon_mapper(reference_trajectory_data)
-            print(f"Updated reference trajectory from horizon mapper with {len(reference_trajectory_data)} points")
 
             # Save horizon mapper reference trajectory as TUM file for EVO analysis
             if (self.save_horizon_reference and not self.horizon_reference_saved and
