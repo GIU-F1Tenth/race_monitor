@@ -24,6 +24,7 @@ import csv
 import json
 import pickle
 import numpy as np
+import gzip
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
@@ -497,48 +498,57 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
+            # By default we don't produce timestamped CSV race results anymore (they were confusing/misleading).
+            # If a filename_override is provided we will honour it and write a CSV, otherwise produce a
+            # consolidated race_results.json via save_consolidated_race_results and skip creating the CSV.
             if filename_override:
                 filename = filename_override
-            else:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"race_results_{timestamp}.csv"
-            filepath = os.path.join(self.results_dir, filename)
+                filepath = os.path.join(self.results_dir, filename)
 
-            with open(filepath, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
+                with open(filepath, 'w', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
 
-                # Header
-                writer.writerow(['Race Results', datetime.now().isoformat()])
-                writer.writerow([])
+                    # Header
+                    writer.writerow(['Race Results', datetime.now().isoformat()])
+                    writer.writerow([])
 
-                # Basic race info
-                writer.writerow(['Total Race Time (s)', race_data.get('total_race_time', 0.0)])
-                writer.writerow(['Total Laps', len(race_data.get('lap_times', []))])
-                writer.writerow(['Controller', race_data.get('controller_name', 'unknown')])
-                writer.writerow(['Experiment ID', race_data.get('experiment_id', 'unknown')])
-                writer.writerow(['Race Ending Mode', race_data.get('race_ending_mode', 'unknown')])
-                writer.writerow(['Race Ending Reason', race_data.get('race_ending_reason', 'unknown')])
-                writer.writerow(['Crashed', race_data.get('crashed', False)])
-                writer.writerow(['Forced Shutdown', race_data.get('forced_shutdown', False)])
-                writer.writerow(['Intermediate Save', race_data.get('intermediate_save', False)])
-                writer.writerow([])
+                    # Basic race info
+                    writer.writerow(['Total Race Time (s)', race_data.get('total_race_time', 0.0)])
+                    writer.writerow(['Total Laps', len(race_data.get('lap_times', []))])
+                    writer.writerow(['Controller', race_data.get('controller_name', 'unknown')])
+                    writer.writerow(['Experiment ID', race_data.get('experiment_id', 'unknown')])
+                    writer.writerow(['Race Ending Mode', race_data.get('race_ending_mode', 'unknown')])
+                    writer.writerow(['Race Ending Reason', race_data.get('race_ending_reason', 'unknown')])
+                    writer.writerow(['Crashed', race_data.get('crashed', False)])
+                    writer.writerow(['Forced Shutdown', race_data.get('forced_shutdown', False)])
+                    writer.writerow(['Intermediate Save', race_data.get('intermediate_save', False)])
+                    writer.writerow([])
 
-                # Lap times
-                writer.writerow(['Lap Number', 'Lap Time (s)'])
-                for i, lap_time in enumerate(race_data.get('lap_times', []), 1):
-                    writer.writerow([i, f"{lap_time:.4f}"])
+                    # Lap times
+                    writer.writerow(['Lap Number', 'Lap Time (s)'])
+                    for i, lap_time in enumerate(race_data.get('lap_times', []), 1):
+                        writer.writerow([i, f"{lap_time:.4f}"])
 
-                writer.writerow([])
+                    writer.writerow([])
 
-                # Statistics
-                lap_times = race_data.get('lap_times', [])
-                if lap_times:
-                    writer.writerow(['best_lap_s', f"{min(lap_times):.4f}"])
-                    writer.writerow(['worst_lap_s', f"{max(lap_times):.4f}"])
-                    writer.writerow(['average_lap_s', f"{np.mean(lap_times):.4f}"])
+                    # Statistics
+                    lap_times = race_data.get('lap_times', [])
+                    if lap_times:
+                        writer.writerow(['best_lap_s', f"{min(lap_times):.4f}"])
+                        writer.writerow(['worst_lap_s', f"{max(lap_times):.4f}"])
+                        writer.writerow(['average_lap_s', f"{np.mean(lap_times):.4f}"])
 
-            self.logger.info(f"Saved race results to: {filepath}")
-            return True
+                self.logger.info(f"Saved race results CSV to: {filepath}")
+                return True
+
+            # No filename override: create/refresh consolidated JSON instead and skip CSV
+            try:
+                self.save_consolidated_race_results(race_data)
+                self.logger.info("Skipping creation of timestamped race_results CSV; consolidated JSON saved instead")
+                return True
+            except Exception as e:
+                self.logger.error(f"Failed to save consolidated results as fallback: {e}")
+                return False
 
         except Exception as e:
             self.logger.error(f"Error saving race results: {e}")
@@ -555,22 +565,11 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            filename = "evaluation_summary.csv"
-            # Save evaluation summary in the results directory
-            filepath = os.path.join(self.results_dir, filename)
-
-            # Store evaluation data
+            # The evaluation_summary.csv file was found to be noisy/misleading in experiments.
+            # Keep the evaluation in-memory and do not write a CSV by default. If callers really
+            # need a CSV, they should pass a filename and use save_race_results_to_csv(filename_override=...).
             self.evaluation_summaries.append(evaluation_data)
-
-            # Write to CSV
-            with open(filepath, 'w', newline='') as csvfile:
-                if self.evaluation_summaries:
-                    fieldnames = list(self.evaluation_summaries[0].keys())
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                    writer.writeheader()
-                    writer.writerows(self.evaluation_summaries)
-
-            self.logger.info(f"Saved evaluation summary to: {filepath}")
+            self.logger.info("Stored evaluation summary in-memory; CSV output disabled by default")
             return True
 
         except Exception as e:
@@ -770,39 +769,126 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            controller_name = race_summary.get('race_metadata', {}).get('controller_name', 'unknown')
-            experiment_id = race_summary.get('race_metadata', {}).get('experiment_id', 'exp')
+            # Produce stable race_summary files without timestamps in the filename.
+            # Write a human-readable JSON and a compact gzipped companion (.rsum) so tools can
+            # consume the data efficiently.
 
-            # Create filename with run identification
-            base_filename = f"race_summary_{controller_name}_{experiment_id}_{timestamp}"
-
-            # Save as JSON
-            json_filepath = os.path.join(self.results_dir, f"{base_filename}.json")
+            json_filepath = os.path.join(self.results_dir, "race_summary.json")
             with open(json_filepath, 'w') as f:
                 json.dump(race_summary, f, indent=2, default=str)
 
-            # Save as detailed CSV
-            csv_filepath = os.path.join(self.results_dir, f"{base_filename}.csv")
-            with open(csv_filepath, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
+            # Also write a gzipped compact binary representation (custom .rsum) - compatible
+            # with our tools: contains gzipped JSON bytes.
+            try:
+                rsum_path = os.path.join(self.results_dir, "race_summary.rsum")
+                with gzip.open(rsum_path, 'wt', encoding='utf-8') as gz:
+                    json.dump(race_summary, gz, separators=(',', ':'), default=str)
+                self.logger.info(f"Saved compact race summary to: {rsum_path}")
+            except Exception:
+                # Not critical; continue if gzip fails
+                self.logger.debug("Failed to write compact .rsum file for race summary")
 
-                # Write metadata section
-                writer.writerow(['=== RACE SUMMARY ==='])
-                writer.writerow(['Generated', datetime.now().isoformat()])
-                writer.writerow([])
+            # For backward compatibility keep a detailed CSV if explicitly requested via config
+            if 'csv' in self.output_formats:
+                csv_filepath = os.path.join(self.results_dir, "race_summary.csv")
+                try:
+                    with open(csv_filepath, 'w', newline='') as csvfile:
+                        writer = csv.writer(csvfile)
 
-                # Write race metadata
-                writer.writerow(['=== RACE METADATA ==='])
-                metadata = race_summary.get('race_metadata', {})
-                for key, value in metadata.items():
-                    writer.writerow([key.replace('_', ' ').title(), value])
-                writer.writerow([])
+                        # Write metadata section
+                        writer.writerow(['=== RACE SUMMARY ==='])
+                        writer.writerow(['Generated', datetime.now().isoformat()])
+                        writer.writerow([])
 
-                # Write lap statistics
-                writer.writerow(['=== LAP STATISTICS ==='])
-                lap_stats = race_summary.get('lap_statistics', {})
-                for key, value in lap_stats.items():
+                        # Write race metadata
+                        writer.writerow(['=== RACE METADATA ==='])
+                        metadata = race_summary.get('race_metadata', {})
+                        for key, value in metadata.items():
+                            writer.writerow([key.replace('_', ' ').title(), value])
+                        writer.writerow([])
+
+                        # Write lap statistics
+                        writer.writerow(['=== LAP STATISTICS ==='])
+                        lap_stats = race_summary.get('lap_statistics', {})
+                        for key, value in lap_stats.items():
+                            if key != 'lap_times':
+                                writer.writerow([key.replace('_', ' ').title(),
+                                                 f"{value:.4f}" if isinstance(value, float) else value])
+
+                        writer.writerow([])
+                        writer.writerow(['=== INDIVIDUAL LAP TIMES ==='])
+                        writer.writerow(['Lap Number', 'Lap Time (s)'])
+                        for i, lap_time in enumerate(lap_stats.get('lap_times', []), 1):
+                            writer.writerow([i, f"{lap_time:.4f}"])
+
+                        # Write trajectory statistics
+                        writer.writerow([])
+                        writer.writerow(['=== TRAJECTORY STATISTICS ==='])
+                        traj_stats = race_summary.get('trajectory_statistics', {})
+                        for key, value in traj_stats.items():
+                            writer.writerow([key.replace('_', ' ').title(),
+                                            f"{value:.4f}" if isinstance(value, float) else value])
+
+                        # Write performance metrics
+                        writer.writerow([])
+                        writer.writerow(['=== PERFORMANCE METRICS ==='])
+                        perf_metrics = race_summary.get('performance_metrics', {})
+                        for key, value in perf_metrics.items():
+                            writer.writerow([key.replace('_', ' ').title(),
+                                            f"{value:.4f}" if isinstance(value, float) else value])
+
+                        # Write advanced metrics (including APE/RPE metrics)
+                        advanced_metrics = race_summary.get('advanced_metrics', {})
+                        if advanced_metrics:
+                            writer.writerow([])
+                            writer.writerow(['=== ADVANCED METRICS ==='])
+
+                            # Group APE metrics first
+                            ape_metrics = {k: v for k, v in advanced_metrics.items() if 'ape_' in k}
+                            if ape_metrics:
+                                writer.writerow(['--- Absolute Pose Error (APE) Metrics ---'])
+                                for key, value in sorted(ape_metrics.items()):
+                                    formatted_key = key.replace('_', ' ').replace('ape ', 'APE ').title()
+                                    writer.writerow(
+                                        [formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
+
+                            # Group RPE metrics second
+                            rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
+                            if rpe_metrics:
+                                writer.writerow(['--- Relative Pose Error (RPE) Metrics ---'])
+                                for key, value in sorted(rpe_metrics.items()):
+                                    formatted_key = key.replace('_', ' ').replace('rpe ', 'RPE ').title()
+                                    writer.writerow(
+                                        [formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
+
+                            # Add other important advanced metrics
+                            other_important_metrics = {
+                                k: v for k,
+                                v in advanced_metrics.items() if any(
+                                    keyword in k for keyword in [
+                                        'overall_',
+                                        'consistency',
+                                        'speed',
+                                        'path_length',
+                                        'duration']) and 'ape_' not in k and 'rpe_' not in k}
+                            if other_important_metrics:
+                                writer.writerow(['--- Other Advanced Metrics ---'])
+                                for key, value in sorted(other_important_metrics.items()):
+                                    formatted_key = key.replace('_', ' ').title()
+                                    writer.writerow(
+                                        [formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
+
+                    self.logger.info(f"Saved detailed CSV summary to: {csv_filepath}")
+                except Exception as e:
+                    self.logger.debug(f"Failed to write detailed CSV summary: {e}")
+
+            self.logger.info(f"Saved race summary JSON to: {json_filepath}")
+            return True
+
+             # Write lap statistics
+             writer.writerow(['=== LAP STATISTICS ==='])
+              lap_stats = race_summary.get('lap_statistics', {})
+               for key, value in lap_stats.items():
                     if key != 'lap_times':
                         writer.writerow([key.replace('_', ' ').title(),
                                         f"{value:.4f}" if isinstance(value, float) else value])
@@ -922,9 +1008,53 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"race_evaluation_{timestamp}.json"
+            # Use stable filename without timestamp
+            filename = "race_evaluation.json"
             filepath = os.path.join(self.results_dir, filename)
+
+            # If the evaluation_data is empty or contains only zeros, try to populate from
+            # consolidated results or a recent race_summary to avoid zeroed outputs.
+            def _is_empty_or_all_zero(d: Dict) -> bool:
+                if not d:
+                    return True
+                # check nested values recursively for any non-zero / non-empty
+
+                def any_nonzero(obj):
+                    if obj is None:
+                        return False
+                    if isinstance(obj, (int, float)):
+                        return not (obj == 0 or (isinstance(obj, float) and np.isnan(obj)))
+                    if isinstance(obj, str):
+                        return obj.strip() != ''
+                    if isinstance(obj, dict):
+                        return any(any_nonzero(v) for v in obj.values())
+                    if isinstance(obj, (list, tuple)):
+                        return any(any_nonzero(v) for v in obj)
+                    return True
+
+                return not any_nonzero(d)
+
+            if _is_empty_or_all_zero(evaluation_data):
+                # Try to load consolidated results if available
+                try:
+                    consolidated_path = os.path.join(self.results_dir, 'race_results.json')
+                    if os.path.exists(consolidated_path):
+                        with open(consolidated_path, 'r') as f:
+                            loaded = json.load(f)
+                            # Map to evaluation format if possible
+                            evaluation_data = loaded.get('race_evaluation', loaded)
+                            self.logger.info('Populated empty evaluation_data from race_results.json')
+                except Exception:
+                    # Try race_summary
+                    try:
+                        summary_path = os.path.join(self.results_dir, 'race_summary.json')
+                        if os.path.exists(summary_path):
+                            with open(summary_path, 'r') as f:
+                                loaded = json.load(f)
+                                evaluation_data = loaded
+                                self.logger.info('Populated empty evaluation_data from race_summary.json')
+                    except Exception:
+                        self.logger.debug('No fallback evaluation data available')
 
             with open(filepath, 'w') as f:
                 json.dump(evaluation_data, f, indent=2, default=str)

@@ -1455,9 +1455,6 @@ class RaceMonitor(Node):
                 exp_pattern = os.path.join(controller_dir, 'exp_*')
                 exp_dirs = glob.glob(exp_pattern)
 
-                self.get_logger().info(f"Checking for existing experiments in: {controller_dir}")
-                self.get_logger().info(f"Found directories: {[os.path.basename(d) for d in exp_dirs]}")
-
                 # Extract experiment numbers from existing directories
                 for path in exp_dirs:
                     # Look for pattern: exp_XXX_timestamp or exp_XXX
@@ -1465,11 +1462,9 @@ class RaceMonitor(Node):
                     if match:
                         exp_num = int(match.group(1))
                         max_exp_num = max(max_exp_num, exp_num)
-                        self.get_logger().info(f"Found experiment number: {exp_num}")
 
             next_exp_num = max_exp_num + 1
             next_id = f'exp_{next_exp_num:03d}'
-            self.get_logger().info(f"Generated next experiment ID: {next_id}")
             return next_id
 
         except Exception as e:
