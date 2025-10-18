@@ -523,6 +523,12 @@ class RaceMonitor(Node):
         controller_name = self.config.get('controller_name', 'unknown_controller')
         experiment_id = self.config.get('experiment_id', 'exp_001')
 
+        # Auto-generate next experiment ID if using default or if experiment already exists
+        if experiment_id == 'exp_001' or self._experiment_directory_exists(controller_name, experiment_id):
+            experiment_id = self._get_next_experiment_id(controller_name)
+            self.config['experiment_id'] = experiment_id  # Update config with new experiment ID
+            self.get_logger().info(f"Auto-generated experiment ID: {experiment_id}")
+
         if controller_name and experiment_id:
             run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
             self.get_logger().info(f"Created dedicated run directory: {run_directory}")
@@ -553,6 +559,19 @@ class RaceMonitor(Node):
         if RESEARCH_EVALUATOR_AVAILABLE and self.config['enable_trajectory_evaluation']:
             try:
                 self.research_evaluator = create_research_evaluator(self.config)
+
+                # Set up reference trajectory for APE/RPE calculations
+                if self.reference_manager.is_reference_available():
+                    reference_trajectory = self.reference_manager.get_reference_trajectory()
+                    if reference_trajectory:
+                        # Pass the EVO trajectory object directly to research evaluator
+                        self.research_evaluator.reference_trajectory = reference_trajectory
+                        self.get_logger().info("Reference trajectory set in research evaluator for APE/RPE calculations")
+                    else:
+                        self.get_logger().warn("Reference trajectory is available but could not be retrieved")
+                else:
+                    self.get_logger().warn("No reference trajectory available - APE/RPE metrics will not be calculated")
+
                 self.get_logger().info("Research evaluator initialized")
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize research evaluator: {e}")
@@ -799,6 +818,15 @@ class RaceMonitor(Node):
             self.config['controller_name'] = controller_name
             self.get_logger().info(f"Using detected controller: {controller_name}")
 
+        # Auto-generate next experiment ID if using default or if experiment already exists
+        if controller_name and (
+            experiment_id == 'exp_001' or self._experiment_directory_exists(
+                controller_name,
+                experiment_id)):
+            experiment_id = self._get_next_experiment_id(controller_name)
+            self.config['experiment_id'] = experiment_id  # Update config with new experiment ID
+            self.get_logger().info(f"Auto-generated experiment ID for race start: {experiment_id}")
+
         # Create experiment directory if we have a controller name and haven't created one yet
         if controller_name and not hasattr(self.data_manager, 'run_directory_created'):
             run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
@@ -1028,7 +1056,29 @@ class RaceMonitor(Node):
                 try:
                     # Create research data summary for race evaluator
                     research_summary = self._generate_race_summary(race_data, all_trajectories)
-                    race_evaluation = self.race_evaluator.create_race_evaluation(research_summary)
+
+                    # Extract advanced metrics for EVO evaluation
+                    evo_metrics = {}
+                    if 'advanced_metrics' in research_summary:
+                        advanced_metrics = research_summary['advanced_metrics']
+
+                        # Map advanced metrics to EVO format
+                        evo_metrics = {
+                            'ape_rmse': advanced_metrics.get('overall_ape_mean', 0),
+                            'ape_mean': advanced_metrics.get('overall_ape_mean', 0),
+                            'ape_std': next((v for k, v in advanced_metrics.items() if k.startswith('ape_') and k.endswith('_std')), 0),
+                            'ape_max': next((v for k, v in advanced_metrics.items() if k.startswith('ape_') and k.endswith('_max')), 0),
+                            'rpe_rmse': advanced_metrics.get('overall_rpe_mean', 0),
+                            'rpe_mean': advanced_metrics.get('overall_rpe_mean', 0),
+                            'rpe_std': next((v for k, v in advanced_metrics.items() if k.startswith('rpe_') and k.endswith('_std')), 0),
+                            'rpe_max': next((v for k, v in advanced_metrics.items() if k.startswith('rpe_') and k.endswith('_max')), 0),
+                            'reference_available': True,
+                            'reference_deviation': advanced_metrics.get('overall_ape_mean', 0)
+                        }
+                        self.get_logger().info(
+                            f"Extracted APE/RPE metrics for race evaluation: APE={evo_metrics['ape_mean']:.4f}, RPE={evo_metrics['rpe_mean']:.4f}")
+
+                    race_evaluation = self.race_evaluator.create_race_evaluation(research_summary, evo_metrics)
                     if race_evaluation:
                         self.data_manager.save_race_evaluation(race_evaluation)
                         self.get_logger().info("Custom race evaluation completed successfully")
@@ -1139,7 +1189,8 @@ class RaceMonitor(Node):
                     'consistency_score': 1.0 - (np.std(lap_times) / np.mean(lap_times)) if lap_times and np.mean(lap_times) > 0 else 0.0
                 },
                 'trajectory_statistics': {},
-                'performance_metrics': {}
+                'performance_metrics': {},
+                'advanced_metrics': {}
             }
 
             # Calculate trajectory statistics if available
@@ -1176,11 +1227,151 @@ class RaceMonitor(Node):
                         'distance_per_second': total_distance / race_data.get('total_race_time', 1.0)
                     }
 
+            # Calculate averaged advanced metrics from research evaluator
+            if hasattr(self, 'research_evaluator') and self.research_evaluator:
+                try:
+                    advanced_metrics = self._calculate_averaged_metrics()
+                    if advanced_metrics:
+                        summary['advanced_metrics'] = advanced_metrics
+                        self.get_logger().info(
+                            f"Added {len(advanced_metrics)} averaged advanced metrics to race summary")
+                    else:
+                        self.get_logger().warn("No advanced metrics calculated from research evaluator")
+                except Exception as e:
+                    self.get_logger().error(f"Error calculating averaged metrics: {e}")
+
             return summary
 
         except Exception as e:
             self.get_logger().error(f"Error generating race summary: {e}")
             return {}
+
+    def _calculate_averaged_metrics(self) -> dict:
+        """Calculate averaged metrics from all lap measurements."""
+        try:
+            if not hasattr(self.research_evaluator, 'detailed_metrics') or not self.research_evaluator.detailed_metrics:
+                self.get_logger().warn("No detailed metrics available from research evaluator")
+                return {}
+
+            # Collect all metrics from all laps
+            all_metrics = {}
+            lap_count = len(self.research_evaluator.detailed_metrics)
+
+            if lap_count == 0:
+                return {}
+
+            # Aggregate metrics across all laps
+            for lap_num, lap_metrics in self.research_evaluator.detailed_metrics.items():
+                for metric_name, metric_value in lap_metrics.items():
+                    if isinstance(metric_value, (int, float)) and not math.isnan(metric_value):
+                        if metric_name not in all_metrics:
+                            all_metrics[metric_name] = []
+                        all_metrics[metric_name].append(metric_value)
+
+            # Calculate statistics for each metric
+            averaged_metrics = {}
+            for metric_name, values in all_metrics.items():
+                if len(values) > 0:
+                    try:
+                        averaged_metrics[f'{metric_name}_mean'] = float(np.mean(values))
+                        averaged_metrics[f'{metric_name}_std'] = float(np.std(values))
+                        averaged_metrics[f'{metric_name}_min'] = float(np.min(values))
+                        averaged_metrics[f'{metric_name}_max'] = float(np.max(values))
+                        averaged_metrics[f'{metric_name}_median'] = float(np.median(values))
+
+                        # Add coefficient of variation for key metrics
+                        if metric_name.startswith(('ape_', 'rpe_', 'velocity_', 'acceleration_')):
+                            mean_val = np.mean(values)
+                            if mean_val > 0:
+                                averaged_metrics[f'{metric_name}_cv'] = float(np.std(values) / mean_val * 100)
+                    except Exception as e:
+                        self.get_logger().warn(f"Error calculating statistics for {metric_name}: {e}")
+                        continue
+
+            # Calculate overall performance indicators
+            if averaged_metrics:
+                # APE/RPE consistency scores
+                ape_keys = [k for k in averaged_metrics.keys() if k.startswith('ape_') and k.endswith('_mean')]
+                rpe_keys = [k for k in averaged_metrics.keys() if k.startswith('rpe_') and k.endswith('_mean')]
+
+                if ape_keys:
+                    ape_mean = np.mean([averaged_metrics[k] for k in ape_keys])
+                    averaged_metrics['overall_ape_mean'] = float(ape_mean)
+
+                if rpe_keys:
+                    rpe_mean = np.mean([averaged_metrics[k] for k in rpe_keys])
+                    averaged_metrics['overall_rpe_mean'] = float(rpe_mean)
+
+                # Overall consistency score
+                cv_keys = [k for k in averaged_metrics.keys() if k.endswith('_cv')]
+                if cv_keys:
+                    overall_cv = np.mean([averaged_metrics[k] for k in cv_keys])
+                    averaged_metrics['overall_consistency_cv'] = float(overall_cv)
+
+            self.get_logger().info(f"Calculated {len(averaged_metrics)} averaged metrics from {lap_count} laps")
+            return averaged_metrics
+
+        except Exception as e:
+            self.get_logger().error(f"Error calculating averaged metrics: {e}")
+            return {}
+
+    def _experiment_directory_exists(self, controller_name: str, experiment_id: str) -> bool:
+        """Check if an experiment directory already exists for this controller and experiment ID."""
+        try:
+            base_output_dir = self.config.get('trajectory_output_directory', 'evaluation_results')
+            controller_dir = os.path.join(base_output_dir, controller_name)
+
+            if not os.path.exists(controller_dir):
+                return False
+
+            # Look for any directory that starts with the experiment_id
+            import glob
+            exp_pattern = os.path.join(controller_dir, f'{experiment_id}_*')
+            existing_dirs = glob.glob(exp_pattern)
+
+            return len(existing_dirs) > 0
+        except Exception as e:
+            self.get_logger().warn(f"Error checking experiment directory existence: {e}")
+            return False
+
+    def _get_next_experiment_id(self, controller_name: str) -> str:
+        """Get the next available experiment ID for this controller."""
+        try:
+            import re
+            import glob
+
+            base_output_dir = self.config.get('trajectory_output_directory', 'evaluation_results')
+            controller_dir = os.path.join(base_output_dir, controller_name)
+
+            max_exp_num = 0
+
+            if os.path.exists(controller_dir):
+                exp_pattern = os.path.join(controller_dir, 'exp_*')
+                exp_dirs = glob.glob(exp_pattern)
+
+                self.get_logger().info(f"Checking for existing experiments in: {controller_dir}")
+                self.get_logger().info(f"Found directories: {[os.path.basename(d) for d in exp_dirs]}")
+
+                # Extract experiment numbers from existing directories
+                for path in exp_dirs:
+                    # Look for pattern: exp_XXX_timestamp or exp_XXX
+                    match = re.search(r'exp_(\d+)', os.path.basename(path))
+                    if match:
+                        exp_num = int(match.group(1))
+                        max_exp_num = max(max_exp_num, exp_num)
+                        self.get_logger().info(f"Found experiment number: {exp_num}")
+
+            next_exp_num = max_exp_num + 1
+            next_id = f'exp_{next_exp_num:03d}'
+            self.get_logger().info(f"Generated next experiment ID: {next_id}")
+            return next_id
+
+        except Exception as e:
+            self.get_logger().error(f"Error generating next experiment ID: {e}")
+            # Fallback to timestamp-based ID
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%H%M%S")
+            return f'exp_{timestamp}'
 
     def _publish_race_status(self):
         """Publish current race status."""
