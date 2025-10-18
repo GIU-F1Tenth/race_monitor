@@ -204,7 +204,9 @@ class RaceMonitor(Node):
         # ========================================
         # REFERENCE TRAJECTORY CONFIGURATION
         # ========================================
-        self.declare_parameter('reference_trajectory_file', 'horizon_mapper/horizon_mapper/ref_trajectory.csv')
+        self.declare_parameter(
+            'reference_trajectory_file',
+            '/home/mohammedazab/ws/src/race_stack/horizon_mapper/horizon_mapper/optimal_trajectory.csv')
         self.declare_parameter('reference_trajectory_format', 'csv')
         self.declare_parameter('enable_horizon_mapper_reference', False)
         self.declare_parameter('horizon_mapper_reference_topic', '/horizon_mapper/reference_trajectory')
@@ -1008,6 +1010,9 @@ class RaceMonitor(Node):
             # Save comprehensive race summary
             self.data_manager.save_race_summary(race_summary)
 
+            # Initialize variables for consolidated save
+            race_evaluation = None
+
             if self.research_evaluator and all_trajectories:
                 # Perform research-grade analysis
                 self.get_logger().info("Running research trajectory evaluation...")
@@ -1162,6 +1167,13 @@ class RaceMonitor(Node):
                         self.get_logger().warning("Some visualization plots failed to generate")
                 except Exception as e:
                     self.get_logger().error(f"Plot generation failed: {e}")
+
+            # Save consolidated race_results.json file with all important information
+            try:
+                self.data_manager.save_consolidated_race_results(race_summary, race_evaluation)
+                self.get_logger().info("Saved consolidated race_results.json file")
+            except Exception as e:
+                self.get_logger().error(f"Error saving consolidated results: {e}")
 
             self.get_logger().info("Comprehensive analysis completed!")
 

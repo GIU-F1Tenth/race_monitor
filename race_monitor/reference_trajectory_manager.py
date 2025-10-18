@@ -150,25 +150,50 @@ class ReferenceTrajectoryManager:
                 positions = []
                 has_orientation = False
 
+                # Check header to determine format
+                if header and len(header) >= 3:
+                    if header[0].lower() == 'x' and header[1].lower() == 'y':
+                        # Format: x, y, v (horizon_mapper format)
+                        use_xy_format = True
+                    else:
+                        # Format: timestamp, x, y, [z], [qx, qy, qz, qw]
+                        use_xy_format = False
+                else:
+                    # Default to timestamp format if no header
+                    use_xy_format = False
+
+                row_index = 0
                 for row in reader:
-                    if len(row) >= 3:
-                        # Assume format: timestamp, x, y, [z], [qx, qy, qz, qw]
-                        t = float(row[0])
-                        x = float(row[1])
-                        y = float(row[2])
-                        z = float(row[3]) if len(row) > 3 else 0.0
+                    if len(row) >= 2:
+                        if use_xy_format:
+                            # Format: x, y, v (ignore velocity for trajectory)
+                            x = float(row[0])
+                            y = float(row[1])
+                            z = 0.0  # Assume 2D trajectory
+                            t = float(row_index)  # Use row index as synthetic timestamp
+                        else:
+                            # Format: timestamp, x, y, [z], [qx, qy, qz, qw]
+                            if len(row) >= 3:
+                                t = float(row[0])
+                                x = float(row[1])
+                                y = float(row[2])
+                                z = float(row[3]) if len(row) > 3 else 0.0
+                            else:
+                                continue
 
                         timestamps.append(t)
                         positions.append([x, y, z])
 
-                        # Check if this row has orientation data
-                        if len(row) >= 7:
+                        # Check if this row has orientation data (only for timestamp format)
+                        if not use_xy_format and len(row) >= 7:
                             has_orientation = True
 
+                        row_index += 1
+
                 if EVO_AVAILABLE and len(positions) > 0:
-                    # Create EVO trajectory
-                    timestamps = np.array(timestamps)
-                    positions = np.array(positions)
+                    # Create EVO trajectory with proper data types
+                    timestamps = np.array(timestamps, dtype=np.float64)
+                    positions = np.array(positions, dtype=np.float64)
 
                     if has_orientation:  # Has orientation data
                         orientations = []
@@ -186,10 +211,18 @@ class ReferenceTrajectoryManager:
                                 positions, orientations, timestamps
                             )
                         else:
-                            # If orientation loading failed, create path without orientation
-                            self.reference_trajectory = trajectory.PosePath3D(positions, timestamps)
+                            # If orientation loading failed, create PoseTrajectory3D with identity orientations
+                            identity_orientations = np.tile([1.0, 0.0, 0.0, 0.0], (len(positions), 1))  # [w, x, y, z]
+                            self.reference_trajectory = trajectory.PoseTrajectory3D(
+                                positions, identity_orientations, timestamps
+                            )
                     else:
-                        self.reference_trajectory = trajectory.PosePath3D(positions, timestamps)
+                        # For x,y,v format (no orientation data), create PoseTrajectory3D with identity orientations
+                        # This ensures compatibility with APE/RPE calculations
+                        identity_orientations = np.tile([1.0, 0.0, 0.0, 0.0], (len(positions), 1))  # [w, x, y, z]
+                        self.reference_trajectory = trajectory.PoseTrajectory3D(
+                            positions, identity_orientations, timestamps
+                        )
 
                 self.logger.info(f"Loaded {len(positions)} reference points from CSV")
                 return True

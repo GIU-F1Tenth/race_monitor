@@ -120,9 +120,9 @@ class RaceEvaluator:
             # Extract experiment numbers from experiment directories
             for path in exp_dirs:
                 match = re.search(r'exp(\d+)', os.path.basename(path))
-            if match:
-                exp_num = int(match.group(1))
-                max_exp_num = max(max_exp_num, exp_num)
+                if match:
+                    exp_num = int(match.group(1))
+                    max_exp_num = max(max_exp_num, exp_num)
 
         next_exp_num = max_exp_num + 1
         return f'exp{next_exp_num:03d}'

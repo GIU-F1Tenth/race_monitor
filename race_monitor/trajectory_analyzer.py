@@ -343,16 +343,47 @@ class ResearchTrajectoryEvaluator:
 
     def _calculate_advanced_evo_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, Any]:
         """Calculate advanced EVO metrics with all pose relations and statistics"""
-        metrics = {}
+        results = {}
 
         if not hasattr(self, 'reference_trajectory') or self.reference_trajectory is None:
-            return metrics
+            return results
 
         try:
-            # Synchronize trajectories
-            traj_ref, traj_est = sync.associate_trajectories(
-                self.reference_trajectory, traj, max_diff=0.01
-            )
+            # For trajectory alignment, use a more flexible approach
+            # since reference trajectory uses synthetic timestamps (row indices)
+            # and race trajectory uses real ROS timestamps
+
+            # First try with a larger time difference tolerance
+            try:
+                traj_ref, traj_est = sync.associate_trajectories(
+                    self.reference_trajectory, traj, max_diff=1.0
+                )
+            except Exception:
+                # If timestamp-based sync fails, align trajectories by resampling
+                # to the same number of points (path-based alignment)
+                try:
+                    min_length = min(self.reference_trajectory.num_poses, traj.num_poses)
+                    if min_length < 2:
+                        return results
+
+                    # Resample both trajectories to the same length
+                    ref_indices = np.linspace(0, self.reference_trajectory.num_poses - 1, min_length, dtype=int)
+                    est_indices = np.linspace(0, traj.num_poses - 1, min_length, dtype=int)
+
+                    # Create aligned trajectories with synthetic timestamps
+                    aligned_timestamps = np.arange(min_length, dtype=np.float64)
+
+                    ref_positions = self.reference_trajectory.positions_xyz[ref_indices]
+                    ref_orientations = self.reference_trajectory.orientations_quat_wxyz[ref_indices]
+                    traj_ref = trajectory.PoseTrajectory3D(ref_positions, ref_orientations, aligned_timestamps)
+
+                    est_positions = traj.positions_xyz[est_indices]
+                    est_orientations = traj.orientations_quat_wxyz[est_indices]
+                    traj_est = trajectory.PoseTrajectory3D(est_positions, est_orientations, aligned_timestamps)
+
+                except Exception as e:
+                    self.logger.error(f"Failed to align trajectories: {e}")
+                    return results
 
             # Calculate metrics for all pose relations
             pose_relations = self.config.get('pose_relations', ['translation_part'])
@@ -370,8 +401,8 @@ class ResearchTrajectoryEvaluator:
                         try:
                             stat_type = getattr(metrics.StatisticsType, stat_name)
                             ape_value = ape_metric.get_statistic(stat_type)
-                            metrics[f'ape_{relation_name}_{stat_name}'] = float(ape_value)
-                        except AttributeError:
+                            results[f'ape_{relation_name}_{stat_name}'] = float(ape_value)
+                        except (AttributeError, Exception):
                             continue
 
                     # RPE metrics
@@ -382,17 +413,17 @@ class ResearchTrajectoryEvaluator:
                         try:
                             stat_type = getattr(metrics.StatisticsType, stat_name)
                             rpe_value = rpe_metric.get_statistic(stat_type)
-                            metrics[f'rpe_{relation_name}_{stat_name}'] = float(rpe_value)
-                        except AttributeError:
+                            results[f'rpe_{relation_name}_{stat_name}'] = float(rpe_value)
+                        except (AttributeError, Exception):
                             continue
 
-                except AttributeError:
+                except (AttributeError, Exception):
                     continue
 
         except Exception as e:
             self.logger.error(f"Error calculating advanced EVO metrics: {e}")
 
-        return metrics
+        return results
 
     def _calculate_geometric_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, float]:
         """Calculate geometric analysis metrics"""

@@ -833,6 +833,42 @@ class DataManager:
             self.logger.error(f"Error saving race summary: {e}")
             return False
 
+    def save_consolidated_race_results(self, race_summary: Dict, race_evaluation: Dict = None) -> bool:
+        """
+        Save a single consolidated race_results.json file with all important information.
+
+        Args:
+            race_summary: Comprehensive race summary data
+            race_evaluation: Race evaluation data (optional)
+
+        Returns:
+            bool: True if successfully saved
+        """
+        try:
+            # Create consolidated results structure
+            consolidated_results = {
+                "race_info": race_summary.get('race_metadata', {}),
+                "lap_analysis": {
+                    "statistics": race_summary.get('lap_statistics', {}),
+                    "trajectory_stats": race_summary.get('trajectory_statistics', {}),
+                    "performance_metrics": race_summary.get('performance_metrics', {})
+                },
+                "advanced_metrics": race_summary.get('advanced_metrics', {}),
+                "race_evaluation": race_evaluation or {}
+            }
+
+            # Save as race_results.json
+            results_filepath = os.path.join(self.results_dir, "race_results.json")
+            with open(results_filepath, 'w') as f:
+                json.dump(consolidated_results, f, indent=2, default=str)
+
+            self.logger.info(f"Saved consolidated race results to: {results_filepath}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error saving consolidated race results: {e}")
+            return False
+
     def save_race_evaluation(self, evaluation_data: Dict) -> bool:
         """
         Save race evaluation results.
