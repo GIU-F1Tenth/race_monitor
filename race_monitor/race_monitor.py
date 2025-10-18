@@ -7,23 +7,22 @@ Main ROS2 node that integrates all race monitoring components into a unified sys
 Orchestrates lap detection, trajectory analysis, performance monitoring, visualization,
 and data management for comprehensive autonomous racing evaluation.
 
-This refactored design provides:
-    - Modular architecture with clear separation of concerns
+Architecture:
+    - Modular design with clear separation of concerns
     - Easy maintenance and testing of individual components
     - Flexible configuration and extensibility
     - Clean interfaces between components
 
-Components:
-    - LapDetector: Handles lap detection and timing
-    - ReferenceTrajectoryManager: Manages reference trajectories
-    - PerformanceMonitor: Monitors computational performance
-    - VisualizationPublisher: Handles RViz visualization
-    - DataManager: Manages data storage and file operations
+Core Components:
+    - LapDetector: Lap detection and timing
+    - ReferenceTrajectoryManager: Reference trajectory management
+    - PerformanceMonitor: Computational performance monitoring
+    - VisualizationPublisher: RViz visualization
+    - DataManager: Data storage and file operations
     - TrajectoryAnalyzer: Advanced trajectory analysis
     - RaceEvaluator: Custom race evaluation system
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License
+License: MIT
 """
 
 import rclpy
@@ -87,15 +86,14 @@ except ImportError:
 class RaceMonitor(Node):
     """
     Main race monitoring node that orchestrates all components.
-
-    Provides a clean, modular architecture for race monitoring with
+    
+    Provides modular architecture for race monitoring with
     clear separation of concerns and easy extensibility.
     """
 
     def __init__(self):
         super().__init__('race_monitor')
 
-        self.get_logger().info("Starting Race Monitor")
         self.get_logger().info("🏁 Starting Race Monitor")
 
         # Load configuration parameters
@@ -117,24 +115,6 @@ class RaceMonitor(Node):
         self._start_monitoring_systems()
 
         self.get_logger().info("Race Monitor initialized successfully!")
-        self.get_logger().info(f"  Race Ending Mode: {self.config['race_ending_mode'].upper()}")
-        self.get_logger().info(f"  Lap Detection: Enabled")
-        if self.config['race_ending_mode'] == 'crash':
-            self.get_logger().info(
-                f"  Crash Detection: {'Enabled' if self.config['crash_detection']['enable_crash_detection'] else 'Disabled'}")
-        elif self.config['race_ending_mode'] == 'manual':
-            duration_limit = self.config['manual_mode']['max_race_duration']
-            self.get_logger().info(
-                f"  Manual Mode: Max duration = {duration_limit}s ({'no limit' if duration_limit == 0 else 'limited'})")
-        self.get_logger().info(
-            f"  Reference Trajectory: {'Enabled' if self.reference_manager.is_reference_available() else 'Disabled'}")
-        self.get_logger().info(
-            f"  Performance Monitoring: {'Enabled' if self.config.get('enable_computational_monitoring', True) else 'Disabled'}")
-        self.get_logger().info(f"  Research Evaluator: {'Enabled' if RESEARCH_EVALUATOR_AVAILABLE else 'Disabled'}")
-        self.get_logger().info(f"  Race Evaluator: {'Enabled' if RACE_EVALUATOR_AVAILABLE else 'Disabled'}")
-        self.get_logger().info(f"  EVO Integration: {'Enabled' if EVO_AVAILABLE else 'Disabled'}")
-        self.get_logger().info(
-            f"  EVO Graph Generation: {'Enabled' if self.evo_plotter is not None else 'Disabled'}")
 
     def _load_parameters(self):
         """Load ROS2 parameters and configuration."""
@@ -536,15 +516,12 @@ class RaceMonitor(Node):
             if experiment_id == 'exp_001' or self._experiment_directory_exists(controller_name, experiment_id):
                 experiment_id = self._get_next_experiment_id(controller_name)
                 self.config['experiment_id'] = experiment_id  # Update config with new experiment ID
-                self.get_logger().info(f"Auto-generated experiment ID: {experiment_id}")
 
             run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
-            self.get_logger().info(f"Created dedicated run directory: {run_directory}")
 
             # Update configuration paths for all components to use the run directory
             if self.config.get('auto_generate_graphs', False):
                 self.config['graph_output_directory'] = os.path.join(run_directory, "graphs")
-                self.get_logger().info(f"Graph output directory: {self.config['graph_output_directory']}")
 
             # Update trajectory output directory for research evaluator to use the run directory directly
             self.config['trajectory_output_directory'] = run_directory
@@ -556,8 +533,7 @@ class RaceMonitor(Node):
             self._initialize_analysis_components()
         else:
             # No controller name yet, delay analysis components initialization until race start
-            self.get_logger().info(
-                f"Controller name not set yet ('{controller_name}'), will create experiment directory after controller detection")
+            pass
 
         # Load reference trajectory if specified
         if self.config['reference_trajectory_file']:
@@ -575,30 +551,21 @@ class RaceMonitor(Node):
                     if reference_trajectory:
                         # Pass the EVO trajectory object directly to research evaluator
                         self.research_evaluator.reference_trajectory = reference_trajectory
-                        self.get_logger().info("Reference trajectory set in research evaluator for APE/RPE calculations")
-                    else:
-                        self.get_logger().warn("Reference trajectory is available but could not be retrieved")
-                else:
-                    self.get_logger().warn("No reference trajectory available - APE/RPE metrics will not be calculated")
 
-                self.get_logger().info("Research evaluator initialized")
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize research evaluator: {e}")
 
         if RACE_EVALUATOR_AVAILABLE and self.config.get('enable_race_evaluation', True):
             try:
                 self.race_evaluator = create_race_evaluator(self.config)
-                self.get_logger().info("Race evaluator initialized")
             except Exception as e:
                 self.get_logger().error(f"Failed to initialize race evaluator: {e}")
 
         if EVO_PLOTTER_AVAILABLE and self.config['auto_generate_graphs']:
             try:
                 self.evo_plotter = EVOPlotter(self.config)
-                self.get_logger().info("EVO plotter initialized")
             except Exception as e:
                 self.get_logger().warn(f"EVO plotter initialization failed: {e}")
-                self.get_logger().warn("Graph generation will be disabled. Race monitoring will continue normally.")
                 self.evo_plotter = None
                 # Disable auto_generate_graphs to prevent further attempts
                 self.config['auto_generate_graphs'] = False
