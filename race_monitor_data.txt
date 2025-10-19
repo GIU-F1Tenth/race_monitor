@@ -1,0 +1,16 @@
+# Race Monitor System Information
+# This file contains maintainer and version information for the Race Monitor system
+
+[MAINTAINER]
+name=GIU F1Tenth Team
+email=f1tenth@giu.edu.eg
+
+[VERSION]
+race_monitor_version=2.1.0
+build_date=2025-10-19
+license=MIT
+
+[SYSTEM]
+package_name=race_monitor
+description=Advanced F1Tenth Performance Analysis and Race Monitoring System
+repository=https://github.com/GIU-F1Tenth/race_monitor

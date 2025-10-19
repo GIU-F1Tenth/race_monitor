@@ -7,15 +7,10 @@ Handles creation and management of metadata files that contain
 experiment information, timestamps, system details, and other
 contextual information without cluttering filenames.
 
-This replaces timestamp-based filename generation with clean,
-consistent filenames while preserving all temporal and system
-information in dedicated metadata files.
-
 License: MIT
 """
 
 import os
-import json
 import platform
 import sys
 from datetime import datetime
@@ -51,9 +46,6 @@ class MetadataManager:
             'os_version': platform.version(),
             'machine': platform.machine(),
             'processor': platform.processor(),
-            'python_version': platform.python_version(),
-            'python_executable': sys.executable,
-            'hostname': platform.node(),
             'architecture': platform.architecture()[0],
         }
 
@@ -65,6 +57,68 @@ class MetadataManager:
         except ImportError:
             self.system_info['rclpy_version'] = 'not_available'
             self.system_info['ros_distro'] = 'not_available'
+
+        # Load race monitor data
+        self.race_monitor_data = self._load_race_monitor_data()
+
+    def _load_race_monitor_data(self) -> Dict[str, Any]:
+        """Load race monitor maintainer and version information from data file."""
+        race_monitor_data = {
+            'maintainer': {
+                'name': 'Unknown',
+                'email': 'unknown@unknown.com'
+            },
+            'version': {
+                'race_monitor_version': '2.0.0',
+                'build_date': 'unknown',
+                'license': 'MIT'
+            },
+            'system': {
+                'package_name': 'race_monitor',
+                'description': 'Race Monitoring System',
+                'repository': 'unknown'
+            }
+        }
+
+        try:
+            # Find the race_monitor_data.txt file
+            # Look in the parent directory of this module
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            data_file_path = os.path.join(os.path.dirname(current_dir), 'race_monitor_data.txt')
+
+            if os.path.exists(data_file_path):
+                with open(data_file_path, 'r') as f:
+                    current_section = None
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith('#'):
+                            continue
+
+                        # Check for section headers
+                        if line.startswith('[') and line.endswith(']'):
+                            current_section = line[1:-1].lower()
+                            continue
+
+                        # Parse key=value pairs
+                        if '=' in line and current_section:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip()
+
+                            if current_section in race_monitor_data:
+                                race_monitor_data[current_section][key] = value
+
+                if self.logger:
+                    self.logger.debug(f"Loaded race monitor data from: {data_file_path}")
+            else:
+                if self.logger:
+                    self.logger.warning(f"Race monitor data file not found: {data_file_path}")
+
+        except Exception as e:
+            if self.logger:
+                self.logger.warning(f"Error loading race monitor data: {e}")
+
+        return race_monitor_data
 
     def create_experiment_metadata(self, experiment_id: str, controller_name: str = '',
                                    custom_data: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -81,6 +135,7 @@ class MetadataManager:
         """
         timestamp = datetime.now()
 
+        # Create the metadata structure
         metadata = {
             'experiment_info': {
                 'experiment_id': experiment_id,
@@ -88,13 +143,12 @@ class MetadataManager:
                 'timestamp': timestamp.isoformat(),
                 'date': timestamp.strftime('%Y-%m-%d'),
                 'time': timestamp.strftime('%H:%M:%S'),
-                'unix_timestamp': timestamp.timestamp(),
             },
             'system_info': self.system_info.copy(),
+            'race_monitor_info': self.race_monitor_data.copy(),
             'file_info': {
-                'created_by': 'race_monitor_metadata_manager',
-                'metadata_version': '1.0',
-                'format': 'json'
+                'metadata_created': timestamp.isoformat(),
+                'race_monitor_version': self.race_monitor_data['version']['race_monitor_version']
             }
         }
 
@@ -148,16 +202,31 @@ class MetadataManager:
                 f.write(f"OS: {sys_info.get('os', 'unknown')} {sys_info.get('os_release', '')}\n")
                 f.write(f"Machine: {sys_info.get('machine', 'unknown')}\n")
                 f.write(f"Architecture: {sys_info.get('architecture', 'unknown')}\n")
-                f.write(f"Hostname: {sys_info.get('hostname', 'unknown')}\n")
-                f.write(f"Python Version: {sys_info.get('python_version', 'unknown')}\n")
                 f.write(f"ROS2 Distro: {sys_info.get('ros_distro', 'unknown')}\n")
+                f.write("\n")
+
+                # Race Monitor info
+                rm_info = self.metadata.get('race_monitor_info', {})
+                f.write("RACE MONITOR INFORMATION:\n")
+                f.write("-" * 30 + "\n")
+                maintainer = rm_info.get('maintainer', {})
+                version = rm_info.get('version', {})
+                system = rm_info.get('system', {})
+                f.write(f"Maintainer: {maintainer.get('name', 'unknown')}\n")
+                f.write(f"Email: {maintainer.get('email', 'unknown')}\n")
+                f.write(f"Version: {version.get('race_monitor_version', 'unknown')}\n")
+                f.write(f"Build Date: {version.get('build_date', 'unknown')}\n")
+                f.write(f"License: {version.get('license', 'unknown')}\n")
+                f.write(f"Package: {system.get('package_name', 'unknown')}\n")
+                f.write(f"Description: {system.get('description', 'unknown')}\n")
+                f.write(f"Repository: {system.get('repository', 'unknown')}\n")
                 f.write("\n")
 
                 # Additional metadata
                 f.write("ADDITIONAL METADATA:\n")
                 f.write("-" * 20 + "\n")
                 for key, value in self.metadata.items():
-                    if key not in ['experiment_info', 'system_info', 'file_info']:
+                    if key not in ['experiment_info', 'system_info', 'race_monitor_info', 'file_info']:
                         f.write(f"{key}: {value}\n")
 
                 f.write("\n")
@@ -173,38 +242,6 @@ class MetadataManager:
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error saving metadata file: {e}")
-            return ""
-
-    def save_metadata_json(self, filename: str = 'experiment_metadata.json') -> str:
-        """
-        Save metadata to a JSON file.
-
-        Args:
-            filename: Name of the JSON metadata file
-
-        Returns:
-            Path to the saved JSON file
-        """
-        if not self.metadata:
-            if self.logger:
-                self.logger.warning("No metadata to save")
-            return ""
-
-        os.makedirs(self.output_directory, exist_ok=True)
-        filepath = os.path.join(self.output_directory, filename)
-
-        try:
-            with open(filepath, 'w') as f:
-                json.dump(self.metadata, f, indent=2)
-
-            if self.logger:
-                self.logger.info(f"Saved experiment metadata JSON to: {filepath}")
-
-            return filepath
-
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"Error saving metadata JSON: {e}")
             return ""
 
     def update_metadata(self, key: str, value: Any):
