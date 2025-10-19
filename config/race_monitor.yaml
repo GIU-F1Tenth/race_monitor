@@ -189,7 +189,7 @@ race_monitor:
     # ========================================
 
     # Enable/disable CPU performance monitoring
-    enable_computational_monitoring: true
+    enable_computational_monitoring: false
 
     # ========================================
     # F1TENTH INTERFACE SETTINGS

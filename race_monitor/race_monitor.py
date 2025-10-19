@@ -1075,6 +1075,11 @@ class RaceMonitor(Node):
                         self.get_logger().info(
                             f"Extracted APE/RPE metrics for race evaluation: APE={evo_metrics['ape_mean']:.4f}, RPE={evo_metrics['rpe_mean']:.4f}")
 
+                    # Pass lap times from race_data to race_evaluator
+                    if 'lap_times' in race_data:
+                        self.race_evaluator.lap_times_from_monitor = race_data['lap_times']
+                        self.get_logger().info(f"Set lap times for evaluator: {len(race_data['lap_times'])} laps")
+
                     race_evaluation = self.race_evaluator.create_race_evaluation(research_summary, evo_metrics)
                     if race_evaluation:
                         self.data_manager.save_race_evaluation(race_evaluation)

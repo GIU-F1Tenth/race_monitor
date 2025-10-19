@@ -739,13 +739,62 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            # Produce stable race_summary files without timestamps in the filename.
-            # Write a human-readable JSON and a compact gzipped companion (.rsum) so tools can
-            # consume the data efficiently.
+            # Extract data from race_summary
+            race_metadata = race_summary.get('race_metadata', {})
+            lap_statistics = race_summary.get('lap_statistics', {})
+            trajectory_statistics = race_summary.get('trajectory_statistics', {})
+            performance_metrics = race_summary.get('performance_metrics', {})
+            advanced_metrics = race_summary.get('advanced_metrics', {})
 
+            # Create new structured race_summary.json format
+            structured_summary = {
+                "metadata": {
+                    "timestamp": race_metadata.get('timestamp', ''),
+                    "controller_name": race_metadata.get('controller_name', ''),
+                    "experiment_id": race_metadata.get('experiment_id', '')
+                },
+                "lap_statistics": lap_statistics,
+                "performance_metrics": {
+                    "total_distance": trajectory_statistics.get('total_distance', 0),
+                    "average_speed": performance_metrics.get('average_speed', 0),
+                    "best_lap_speed": performance_metrics.get('best_lap_speed', 0),
+                    "distance_per_second": performance_metrics.get('distance_per_second', 0)
+                },
+                "trajectory_statistics": trajectory_statistics,
+                "trajectory_quality": {
+                    "path_length_mean": advanced_metrics.get('path_length_mean', 0),
+                    "path_length_std": advanced_metrics.get('path_length_std', 0),
+                    "ape_rmse_mean": advanced_metrics.get('ape_translation_part_rmse_mean', 0),
+                    "rpe_rmse_mean": advanced_metrics.get('rpe_translation_part_rmse_mean', 0),
+                    "overall_ape_mean": advanced_metrics.get('overall_ape_mean', 0),
+                    "overall_rpe_mean": advanced_metrics.get('overall_rpe_mean', 0)
+                },
+                "vehicle_dynamics": {
+                    "velocity_mean": advanced_metrics.get('velocity_mean_mean', 0),
+                    "velocity_std": advanced_metrics.get('velocity_std_mean', 0),
+                    "velocity_max_mean": advanced_metrics.get('velocity_max_mean', 0),
+                    "acceleration_mean": advanced_metrics.get('acceleration_mean_mean', 0),
+                    "acceleration_std": advanced_metrics.get('acceleration_std_mean', 0),
+                    "acceleration_max_mean": advanced_metrics.get('acceleration_max_mean', 0),
+                    "jerk_mean": advanced_metrics.get('jerk_mean', 0),
+                    "angular_velocity_mean": advanced_metrics.get('angular_velocity_mean_mean', 0)
+                },
+                "path_metrics": {
+                    "mean_curvature": advanced_metrics.get('mean_curvature_mean', 0),
+                    "max_curvature_mean": advanced_metrics.get('max_curvature_mean', 0),
+                    "path_efficiency_mean": advanced_metrics.get('path_efficiency_mean', 0)
+                },
+                "summary_stats": {
+                    "total_trajectory_points": trajectory_statistics.get('total_trajectory_points', 0),
+                    "sampling_rate_mean": advanced_metrics.get('sampling_rate_mean_mean', 10.0),
+                    "overall_consistency_cv": advanced_metrics.get('overall_consistency_cv', 0)
+                }
+            }
+
+            # Save structured race_summary.json
             json_filepath = os.path.join(self.results_dir, "race_summary.json")
             with open(json_filepath, 'w') as f:
-                json.dump(race_summary, f, indent=2, default=str)
+                json.dump(structured_summary, f, indent=2, default=str)
 
             # Also write a gzipped compact binary representation (custom .rsum) - compatible
             # with our tools: contains gzipped JSON bytes.
@@ -869,22 +918,33 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            # Create consolidated results structure
+            # Extract data from race_summary
+            race_metadata = race_summary.get('race_metadata', {})
+            lap_statistics = race_summary.get('lap_statistics', {})
+            trajectory_statistics = race_summary.get('trajectory_statistics', {})
+            performance_metrics = race_summary.get('performance_metrics', {})
+
+            # Create flatter race_results.json structure
             consolidated_results = {
-                "race_info": race_summary.get('race_metadata', {}),
-                "lap_analysis": {
-                    "statistics": race_summary.get('lap_statistics', {}),
-                    "trajectory_stats": race_summary.get('trajectory_statistics', {}),
-                    "performance_metrics": race_summary.get('performance_metrics', {})
-                },
-                "advanced_metrics": race_summary.get('advanced_metrics', {}),
-                "race_evaluation": race_evaluation or {}
+                "timestamp": race_metadata.get('timestamp', ''),
+                "controller_name": race_metadata.get('controller_name', ''),
+                "experiment_id": race_metadata.get('experiment_id', ''),
+                "total_race_time": race_metadata.get('total_race_time', 0),
+                "laps_completed": race_metadata.get('laps_completed', 0),
+                "race_ending_reason": race_metadata.get('race_ending_reason', ''),
+                "crashed": race_metadata.get('crashed', False),
+                "lap_times": lap_statistics.get('lap_times', []),
+                "total_distance": trajectory_statistics.get('total_distance', 0),
+                "sampling_rate": 10  # Default sampling rate
             }
 
             # Save as race_results.json
             results_filepath = os.path.join(self.results_dir, "race_results.json")
             with open(results_filepath, 'w') as f:
                 json.dump(consolidated_results, f, indent=2, default=str)
+
+            # Also save as CSV
+            self.save_race_results_csv(consolidated_results)
 
             return True
 
@@ -949,10 +1009,153 @@ class DataManager:
             with open(filepath, 'w') as f:
                 json.dump(evaluation_data, f, indent=2, default=str)
 
+            # Also save as CSV
+            self.save_race_evaluation_csv(evaluation_data)
+
             return True
 
         except Exception as e:
             self.logger.error(f"Error saving race evaluation: {e}")
+            return False
+
+    def save_race_evaluation_csv(self, evaluation_data: Dict) -> bool:
+        """
+        Save race evaluation results to CSV format.
+
+        Args:
+            evaluation_data: Race evaluation results
+
+        Returns:
+            bool: True if successfully saved
+        """
+        try:
+            csv_filepath = os.path.join(self.results_dir, "race_evaluation.csv")
+
+            with open(csv_filepath, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+
+                # Header
+                writer.writerow(['=== RACE EVALUATION ==='])
+                writer.writerow(['Generated', datetime.now().isoformat()])
+                writer.writerow([])
+
+                race_eval = evaluation_data.get('race_evaluation', evaluation_data)
+
+                # Metadata
+                writer.writerow(['=== METADATA ==='])
+                metadata = race_eval.get('metadata', {})
+                for key, value in metadata.items():
+                    writer.writerow([key.replace('_', ' ').title(), value])
+                writer.writerow([])
+
+                # Performance Summary
+                writer.writerow(['=== PERFORMANCE SUMMARY ==='])
+                perf_summary = race_eval.get('performance_summary', {})
+                writer.writerow(['Overall Grade', perf_summary.get('overall_grade', 'N/A')])
+                writer.writerow(['Numerical Score', perf_summary.get('numerical_score', 0)])
+
+                # Lap Times
+                lap_times = perf_summary.get('lap_times', {})
+                writer.writerow(['Best Lap Time', lap_times.get('best', 0)])
+                writer.writerow(['Average Lap Time', lap_times.get('average', 0)])
+                writer.writerow(['Worst Lap Time', lap_times.get('worst', 0)])
+                writer.writerow(['Lap Consistency CV', lap_times.get('consistency_cv', 0)])
+                writer.writerow(['Total Laps', lap_times.get('total_laps', 0)])
+                writer.writerow(['Lap Times Grade', lap_times.get('grade', 'N/A')])
+                writer.writerow([])
+
+                # Speed Analysis
+                writer.writerow(['=== SPEED ANALYSIS ==='])
+                speed_analysis = perf_summary.get('speed_analysis', {})
+                for key, value in speed_analysis.items():
+                    writer.writerow([key.replace('_', ' ').title(), value])
+                writer.writerow([])
+
+                # Category Grades
+                writer.writerow(['=== CATEGORY GRADES ==='])
+                category_grades = perf_summary.get('category_grades', {})
+                for key, value in category_grades.items():
+                    writer.writerow([key.replace('_', ' ').title(), value])
+                writer.writerow([])
+
+                # Trajectory Evaluation
+                writer.writerow(['=== TRAJECTORY EVALUATION ==='])
+                traj_eval = race_eval.get('trajectory_evaluation', {})
+
+                # APE Analysis
+                ape_analysis = traj_eval.get('ape_analysis', {})
+                if ape_analysis:
+                    writer.writerow(['--- APE Analysis ---'])
+                    for key, value in ape_analysis.items():
+                        writer.writerow([f'APE {key.title()}', f"{value:.4f}" if isinstance(value, float) else value])
+
+                # RPE Analysis
+                rpe_analysis = traj_eval.get('rpe_analysis', {})
+                if rpe_analysis:
+                    writer.writerow(['--- RPE Analysis ---'])
+                    for key, value in rpe_analysis.items():
+                        writer.writerow([f'RPE {key.title()}', f"{value:.4f}" if isinstance(value, float) else value])
+                writer.writerow([])
+
+                # Recommendations
+                recommendations = race_eval.get('recommendations', [])
+                if recommendations:
+                    writer.writerow(['=== RECOMMENDATIONS ==='])
+                    for i, rec in enumerate(recommendations, 1):
+                        writer.writerow([f'Recommendation {i}', rec])
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error saving race evaluation CSV: {e}")
+            return False
+
+    def save_race_results_csv(self, race_results: Dict) -> bool:
+        """
+        Save race results to CSV format.
+
+        Args:
+            race_results: Race results data
+
+        Returns:
+            bool: True if successfully saved
+        """
+        try:
+            csv_filepath = os.path.join(self.results_dir, "race_results.csv")
+
+            with open(csv_filepath, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+
+                # Header
+                writer.writerow(['=== RACE RESULTS ==='])
+                writer.writerow(['Generated', datetime.now().isoformat()])
+                writer.writerow([])
+
+                # Basic Info
+                writer.writerow(['=== BASIC INFORMATION ==='])
+                writer.writerow(['Timestamp', race_results.get('timestamp', '')])
+                writer.writerow(['Controller Name', race_results.get('controller_name', '')])
+                writer.writerow(['Experiment ID', race_results.get('experiment_id', '')])
+                writer.writerow(['Total Race Time (s)', f"{race_results.get('total_race_time', 0):.3f}"])
+                writer.writerow(['Laps Completed', race_results.get('laps_completed', 0)])
+                writer.writerow(['Race Ending Reason', race_results.get('race_ending_reason', '')])
+                writer.writerow(['Crashed', 'Yes' if race_results.get('crashed', False) else 'No'])
+                writer.writerow(['Total Distance (m)', f"{race_results.get('total_distance', 0):.3f}"])
+                writer.writerow(['Sampling Rate (Hz)', race_results.get('sampling_rate', 10)])
+                writer.writerow([])
+
+                # Lap Times
+                lap_times = race_results.get('lap_times', [])
+                if lap_times:
+                    writer.writerow(['=== LAP TIMES ==='])
+                    writer.writerow(['Lap Number', 'Lap Time (s)'])
+                    for i, lap_time in enumerate(lap_times, 1):
+                        writer.writerow([i, f"{lap_time:.3f}"])
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error saving race results CSV: {e}")
             return False
 
     def create_run_directory(self, controller_name: str, experiment_id: str) -> str:
