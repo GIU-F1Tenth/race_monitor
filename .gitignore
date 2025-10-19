@@ -1,6 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[codz]
+*.py[cod]
 *$py.class
 
 # C extensions
@@ -27,8 +27,6 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -48,6 +46,50 @@ coverage.xml
 *.cover
 *.py.cover
 .hypothesis/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ROS2 specific
+install/
+log/
+build/
+
+# Race monitor outputs
+trajectory_evaluation/
+demonstration_outputs/
+single_controller_demo/
+
+# Test and demo files
+test_*.py
+demo_*.py
+*_test.py
+*_demo.py
+analyze_*.py
+
+# Documentation (generated)
+*.md
+!README.md
+
+# Temporary files
+*.tmp
+*.temp
+*.log
 .pytest_cache/
 cover/
 
@@ -210,3 +252,6 @@ __marimo__/
 
 log/
 .vscode/
+data/
+trajectory_evaluation/
+evaluation_results/
