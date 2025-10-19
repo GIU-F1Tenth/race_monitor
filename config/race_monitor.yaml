@@ -31,7 +31,7 @@ race_monitor:
     # Base directory for data storage (absolute path to race_monitor package)
     trajectory_output_directory: "/home/mohammedazab/ws/src/race_stack/race_monitor/evaluation_results"
 
-    # Graph output directory (relative to trajectory_output_directory)
+    # Graph output directory
     graph_output_directory: "graphs" # ========================================
     # RACE ENDING CONDITIONS
     # ========================================
@@ -183,6 +183,11 @@ race_monitor:
     generate_speed_plots: true # Velocity analysis
     generate_error_plots: true # APE/RPE error analysis
     generate_metrics_plots: true # Smoothness/consistency over time
+
+    # Advanced plot types (like your provided images)
+    generate_error_mapped_plots: true # Error mapped onto trajectory with color coding
+    generate_violin_plots: true # Violin plots for error distribution comparison
+    generate_3d_vector_plots: true # 3D trajectory plots with directional vectors
 
     # ========================================
     # COMPUTATIONAL MONITORING SETTINGS

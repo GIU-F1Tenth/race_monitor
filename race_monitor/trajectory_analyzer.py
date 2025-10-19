@@ -635,35 +635,37 @@ class ResearchTrajectoryEvaluator:
         try:
             # Generate comprehensive summary
             summary = self.generate_research_summary()
-
-            # Save summary in multiple formats
+            # Save summary in multiple formats to results directory 
             output_formats = self.config.get('output_formats', ['json', 'csv'])
 
             for fmt in output_formats:
                 if fmt == 'json':
                     summary_file = os.path.join(
                         self.experiment_dir,
-                        'exports',
+                        'results',
                         f'{self.controller_name}_{self.experiment_id}_summary.json')
+                    os.makedirs(os.path.dirname(summary_file), exist_ok=True)
                     with open(summary_file, 'w') as f:
                         json.dump(summary, f, indent=2)
 
                 elif fmt == 'csv':
-                    # Export lap-by-lap metrics as CSV
+                    # Export lap-by-lap metrics as CSV to results directory
                     csv_file = os.path.join(
                         self.experiment_dir,
-                        'exports',
+                        'results',
                         f'{self.controller_name}_{self.experiment_id}_metrics.csv')
+                    os.makedirs(os.path.dirname(csv_file), exist_ok=True)
                     self._export_metrics_csv(csv_file)
 
                 elif fmt == 'pickle' and EVO_AVAILABLE:
-                    # Export using pandas bridge
+                    # Export using pandas bridge to results directory
                     try:
                         import pickle
                         pickle_file = os.path.join(
                             self.experiment_dir,
-                            'exports',
+                            'results',
                             f'{self.controller_name}_{self.experiment_id}_data.pkl')
+                        os.makedirs(os.path.dirname(pickle_file), exist_ok=True)
                         with open(pickle_file, 'wb') as f:
                             pickle.dump({
                                 'trajectories': self.lap_trajectories,

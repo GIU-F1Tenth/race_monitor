@@ -545,6 +545,10 @@ class RaceMonitor(Node):
             try:
                 self.research_evaluator = create_research_evaluator(self.config)
 
+                # Connect data manager for proper directory handling
+                if hasattr(self.research_evaluator, 'set_data_manager'):
+                    self.research_evaluator.set_data_manager(self.data_manager)
+
                 # Set up reference trajectory for APE/RPE calculations
                 if self.reference_manager.is_reference_available():
                     reference_trajectory = self.reference_manager.get_reference_trajectory()
@@ -978,7 +982,7 @@ class RaceMonitor(Node):
             # Save comprehensive race summary
             self.data_manager.save_race_summary(race_summary)
 
-            # Save APE/RPE metrics as individual files and generate plots
+            # Save APE/RPE metrics as individual files (plots disabled)
             advanced_metrics = race_summary.get('advanced_metrics', {})
             if advanced_metrics:
                 try:
@@ -987,14 +991,9 @@ class RaceMonitor(Node):
                         self.get_logger().info("APE/RPE metrics files saved successfully")
                     else:
                         self.get_logger().warning("Failed to save APE/RPE metrics files")
-
-                    # Generate APE/RPE plots
-                    if self.data_manager.generate_ape_rpe_plots(advanced_metrics):
-                        self.get_logger().info("APE/RPE plots generated successfully")
-                    else:
-                        self.get_logger().warning("Failed to generate APE/RPE plots")
+                    # Note: APE/RPE plot generation has been removed to reduce storage overhead
                 except Exception as e:
-                    self.get_logger().error(f"Error generating APE/RPE metrics files and plots: {e}")
+                    self.get_logger().error(f"Error saving APE/RPE metrics files: {e}")
 
             # Initialize variables for consolidated save
             race_evaluation = None
@@ -1244,7 +1243,7 @@ class RaceMonitor(Node):
                     self.get_logger().info(
                         f"Added {len(advanced_metrics)} averaged advanced metrics to race summary")
                 else:
-                    self.get_logger().warn("No advanced metrics calculated - adding empty dictionary")
+                    # No advanced metrics available - this is normal for basic monitoring
                     summary['advanced_metrics'] = {}
             except Exception as e:
                 self.get_logger().error(f"Error calculating averaged metrics: {e}")
@@ -1269,11 +1268,11 @@ class RaceMonitor(Node):
                     f"Using in-memory detailed metrics from research evaluator: {len(detailed_metrics)} laps")
             else:
                 # Fallback: Load metrics from saved lap files
-                self.get_logger().info("Research evaluator not available or no in-memory metrics, loading from saved lap files")
+                self.get_logger().debug("Research evaluator not available or no in-memory metrics, loading from saved lap files")
                 detailed_metrics = self._load_metrics_from_files()
 
             if not detailed_metrics:
-                self.get_logger().warn("No detailed metrics available from research evaluator or saved files")
+                self.get_logger().debug("No detailed metrics available from research evaluator or saved files")
                 return {}
 
             # Collect all metrics from all laps
@@ -1363,7 +1362,7 @@ class RaceMonitor(Node):
             lap_files = [f for f in os.listdir(metrics_dir) if f.startswith('lap_') and f.endswith('_metrics.json')]
             lap_files.sort()
 
-            self.get_logger().info(f"Found {len(lap_files)} lap metric files in {metrics_dir}")
+            self.get_logger().debug(f"Found {len(lap_files)} lap metric files in {metrics_dir}")
 
             for lap_file in lap_files:
                 try:
@@ -1382,7 +1381,7 @@ class RaceMonitor(Node):
                     self.get_logger().warn(f"Error loading lap file {lap_file}: {e}")
                     continue
 
-            self.get_logger().info(f"Successfully loaded metrics for {len(detailed_metrics)} laps from files")
+            self.get_logger().debug(f"Successfully loaded metrics for {len(detailed_metrics)} laps from files")
             return detailed_metrics
 
         except Exception as e:
