@@ -29,7 +29,7 @@ race_monitor:
     # ========================================
 
     # Base directory for data storage (absolute path to race_monitor package)
-    trajectory_output_directory: "/home/mohammedazab/ws/src/race_stack/race_monitor/evaluation_results"
+    trajectory_output_directory: "" # To be set by the user
 
     # Graph output directory
     graph_output_directory: "graphs" # ========================================
@@ -118,7 +118,7 @@ race_monitor:
     # ========================================
 
     # File-based reference trajectory
-    reference_trajectory_file: "/home/mohammedazab/ws/src/race_stack/horizon_mapper/horizon_mapper/optimal_trajectory.csv"
+    reference_trajectory_file: "" # To be set by the user
     reference_trajectory_format: "csv" # csv, tum, kitti
 
     # ========================================
