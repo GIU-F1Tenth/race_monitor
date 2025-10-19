@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import numpy as np
+import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for saving plots
 
@@ -112,8 +113,110 @@ class EVOPlotter:
             return True
 
         except Exception as e:
-            print(f"Error loading reference trajectory: {e}")
-            return False
+            print(f"❌ Failed to load reference trajectory from data: {e}")
+
+    def _create_reference_from_laps(self):
+        """Create a reference trajectory from the average of all lap trajectories"""
+        if not self.lap_trajectories:
+            return
+
+        try:
+            print(f"🎯 Creating reference trajectory from {len(self.lap_trajectories)} laps...")
+
+            # Get all trajectory positions
+            all_positions = []
+            for lap_num, traj in self.lap_trajectories.items():
+                positions = traj.positions_xyz
+                all_positions.append(positions)
+
+            # Find minimum length to avoid index issues
+            min_length = min(len(pos) for pos in all_positions)
+            print(f"📏 Using first {min_length} points for reference")
+
+            # Truncate all trajectories to same length
+            truncated_positions = [pos[:min_length] for pos in all_positions]
+
+            # Calculate average trajectory (centroid)
+            avg_positions = np.mean(truncated_positions, axis=0)
+
+            # Smooth the reference trajectory if scipy is available
+            try:
+                from scipy import signal
+                window_length = min(51, len(avg_positions) // 10)
+                if window_length % 2 == 0:
+                    window_length += 1
+
+                if window_length >= 3:
+                    avg_positions[:, 0] = signal.savgol_filter(avg_positions[:, 0], window_length, 3)
+                    avg_positions[:, 1] = signal.savgol_filter(avg_positions[:, 1], window_length, 3)
+                    avg_positions[:, 2] = signal.savgol_filter(avg_positions[:, 2], window_length, 3)
+                    print(f"✅ Applied smoothing to reference trajectory")
+            except ImportError:
+                print(f"⚠️ Scipy not available, using unsmoothed reference")
+
+            # Create timestamps
+            timestamps = np.arange(len(avg_positions)) * 0.1  # Assume 10Hz
+
+            # Create default orientations (looking forward)
+            qw = np.ones(len(avg_positions))
+            qx = np.zeros(len(avg_positions))
+            qy = np.zeros(len(avg_positions))
+            qz = np.zeros(len(avg_positions))
+
+            # Create EVO trajectory
+            self.reference_trajectory = trajectory.PoseTrajectory3D(
+                positions_xyz=avg_positions,
+                orientations_quat_wxyz=np.column_stack([qw, qx, qy, qz]),
+                timestamps=timestamps
+            )
+
+            print(f"✅ Created reference trajectory with {len(avg_positions)} points")
+
+        except Exception as e:
+            print(f"❌ Failed to create reference trajectory from laps: {e}")
+
+    def _find_best_lap(self):
+        """Find the best lap based on lowest average error to reference trajectory"""
+        if not self.lap_trajectories or not self.reference_trajectory:
+            return None
+
+        best_lap = None
+        lowest_error = float('inf')
+
+        try:
+            for lap_num, traj in self.lap_trajectories.items():
+                try:
+                    # Synchronize trajectories
+                    traj_ref, traj_est = sync.associate_trajectories(
+                        self.reference_trajectory, traj, max_diff=0.01)
+
+                    # Calculate average error
+                    pose_relation = metrics.PoseRelation.translation_part
+                    ape_metric = metrics.APE(pose_relation)
+                    ape_metric.process_data((traj_ref, traj_est))
+                    avg_error = np.mean(ape_metric.error)
+
+                    print(f"🏁 Lap {lap_num}: Average error = {avg_error:.4f}m")
+
+                    if avg_error < lowest_error:
+                        lowest_error = avg_error
+                        best_lap = lap_num
+
+                except Exception as e:
+                    print(f"Warning: Could not evaluate lap {lap_num}: {e}")
+                    continue
+
+            if best_lap is not None:
+                print(f"🏆 Best lap identified: Lap {best_lap} (avg error: {lowest_error:.4f}m)")
+
+            return best_lap
+
+        except Exception as e:
+            print(f"❌ Failed to find best lap: {e}")
+            return None
+
+    def generate_plots(self):
+        return False
 
     def add_lap_trajectory(self, lap_number, trajectory_data):
         """Add a completed lap trajectory for plotting"""
@@ -199,6 +302,31 @@ class EVOPlotter:
         except Exception as e:
             print(f"Error adding lap {lap_number} trajectory: {e}")
 
+    def add_lap_trajectory_evo(self, lap_number: int, evo_trajectory):
+        """Add EVO trajectory object directly for plotting"""
+        if not EVO_AVAILABLE:
+            return
+
+        try:
+            self.lap_trajectories[lap_number] = evo_trajectory
+            print(f"✅ Added EVO lap {lap_number} trajectory for plotting with {len(evo_trajectory.timestamps)} poses")
+            print(f"Total trajectories stored: {len(self.lap_trajectories)}")
+            print(f"Trajectory keys: {list(self.lap_trajectories.keys())}")
+        except Exception as e:
+            print(f"Error adding EVO lap {lap_number} trajectory: {e}")
+
+    def load_reference_trajectory_from_data(self, traj_data):
+        """Load reference trajectory from EVO trajectory object directly"""
+        if not EVO_AVAILABLE:
+            return False
+
+        try:
+            self.reference_trajectory = traj_data
+            return True
+        except Exception as e:
+            print(f"Could not load reference trajectory from data: {e}")
+            return False
+
     def add_lap_metrics(self, lap_number, metrics_data):
         """Add lap metrics for plotting"""
         self.lap_metrics[lap_number] = metrics_data
@@ -228,6 +356,11 @@ class EVOPlotter:
             print(f"Creating plot collection...")
             self.plot_collection = plot.PlotCollection("Race Monitor - EVO Analysis")
 
+            # Auto-generate reference trajectory if not available
+            if not self.reference_trajectory and self.lap_trajectories:
+                print(f"🎯 Auto-generating reference trajectory from lap data...")
+                self._create_reference_from_laps()
+
             # Generate different types of plots
             print(f"Generating trajectory plots...")
             if self.config.get('generate_trajectory_plots', True):
@@ -252,6 +385,19 @@ class EVOPlotter:
             print(f"Generating metrics plots...")
             if self.config.get('generate_metrics_plots', True):
                 self._generate_metrics_plots()
+
+            # Generate new advanced plot types
+            print(f"Generating error-mapped trajectory plots...")
+            if self.config.get('generate_error_mapped_plots', True) and self.reference_trajectory:
+                self._generate_error_mapped_trajectory()
+
+            print(f"Generating violin/box plots...")
+            if self.config.get('generate_violin_plots', True) and self.reference_trajectory:
+                self._generate_violin_plots()
+
+            print(f"Generating 3D trajectory plots with vectors...")
+            if self.config.get('generate_3d_vector_plots', True):
+                self._generate_3d_trajectory_with_vectors()
 
             # Save all plots
             print(f"Saving all plots...")
@@ -282,11 +428,9 @@ class EVOPlotter:
             ref_positions = self.reference_trajectory.positions_xyz
             ax_traj.plot(ref_positions[:, 0], ref_positions[:, 1],
                          '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            # Add start/end markers
+            # Add only start marker
             ax_traj.scatter(ref_positions[0, 0], ref_positions[0, 1],
-                            color='darkgreen', s=100, marker='o', label='Ref Start', zorder=5)
-            ax_traj.scatter(ref_positions[-1, 0], ref_positions[-1, 1],
-                            color='darkred', s=100, marker='s', label='Ref End', zorder=5)
+                            color='darkgreen', s=100, marker='o', label='Start', zorder=5)
 
         # Plot all lap trajectories
         colors = cm.get_cmap(self.config.get('plot_color_scheme', 'viridis'))
@@ -295,11 +439,9 @@ class EVOPlotter:
             positions = traj.positions_xyz
             ax_traj.plot(positions[:, 0], positions[:, 1],
                          '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
-            # Add start/end markers
+            # Add only start marker
             ax_traj.scatter(positions[0, 0], positions[0, 1],
                             color=color, s=80, marker='o', alpha=0.9, zorder=4)
-            ax_traj.scatter(positions[-1, 0], positions[-1, 1],
-                            color=color, s=80, marker='s', alpha=0.9, zorder=4)
 
         ax_traj.set_title('Trajectory Comparison')
         ax_traj.set_xlabel('X (m)')
@@ -311,7 +453,7 @@ class EVOPlotter:
         self.plot_collection.add_figure("trajectories", fig_traj)
 
     def _generate_xyz_plots(self):
-        """Generate X, Y, Z position plots"""
+        """Generate X, Y, Z position plots (without reference trajectory)"""
         if not self.lap_trajectories:
             return
 
@@ -319,18 +461,7 @@ class EVOPlotter:
                                           figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])),
                                           constrained_layout=False)
 
-        # Plot reference trajectory if available
-        if self.reference_trajectory:
-            ref_positions = self.reference_trajectory.positions_xyz
-            ref_timestamps = self.reference_trajectory.timestamps
-            axarr_xyz[0].plot(ref_timestamps, ref_positions[:, 0],
-                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_xyz[1].plot(ref_timestamps, ref_positions[:, 1],
-                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_xyz[2].plot(ref_timestamps, ref_positions[:, 2],
-                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-
-        # Plot all lap trajectories
+        # Plot all lap trajectories (no reference)
         colors = cm.get_cmap(self.config.get('plot_color_scheme', 'viridis'))
         for i, (lap_num, traj) in enumerate(self.lap_trajectories.items()):
             color = colors(i / len(self.lap_trajectories))
@@ -359,7 +490,7 @@ class EVOPlotter:
         self.plot_collection.add_figure("xyz", fig_xyz)
 
     def _generate_rpy_plots(self):
-        """Generate Roll, Pitch, Yaw plots"""
+        """Generate Roll, Pitch, Yaw plots (without reference trajectory)"""
         if not self.lap_trajectories:
             return
 
@@ -367,20 +498,7 @@ class EVOPlotter:
                                           figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])),
                                           constrained_layout=False)
 
-        # Plot reference trajectory if available
-        if self.reference_trajectory:
-            ref_orientations = self.reference_trajectory.orientations_quat_wxyz
-            ref_timestamps = self.reference_trajectory.timestamps
-            # Convert quaternions to Euler angles for plotting
-            ref_rpy = self._quat_to_euler(ref_orientations)
-            axarr_rpy[0].plot(ref_timestamps, ref_rpy[:, 0],
-                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_rpy[1].plot(ref_timestamps, ref_rpy[:, 1],
-                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            axarr_rpy[2].plot(ref_timestamps, ref_rpy[:, 2],
-                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-
-        # Plot all lap trajectories
+        # Plot all lap trajectories (no reference)
         colors = cm.get_cmap(self.config.get('plot_color_scheme', 'viridis'))
         for i, (lap_num, traj) in enumerate(self.lap_trajectories.items()):
             color = colors(i / len(self.lap_trajectories))
@@ -420,24 +538,14 @@ class EVOPlotter:
         return np.column_stack([roll, pitch, yaw])
 
     def _generate_speed_plots(self):
-        """Generate speed analysis plots"""
+        """Generate speed analysis plots (without reference trajectory)"""
         if not self.lap_trajectories:
             return
 
         fig_speed = plt.figure(figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])))
         ax_speed = fig_speed.gca()
 
-        # Plot reference trajectory if available
-        if self.reference_trajectory:
-            try:
-                ref_speeds = self._calculate_speeds(self.reference_trajectory)
-                ref_timestamps = self.reference_trajectory.timestamps[1:]  # One less due to speed calculation
-                ax_speed.plot(ref_timestamps, ref_speeds,
-                              '--', color='black', label='Reference', alpha=0.7, linewidth=2)
-            except Exception as e:
-                print(f"Could not plot reference speeds: {e}")
-
-        # Plot all lap trajectories
+        # Plot all lap trajectories (no reference)
         colors = cm.get_cmap(self.config.get('plot_color_scheme', 'viridis'))
         for i, (lap_num, traj) in enumerate(self.lap_trajectories.items()):
             try:
@@ -579,6 +687,324 @@ class EVOPlotter:
         plt.tight_layout()
         self.plot_collection.add_figure("metrics", fig_metrics)
 
+    def _generate_error_mapped_trajectory(self):
+        """Generate trajectory plot with error mapped as colors for the best lap only"""
+        if not self.reference_trajectory or not self.lap_trajectories:
+            return
+
+        try:
+            print("🎨 Generating error-mapped trajectory plot for best lap...")
+
+            # Find the best lap
+            best_lap = self._find_best_lap()
+            if best_lap is None:
+                print("❌ Could not determine best lap")
+                return
+
+            # Create the plot
+            fig, ax = plt.subplots(figsize=(14, 10))
+
+            # Plot reference trajectory with better visibility
+            ref_xyz = self.reference_trajectory.positions_xyz
+            ax.plot(ref_xyz[:, 0], ref_xyz[:, 1], '--', color='black',
+                    linewidth=4, alpha=0.9, label='Reference Trajectory', zorder=1)
+
+            # Process only the best lap
+            traj = self.lap_trajectories[best_lap]
+            try:
+                # Synchronize trajectories
+                traj_ref, traj_est = sync.associate_trajectories(
+                    self.reference_trajectory, traj, max_diff=0.01)
+
+                # Calculate point-wise errors
+                pose_relation = metrics.PoseRelation.translation_part
+                ape_metric = metrics.APE(pose_relation)
+                ape_metric.process_data((traj_ref, traj_est))
+                errors = ape_metric.error
+
+                # Get trajectory positions
+                est_xyz = traj_est.positions_xyz
+
+                # Create the main error-mapped visualization
+                scatter = ax.scatter(est_xyz[:, 0], est_xyz[:, 1], c=errors, cmap='viridis',
+                                     s=30, alpha=0.8, edgecolors='none', zorder=3)
+
+            except Exception as e:
+                print(f"Warning: Could not process best lap {best_lap}: {e}")
+                return
+
+            # Add colorbar on the right side (fixed positioning)
+            cbar = plt.colorbar(scatter, ax=ax, shrink=0.8, location='right', pad=0.02)
+            cbar.set_label('Error (m)', rotation=270, labelpad=20, fontsize=12)
+            cbar.ax.tick_params(labelsize=10)
+
+            # Formatting
+            ax.set_xlabel('x (m)', fontsize=12)
+            ax.set_ylabel('y (m)', fontsize=12)
+            ax.set_title(f'Error Mapped onto Trajectory (Best Lap {best_lap})', fontsize=14, fontweight='bold')
+            ax.legend(loc='upper right', fontsize=10)
+            ax.grid(True, alpha=0.3)
+            ax.set_aspect('equal')
+
+            # Improve layout
+            plt.tight_layout()
+            self.plot_collection.add_figure("best_lap_error_mapped_trajectory", fig)
+
+            print(f"✅ Generated error-mapped trajectory for best lap {best_lap}")
+
+        except Exception as e:
+            print(f"❌ Could not generate error-mapped trajectory: {e}")
+
+    def _generate_violin_plots(self):
+        """Generate combined violin/box plots for error comparison across all laps"""
+        if not self.reference_trajectory or not self.lap_trajectories:
+            return
+
+        try:
+            import seaborn as sns
+
+            print("📊 Generating combined statistical comparison plot...")
+
+            # Collect APE data for all laps
+            data_for_plot = []
+
+            for lap_num, traj in self.lap_trajectories.items():
+                try:
+                    # Synchronize trajectories
+                    traj_ref, traj_est = sync.associate_trajectories(
+                        self.reference_trajectory, traj, max_diff=0.01)
+
+                    # Calculate APE
+                    pose_relation = metrics.PoseRelation.translation_part
+                    ape_metric = metrics.APE(pose_relation)
+                    ape_metric.process_data((traj_ref, traj_est))
+
+                    # Add errors to data
+                    for error in ape_metric.error:
+                        data_for_plot.append({'Lap': f'Lap {lap_num}', 'Error (m)': error})
+
+                except Exception as e:
+                    print(f"Warning: Error processing lap {lap_num} for violin plot: {e}")
+                    continue
+
+            if not data_for_plot:
+                print("❌ No data available for statistical comparison")
+                return
+
+            # Create DataFrame for plotting
+            df = pd.DataFrame(data_for_plot)
+
+            # Create the plot
+            fig, ax = plt.subplots(figsize=(12, 8))
+
+            # Generate violin plot
+            sns.violinplot(data=df, x='Lap', y='Error (m)', ax=ax, hue='Lap', palette='Set2', legend=False)
+
+            # Add box plot overlay for better statistics visibility
+            sns.boxplot(data=df, x='Lap', y='Error (m)', ax=ax,
+                        width=0.3, hue='Lap', palette='Set2', legend=False)
+
+            # Formatting
+            ax.set_title('Trajectory Error Distribution Comparison', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Error (m)', fontsize=12)
+            ax.set_xlabel('Lap', fontsize=12)
+            ax.grid(True, alpha=0.3)
+
+            plt.tight_layout()
+            self.plot_collection.add_figure("Trajectory_Error_Distribution", fig)
+
+            print(f"✅ Generated statistical comparison for {len(df)} data points")
+
+        except ImportError:
+            print("⚠️ Seaborn not available, generating simple box plot instead...")
+            self._generate_simple_box_plot()
+        except Exception as e:
+            print(f"❌ Could not generate statistical comparison plot: {e}")
+
+    def _generate_simple_box_plot(self):
+        """Generate simple box plot as fallback when seaborn is not available"""
+        try:
+            # Collect APE data for all laps
+            lap_errors = {}
+
+            for lap_num, traj in self.lap_trajectories.items():
+                try:
+                    # Synchronize trajectories
+                    traj_ref, traj_est = sync.associate_trajectories(
+                        self.reference_trajectory, traj, max_diff=0.01)
+
+                    # Calculate APE
+                    pose_relation = metrics.PoseRelation.translation_part
+                    ape_metric = metrics.APE(pose_relation)
+                    ape_metric.process_data((traj_ref, traj_est))
+
+                    lap_errors[f'Lap {lap_num}'] = ape_metric.error
+
+                except Exception as e:
+                    print(f"Warning: Error processing lap {lap_num} for box plot: {e}")
+                    continue
+
+            if not lap_errors:
+                return
+
+            # Create the plot
+            fig, ax = plt.subplots(figsize=(12, 8))
+
+            # Create box plot
+            box_data = list(lap_errors.values())
+            labels = list(lap_errors.keys())
+
+            ax.boxplot(box_data, labels=labels)
+
+            # Formatting
+            ax.set_title('Trajectory Error Distribution Comparison', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Error (m)', fontsize=12)
+            ax.set_xlabel('Lap', fontsize=12)
+            ax.grid(True, alpha=0.3)
+
+            plt.tight_layout()
+            self.plot_collection.add_figure("simple_statistical_comparison", fig)
+
+        except Exception as e:
+            print(f"❌ Could not generate simple box plot: {e}")
+
+    def _generate_3d_trajectory_with_vectors(self):
+        """Generate 3D trajectory visualization with direction vectors for the best lap only"""
+        if not self.lap_trajectories:
+            return
+
+        try:
+            print("🔵 Generating 3D trajectory plot for best lap...")
+
+            # Find the best lap
+            best_lap = self._find_best_lap()
+            if best_lap is None:
+                print("❌ Could not determine best lap for 3D plot")
+                return
+
+            fig = plt.figure(figsize=(12, 10))
+            ax = fig.add_subplot(111, projection='3d')
+
+            # Plot reference trajectory if available
+            if self.reference_trajectory:
+                ref_xyz = self.reference_trajectory.positions_xyz
+                ax.plot(ref_xyz[:, 0], ref_xyz[:, 1], ref_xyz[:, 2],
+                        '--', color='black', linewidth=3, alpha=0.8, label='Reference')
+
+            # Plot only the best lap trajectory
+            traj = self.lap_trajectories[best_lap]
+            try:
+                est_xyz = traj.positions_xyz
+
+                ax.plot(est_xyz[:, 0], est_xyz[:, 1], est_xyz[:, 2],
+                        color='blue', linewidth=3, alpha=0.9, label=f'Best Lap {best_lap}')
+
+                # Add directional vectors at regular intervals
+                step = max(1, len(est_xyz) // 20)  # Show ~20 vectors
+                for j in range(0, len(est_xyz), step):
+                    if j + 1 < len(est_xyz):
+                        # Calculate direction vector
+                        direction = est_xyz[j + 1] - est_xyz[j]
+                        direction = direction / (np.linalg.norm(direction) + 1e-8)  # Normalize
+
+                        # Scale the vector for visibility
+                        scale = 0.4
+                        direction *= scale
+
+                        # Draw arrow
+                        ax.quiver(est_xyz[j, 0], est_xyz[j, 1], est_xyz[j, 2],
+                                  direction[0], direction[1], direction[2],
+                                  color='red', alpha=0.8, arrow_length_ratio=0.1)
+
+            except Exception as e:
+                print(f"Warning: Could not process best lap {best_lap} for 3D plot: {e}")
+                return
+
+            # Formatting
+            ax.set_xlabel('x (m)', fontsize=12)
+            ax.set_ylabel('y (m)', fontsize=12)
+            ax.set_zlabel('z (m)', fontsize=12)
+            ax.legend(fontsize=10)
+            ax.set_title(f'3D Trajectory with Direction Vectors (Best Lap {best_lap})', fontsize=14, fontweight='bold')
+
+            # Set equal aspect ratio using best lap and reference trajectory
+            trajectories = [traj.positions_xyz]
+            if self.reference_trajectory:
+                trajectories.append(self.reference_trajectory.positions_xyz)
+
+            if trajectories:
+                all_x = np.concatenate([traj[:, 0] for traj in trajectories])
+                all_y = np.concatenate([traj[:, 1] for traj in trajectories])
+                all_z = np.concatenate([traj[:, 2] for traj in trajectories])
+
+                max_range = np.array([all_x.max() - all_x.min(),
+                                     all_y.max() - all_y.min(),
+                                     all_z.max() - all_z.min()]).max() / 2.0
+
+                mid_x = (all_x.max() + all_x.min()) * 0.5
+                mid_y = (all_y.max() + all_y.min()) * 0.5
+                mid_z = (all_z.max() + all_z.min()) * 0.5
+
+                ax.set_xlim(mid_x - max_range, mid_x + max_range)
+                ax.set_ylim(mid_y - max_range, mid_y + max_range)
+                ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+            plt.tight_layout()
+            self.plot_collection.add_figure("best_lap_3d_trajectory_vectors", fig)
+
+            print(f"✅ Generated 3D trajectory plot for best lap {best_lap}")
+
+        except Exception as e:
+            print(f"❌ Could not generate 3D trajectory plot: {e}")
+
+    def _generate_box_plots(self):
+        """Fallback box plots if seaborn is not available"""
+        if not self.reference_trajectory or not self.lap_trajectories:
+            return
+
+        ape_data_by_lap = {}
+
+        for lap_num, traj in self.lap_trajectories.items():
+            try:
+                # Synchronize trajectories
+                traj_ref, traj_est = sync.associate_trajectories(
+                    self.reference_trajectory, traj, max_diff=0.01)
+
+                # Calculate APE
+                pose_relation = metrics.PoseRelation.translation_part
+                ape_metric = metrics.APE(pose_relation)
+                ape_metric.process_data((traj_ref, traj_est))
+
+                ape_data_by_lap[f'LAP_{lap_num:02d}'] = ape_metric.error
+
+            except Exception as e:
+                print(f"Error processing lap {lap_num} for box plot: {e}")
+
+        if not ape_data_by_lap:
+            return
+
+        # Create box plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        data_values = list(ape_data_by_lap.values())
+        labels = list(ape_data_by_lap.keys())
+
+        box_plot = ax.boxplot(data_values, labels=labels, patch_artist=True)
+
+        # Color the boxes
+        colors = ['steelblue', 'green'] * (len(box_plot['boxes']) // 2 + 1)
+        for patch, color in zip(box_plot['boxes'], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.7)
+
+        ax.set_ylabel('APE (m)')
+        ax.set_title('Error Distribution Comparison')
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+
+        self.plot_collection.add_figure("box_comparison", fig)
+
     def _save_all_plots(self):
         """Save all generated plots"""
         if not self.plot_collection:
@@ -618,17 +1044,8 @@ class EVOPlotter:
             except Exception as e:
                 print(f"❌ Error saving {plot_name} plot: {e}")
 
-        # Also try to save using EVO's native export (as backup)
-        try:
-            for fmt in graph_formats:
-                if fmt.lower() == 'png':
-                    output_path = os.path.join(graph_dir, f"race_analysis_evo.png")
-                    print(f"Attempting EVO export to {output_path}")
-                    self.plot_collection.export(output_path, confirm_overwrite=False)
-                    print(f"✅ EVO export successful")
-                    break
-        except Exception as e:
-            print(f"EVO export failed (this is okay, individual plots were saved): {e}")
+        # Note: EVO native export disabled to avoid duplicate plots
+        # All plots are saved individually using matplotlib
 
         print(f"✅ All plots saved to {graph_dir}")
         return True
