@@ -321,7 +321,7 @@ class PerformanceMonitor:
 
     def save_performance_data_to_csv(self, output_dir: str, filename_prefix: str = "computational_performance"):
         """
-        Save performance data to CSV file.
+        Save performance data to CSV file and generate summary.
 
         Args:
             output_dir: Directory to save the file
@@ -345,8 +345,120 @@ class PerformanceMonitor:
                 for data in self.performance_data:
                     writer.writerow(data)
 
+            self.logger.info(f"Performance data saved to: {filepath}")
+
+            # Generate performance summary
+            self._generate_performance_summary(filepath)
+
         except Exception as e:
             self.logger.error(f"Error saving performance data: {e}")
+
+    def _generate_performance_summary(self, csv_filepath: str):
+        """Generate a JSON summary of computational performance data."""
+        try:
+            import json
+            import numpy as np
+            from datetime import datetime
+
+            if not self.performance_data:
+                return
+
+            # Extract data for analysis
+            cpu_data = [d['cpu_percent'] for d in self.performance_data]
+            memory_data = [d['memory_mb'] for d in self.performance_data]
+            latency_data = [d['control_latency_ms'] for d in self.performance_data]
+            cpu_max_data = [d['cpu_max'] for d in self.performance_data]
+            memory_max_data = [d['memory_max'] for d in self.performance_data]
+            latency_max_data = [d['latency_max'] for d in self.performance_data]
+
+            # Calculate timestamps if available
+            timestamps = [d.get('timestamp') for d in self.performance_data if d.get('timestamp')]
+            duration = 0
+            sample_rate = 0
+
+            if len(timestamps) >= 2:
+                try:
+                    from datetime import datetime
+                    first_time = datetime.fromisoformat(timestamps[0])
+                    last_time = datetime.fromisoformat(timestamps[-1])
+                    duration = (last_time - first_time).total_seconds()
+                    sample_rate = len(self.performance_data) / duration if duration > 0 else 0
+                except BaseException:
+                    pass
+
+            def calculate_grade(avg_val, max_val, thresholds):
+                """Calculate performance grade based on thresholds."""
+                for grade, (avg_thresh, max_thresh) in thresholds.items():
+                    if avg_val <= avg_thresh and max_val <= max_thresh:
+                        return grade
+                return "F"
+
+            # Grade calculations
+            cpu_grade = calculate_grade(np.mean(cpu_data), np.max(cpu_data), {
+                "A": (15, 50), "B": (30, 70), "C": (50, 85), "D": (70, 95)
+            })
+
+            memory_grade = calculate_grade(np.mean(memory_data), np.max(memory_data), {
+                "A": (200, 300), "B": (300, 400), "C": (400, 500), "D": (500, 600)
+            })
+
+            latency_grade = calculate_grade(np.mean(latency_data), np.max(latency_data), {
+                "A": (5, 15), "B": (10, 25), "C": (20, 40), "D": (30, 60)
+            })
+
+            # Overall grade
+            grade_values = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+            avg_grade_value = np.mean(
+                [grade_values[cpu_grade], grade_values[memory_grade], grade_values[latency_grade]])
+            overall_grade = ["F", "D", "C", "B", "A"][min(4, int(avg_grade_value))]
+
+            # Create performance summary
+            performance_summary = {
+                "metadata": {
+                    "source_file": csv_filepath,
+                    "generated_at": datetime.now().isoformat(),
+                    "total_samples": len(self.performance_data),
+                    "duration_seconds": duration,
+                    "sample_rate_hz": sample_rate
+                },
+                "cpu_performance": {
+                    "average_percent": float(np.mean(cpu_data)),
+                    "best_percent": float(np.min(cpu_data)),
+                    "worst_percent": float(np.max(cpu_data)),
+                    "std_deviation": float(np.std(cpu_data)),
+                    "peak_cpu_max": float(np.max(cpu_max_data))
+                },
+                "memory_performance": {
+                    "average_mb": float(np.mean(memory_data)),
+                    "best_mb": float(np.min(memory_data)),
+                    "worst_mb": float(np.max(memory_data)),
+                    "std_deviation": float(np.std(memory_data)),
+                    "peak_memory_max": float(np.max(memory_max_data))
+                },
+                "control_latency": {
+                    "average_ms": float(np.mean(latency_data)),
+                    "best_ms": float(np.min(latency_data)),
+                    "worst_ms": float(np.max(latency_data)),
+                    "std_deviation": float(np.std(latency_data)),
+                    "peak_latency_max": float(np.max(latency_max_data))
+                },
+                "performance_grades": {
+                    "cpu_grade": cpu_grade,
+                    "memory_grade": memory_grade,
+                    "latency_grade": latency_grade,
+                    "overall_grade": overall_grade
+                }
+            }
+
+            # Save summary JSON file
+            summary_path = csv_filepath.replace('.csv', '_summary.json')
+            with open(summary_path, 'w') as f:
+                json.dump(performance_summary, f, indent=2)
+
+            self.logger.info(f"Performance summary generated: {summary_path}")
+
+        except Exception as e:
+            self.logger.error(f"Error generating performance summary: {e}")
 
     def reset_performance_data(self):
         """Clear all performance monitoring data."""

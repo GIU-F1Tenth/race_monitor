@@ -1005,9 +1005,8 @@ class DataManager:
                 # Update metadata manager output directory to the experiment directory
                 self.metadata_manager.output_directory = experiment_dir
 
-                # Save both text and JSON metadata files
+                # Save text metadata file
                 self.metadata_manager.save_metadata_file('experiment_metadata.txt')
-                self.metadata_manager.save_metadata_json('experiment_metadata.json')
 
                 # Log experiment summary
                 self.logger.info(f"Experiment setup: {self.metadata_manager.get_experiment_summary()}")

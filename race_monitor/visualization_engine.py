@@ -316,7 +316,8 @@ class EVOPlotter:
             return
 
         fig_xyz, axarr_xyz = plt.subplots(3, 1, sharex=True,
-                                          figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])))
+                                          figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])),
+                                          constrained_layout=False)
 
         # Plot reference trajectory if available
         if self.reference_trajectory:
@@ -363,7 +364,8 @@ class EVOPlotter:
             return
 
         fig_rpy, axarr_rpy = plt.subplots(3, 1, sharex=True,
-                                          figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])))
+                                          figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])),
+                                          constrained_layout=False)
 
         # Plot reference trajectory if available
         if self.reference_trajectory:
@@ -505,7 +507,8 @@ class EVOPlotter:
             return
 
         # Create error plots
-        fig_error, (ax_ape, ax_rpe) = plt.subplots(2, 1, figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])))
+        fig_error, (ax_ape, ax_rpe) = plt.subplots(2, 1, figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])),
+                                                   constrained_layout=False)
 
         # APE plot
         lap_numbers = list(ape_scores.keys())
@@ -540,7 +543,8 @@ class EVOPlotter:
 
         # Create metrics plots
         fig_metrics, ((ax_smooth, ax_consist), (ax_length, ax_combined)) = plt.subplots(
-            2, 2, figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])))
+            2, 2, figsize=tuple(self.config.get('plot_figsize', [12.0, 8.0])),
+            constrained_layout=False)
 
         # Smoothness plot
         ax_smooth.plot(lap_numbers, smoothness_values, 'bo-', linewidth=2, markersize=8)
@@ -620,7 +624,7 @@ class EVOPlotter:
                 if fmt.lower() == 'png':
                     output_path = os.path.join(graph_dir, f"race_analysis_evo.png")
                     print(f"Attempting EVO export to {output_path}")
-                    self.plot_collection.export(output_path, confirm_overwrite=True)
+                    self.plot_collection.export(output_path, confirm_overwrite=False)
                     print(f"✅ EVO export successful")
                     break
         except Exception as e:
