@@ -439,7 +439,7 @@ class LapDetector:
             self.on_lap_complete(self.current_lap, lap_time)
 
         # Check if race is complete based on ending mode
-        if self.race_ending_mode == "lap_complete" and self.current_lap >= self.required_laps:
+        if self.race_ending_mode == "lap_complete" and len(self.lap_times) >= self.required_laps:
             self._complete_race(timestamp)
         elif self.race_ending_mode == "lap_complete":
             # Start next lap
