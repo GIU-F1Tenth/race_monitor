@@ -16,9 +16,9 @@ setup(
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
         (os.path.join('lib', 'python3.10', 'site-packages'), ['race_monitor_data.txt']),
     ],
-    install_requires=['setuptools', 'evo', 'psutil', 'ackermann_msgs'],
+    install_requires=['setuptools', 'evo', 'psutil', 'ackermann_msgs', 'pandas', 'seaborn', 'matplotlib'],
     zip_safe=True,
-    maintainer='Mohammed Azab',
+    maintainer='Mohammed Abdeazim',
     maintainer_email='mohammed@azab.io',
     description='ROS2 node for tracking laps, lap times, and race statistics in autonomous racing with EVO trajectory analysis',
     license='MIT',
@@ -26,7 +26,6 @@ setup(
     entry_points={
         'console_scripts': [
             'race_monitor = race_monitor.race_monitor:main',
-            'lap_timing_monitor = race_monitor.lap_timing_monitor:main',  # Keep old entry point for compatibility
         ],
     },
 )

@@ -659,33 +659,6 @@ class DataManager:
         os.makedirs(filtered_dir, exist_ok=True)
         return filtered_dir
 
-    def get_exports_directory(self) -> str:
-        """Get the exports directory path."""
-        if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "exports")
-
-        exports_dir = os.path.join(self.base_output_dir, "exports")
-        os.makedirs(exports_dir, exist_ok=True)
-        return exports_dir
-
-    def get_plots_directory(self) -> str:
-        """Get the plots directory path."""
-        if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "plots")
-
-        plots_dir = os.path.join(self.base_output_dir, "plots")
-        os.makedirs(plots_dir, exist_ok=True)
-        return plots_dir
-
-    def get_statistics_directory(self) -> str:
-        """Get the statistics directory path."""
-        if not self._is_in_experiment_directory():
-            return os.path.join(self.base_output_dir, "statistics")
-
-        stats_dir = os.path.join(self.base_output_dir, "statistics")
-        os.makedirs(stats_dir, exist_ok=True)
-        return stats_dir
-
     def get_graphs_directory(self) -> str:
         """Get the graphs directory path."""
         if not self._is_in_experiment_directory():
@@ -1182,9 +1155,7 @@ class DataManager:
             os.makedirs(os.path.join(experiment_dir, "graphs"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "metrics"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "filtered"), exist_ok=True)
-            os.makedirs(os.path.join(experiment_dir, "exports"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "plots"), exist_ok=True)
-            os.makedirs(os.path.join(experiment_dir, "statistics"), exist_ok=True)
 
             self.trajectory_dir = os.path.join(experiment_dir, "trajectories")
             self.results_dir = os.path.join(experiment_dir, "results")

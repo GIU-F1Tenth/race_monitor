@@ -37,6 +37,7 @@ from .race_monitor import RaceMonitor
 from .trajectory_analyzer import ResearchTrajectoryEvaluator, create_research_evaluator
 from .race_evaluator import RaceEvaluator, create_race_evaluator
 from .data_manager import DataManager
+from .visualization_engine import EVOPlotter
 
 __all__ = [
     "RaceMonitor",
@@ -44,5 +45,6 @@ __all__ = [
     "create_research_evaluator",
     "RaceEvaluator",
     "create_race_evaluator",
-    "DataManager"
+    "DataManager",
+    "EVOPlotter"
 ]
