@@ -175,7 +175,20 @@ class MetadataManager:
             return ""
 
         os.makedirs(self.output_directory, exist_ok=True)
-        filepath = os.path.join(self.output_directory, filename)
+
+        # Check for exceptions that should NOT be organized
+        if filename == 'experiment_metadata.txt' or filename.lower().endswith('.md'):
+            filepath = os.path.join(self.output_directory, filename)
+        else:
+            # Organize by extension
+            _, ext = os.path.splitext(filename)
+            ext = ext.lstrip('.').lower()
+            if ext:
+                ext_dir = os.path.join(self.output_directory, ext)
+                os.makedirs(ext_dir, exist_ok=True)
+                filepath = os.path.join(ext_dir, filename)
+            else:
+                filepath = os.path.join(self.output_directory, filename)
 
         try:
             with open(filepath, 'w') as f:

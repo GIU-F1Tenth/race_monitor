@@ -358,7 +358,7 @@ class DataManager:
         """Save trajectory as CSV file."""
         try:
             filename = f"lap_{lap_number:03d}_trajectory.csv"
-            filepath = os.path.join(self.trajectory_dir, filename)
+            filepath = self._get_organized_file_path(self.trajectory_dir, filename)
 
             with open(filepath, 'w', newline='') as csvfile:
                 if points:
@@ -377,7 +377,7 @@ class DataManager:
         """Save trajectory in TUM format."""
         try:
             filename = f"lap_{lap_number:03d}_trajectory.tum"
-            filepath = os.path.join(self.trajectory_dir, filename)
+            filepath = self._get_organized_file_path(self.trajectory_dir, filename)
 
             with open(filepath, 'w') as f:
                 for point in points:
@@ -403,7 +403,7 @@ class DataManager:
         """Save trajectory as JSON file."""
         try:
             filename = f"lap_{lap_number:03d}_trajectory.json"
-            filepath = os.path.join(self.trajectory_dir, filename)
+            filepath = self._get_organized_file_path(self.trajectory_dir, filename)
 
             with open(filepath, 'w') as f:
                 json.dump(trajectory_data, f, indent=2)
@@ -418,7 +418,7 @@ class DataManager:
         """Save trajectory as Pickle file."""
         try:
             filename = f"lap_{lap_number:03d}_trajectory.pkl"
-            filepath = os.path.join(self.trajectory_dir, filename)
+            filepath = self._get_organized_file_path(self.trajectory_dir, filename)
 
             with open(filepath, 'wb') as f:
                 pickle.dump(trajectory_data, f)
@@ -437,7 +437,7 @@ class DataManager:
 
         try:
             filename = f"lap_{lap_number:03d}_trajectory.mat"
-            filepath = os.path.join(self.trajectory_dir, filename)
+            filepath = self._get_organized_file_path(self.trajectory_dir, filename)
 
             # Prepare data for MAT format
             points = trajectory_data['points']
@@ -501,7 +501,7 @@ class DataManager:
             # consolidated race_results.json via save_consolidated_race_results and skip creating the CSV.
             if filename_override:
                 filename = filename_override
-                filepath = os.path.join(self.results_dir, filename)
+                filepath = self._get_organized_file_path(self.results_dir, filename)
 
                 with open(filepath, 'w', newline='') as csvfile:
                     writer = csv.writer(csvfile)
@@ -668,6 +668,38 @@ class DataManager:
         os.makedirs(graphs_dir, exist_ok=True)
         return graphs_dir
 
+    def _get_organized_file_path(self, base_dir: str, filename: str) -> str:
+        """
+        Get organized file path with extension-specific subdirectory.
+
+        Exceptions:
+        - experiment_metadata.txt files are saved directly in base directory
+        - .md files are saved directly in base directory
+
+        Args:
+            base_dir: Base directory path
+            filename: Filename with extension
+
+        Returns:
+            str: Full path with extension subdirectory (or base directory for exceptions)
+        """
+        # Check for exceptions that should NOT be organized
+        if filename == 'experiment_metadata.txt' or filename.lower().endswith('.md'):
+            return os.path.join(base_dir, filename)
+
+        # Extract extension from filename
+        _, ext = os.path.splitext(filename)
+        ext = ext.lstrip('.').lower()  # Remove dot and make lowercase
+
+        if ext:
+            # Create extension-specific subdirectory
+            ext_dir = os.path.join(base_dir, ext)
+            os.makedirs(ext_dir, exist_ok=True)
+            return os.path.join(ext_dir, filename)
+        else:
+            # No extension, save directly in base directory
+            return os.path.join(base_dir, filename)
+
     def get_current_trajectory_directory(self) -> str:
         """Get the current trajectory base directory path."""
         return self.base_output_dir
@@ -765,14 +797,14 @@ class DataManager:
             }
 
             # Save structured race_summary.json
-            json_filepath = os.path.join(self.results_dir, "race_summary.json")
+            json_filepath = self._get_organized_file_path(self.results_dir, "race_summary.json")
             with open(json_filepath, 'w') as f:
                 json.dump(structured_summary, f, indent=2, default=str)
 
             # Also write a gzipped compact binary representation (custom .rsum) - compatible
             # with our tools: contains gzipped JSON bytes.
             try:
-                rsum_path = os.path.join(self.results_dir, "race_summary.rsum")
+                rsum_path = self._get_organized_file_path(self.results_dir, "race_summary.rsum")
                 with gzip.open(rsum_path, 'wt', encoding='utf-8') as gz:
                     json.dump(race_summary, gz, separators=(',', ':'), default=str)
             except Exception:
@@ -780,7 +812,7 @@ class DataManager:
 
             # For backward compatibility keep a detailed CSV if explicitly requested via config
             if 'csv' in self.output_formats:
-                csv_filepath = os.path.join(self.results_dir, "race_summary.csv")
+                csv_filepath = self._get_organized_file_path(self.results_dir, "race_summary.csv")
                 try:
                     with open(csv_filepath, 'w', newline='') as csvfile:
                         writer = csv.writer(csvfile)
@@ -912,7 +944,7 @@ class DataManager:
             }
 
             # Save as race_results.json
-            results_filepath = os.path.join(self.results_dir, "race_results.json")
+            results_filepath = self._get_organized_file_path(self.results_dir, "race_results.json")
             with open(results_filepath, 'w') as f:
                 json.dump(consolidated_results, f, indent=2, default=str)
 
@@ -938,7 +970,7 @@ class DataManager:
         try:
             # Use stable filename without timestamp
             filename = "race_evaluation.json"
-            filepath = os.path.join(self.results_dir, filename)
+            filepath = self._get_organized_file_path(self.results_dir, filename)
 
             # If the evaluation_data is empty or contains only zeros, try to populate from
             # consolidated results or a recent race_summary to avoid zeroed outputs.
@@ -1002,7 +1034,7 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            csv_filepath = os.path.join(self.results_dir, "race_evaluation.csv")
+            csv_filepath = self._get_organized_file_path(self.results_dir, "race_evaluation.csv")
 
             with open(csv_filepath, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile)
@@ -1094,7 +1126,7 @@ class DataManager:
             bool: True if successfully saved
         """
         try:
-            csv_filepath = os.path.join(self.results_dir, "race_results.csv")
+            csv_filepath = self._get_organized_file_path(self.results_dir, "race_results.csv")
 
             with open(csv_filepath, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile)
@@ -1155,7 +1187,6 @@ class DataManager:
             os.makedirs(os.path.join(experiment_dir, "graphs"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "metrics"), exist_ok=True)
             os.makedirs(os.path.join(experiment_dir, "filtered"), exist_ok=True)
-            os.makedirs(os.path.join(experiment_dir, "plots"), exist_ok=True)
 
             self.trajectory_dir = os.path.join(experiment_dir, "trajectories")
             self.results_dir = os.path.join(experiment_dir, "results")
@@ -1211,7 +1242,7 @@ class DataManager:
             # Extract APE metrics
             ape_metrics = {k: v for k, v in advanced_metrics.items() if 'ape_' in k}
             if ape_metrics:
-                ape_filepath = os.path.join(metrics_dir, 'ape_metrics_summary.json')
+                ape_filepath = self._get_organized_file_path(metrics_dir, 'ape_metrics_summary.json')
                 with open(ape_filepath, 'w') as f:
                     json.dump(ape_metrics, f, indent=2, default=str)
                 self.logger.info(f"Saved APE metrics summary to: {ape_filepath}")
@@ -1219,7 +1250,7 @@ class DataManager:
             # Extract RPE metrics
             rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
             if rpe_metrics:
-                rpe_filepath = os.path.join(metrics_dir, 'rpe_metrics_summary.json')
+                rpe_filepath = self._get_organized_file_path(metrics_dir, 'rpe_metrics_summary.json')
                 with open(rpe_filepath, 'w') as f:
                     json.dump(rpe_metrics, f, indent=2, default=str)
                 self.logger.info(f"Saved RPE metrics summary to: {rpe_filepath}")

@@ -1708,8 +1708,12 @@ class RaceMonitor(Node):
             perf_dir = os.path.join(self.trajectory_output_directory, 'cpu_performance_data')
             os.makedirs(perf_dir, exist_ok=True)
 
+            # Organize by extension
+            csv_dir = os.path.join(perf_dir, 'csv')
+            os.makedirs(csv_dir, exist_ok=True)
+
             # Generate clean filename
-            filename = os.path.join(perf_dir, 'computational_performance.csv')
+            filename = os.path.join(csv_dir, 'computational_performance.csv')
 
             # Write CSV
             with open(filename, 'w', newline='') as csvfile:
@@ -2069,8 +2073,13 @@ class RaceMonitor(Node):
         try:
             data_dir = os.path.join(os.getcwd(), 'race_monitor', 'data')
             os.makedirs(data_dir, exist_ok=True)
+
+            # Organize by extension
+            csv_dir = os.path.join(data_dir, 'csv')
+            os.makedirs(csv_dir, exist_ok=True)
+
             filename = self.output_file
-            filepath = os.path.join(data_dir, filename)
+            filepath = os.path.join(csv_dir, filename)
 
             with open(filepath, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile)

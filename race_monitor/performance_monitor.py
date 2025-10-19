@@ -334,7 +334,11 @@ class PerformanceMonitor:
         try:
             os.makedirs(output_dir, exist_ok=True)
             filename = f"{filename_prefix}.csv"
-            filepath = os.path.join(output_dir, filename)
+
+            # Organize file by extension
+            csv_dir = os.path.join(output_dir, "csv")
+            os.makedirs(csv_dir, exist_ok=True)
+            filepath = os.path.join(csv_dir, filename)
 
             with open(filepath, 'w', newline='') as csvfile:
                 fieldnames = ['timestamp', 'cpu_percent', 'memory_mb', 'control_latency_ms',
@@ -450,8 +454,14 @@ class PerformanceMonitor:
                 }
             }
 
-            # Save summary JSON file
-            summary_path = csv_filepath.replace('.csv', '_summary.json')
+            # Save summary JSON file with organized structure
+            json_filename = csv_filepath.replace('.csv', '_summary.json').split('/')[-1]  # Get just filename
+            csv_dir = os.path.dirname(csv_filepath)
+            base_dir = os.path.dirname(csv_dir)  # Go up from csv/ to parent
+            json_dir = os.path.join(base_dir, "json")
+            os.makedirs(json_dir, exist_ok=True)
+            summary_path = os.path.join(json_dir, json_filename)
+
             with open(summary_path, 'w') as f:
                 json.dump(performance_summary, f, indent=2)
 

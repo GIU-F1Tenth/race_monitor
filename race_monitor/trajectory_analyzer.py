@@ -560,8 +560,11 @@ class ResearchTrajectoryEvaluator:
             return
 
         try:
-            # Save metrics as JSON
-            metrics_file = os.path.join(self.experiment_dir, 'metrics', f'lap_{lap_number:03d}_metrics.json')
+            # Save metrics as JSON with organized structure
+            metrics_dir = os.path.join(self.experiment_dir, 'metrics')
+            json_dir = os.path.join(metrics_dir, 'json')
+            os.makedirs(json_dir, exist_ok=True)
+            metrics_file = os.path.join(json_dir, f'lap_{lap_number:03d}_metrics.json')
             with open(metrics_file, 'w') as f:
                 json.dump(self.detailed_metrics[lap_number], f, indent=2)
         except Exception as e:
@@ -569,7 +572,10 @@ class ResearchTrajectoryEvaluator:
 
         # Save filtered trajectory if available
         if lap_number in self.filtered_trajectories:
-            filtered_file = os.path.join(self.experiment_dir, 'filtered', f'lap_{lap_number:03d}_filtered.tum')
+            filtered_dir = os.path.join(self.experiment_dir, 'filtered')
+            tum_dir = os.path.join(filtered_dir, 'tum')
+            os.makedirs(tum_dir, exist_ok=True)
+            filtered_file = os.path.join(tum_dir, f'lap_{lap_number:03d}_filtered.tum')
             try:
                 file_interface.write_tum_trajectory_file(filtered_file, self.filtered_trajectories[lap_number])
             except Exception as e:
@@ -635,37 +641,34 @@ class ResearchTrajectoryEvaluator:
         try:
             # Generate comprehensive summary
             summary = self.generate_research_summary()
-            # Save summary in multiple formats to results directory 
+            # Save summary in multiple formats to results directory
             output_formats = self.config.get('output_formats', ['json', 'csv'])
 
             for fmt in output_formats:
                 if fmt == 'json':
-                    summary_file = os.path.join(
-                        self.experiment_dir,
-                        'results',
-                        f'{self.controller_name}_{self.experiment_id}_summary.json')
-                    os.makedirs(os.path.dirname(summary_file), exist_ok=True)
+                    results_dir = os.path.join(self.experiment_dir, 'results')
+                    json_dir = os.path.join(results_dir, 'json')
+                    os.makedirs(json_dir, exist_ok=True)
+                    summary_file = os.path.join(json_dir, f'{self.controller_name}_{self.experiment_id}_summary.json')
                     with open(summary_file, 'w') as f:
                         json.dump(summary, f, indent=2)
 
                 elif fmt == 'csv':
                     # Export lap-by-lap metrics as CSV to results directory
-                    csv_file = os.path.join(
-                        self.experiment_dir,
-                        'results',
-                        f'{self.controller_name}_{self.experiment_id}_metrics.csv')
-                    os.makedirs(os.path.dirname(csv_file), exist_ok=True)
+                    results_dir = os.path.join(self.experiment_dir, 'results')
+                    csv_dir = os.path.join(results_dir, 'csv')
+                    os.makedirs(csv_dir, exist_ok=True)
+                    csv_file = os.path.join(csv_dir, f'{self.controller_name}_{self.experiment_id}_metrics.csv')
                     self._export_metrics_csv(csv_file)
 
                 elif fmt == 'pickle' and EVO_AVAILABLE:
                     # Export using pandas bridge to results directory
                     try:
                         import pickle
-                        pickle_file = os.path.join(
-                            self.experiment_dir,
-                            'results',
-                            f'{self.controller_name}_{self.experiment_id}_data.pkl')
-                        os.makedirs(os.path.dirname(pickle_file), exist_ok=True)
+                        results_dir = os.path.join(self.experiment_dir, 'results')
+                        pkl_dir = os.path.join(results_dir, 'pkl')
+                        os.makedirs(pkl_dir, exist_ok=True)
+                        pickle_file = os.path.join(pkl_dir, f'{self.controller_name}_{self.experiment_id}_data.pkl')
                         with open(pickle_file, 'wb') as f:
                             pickle.dump({
                                 'trajectories': self.lap_trajectories,

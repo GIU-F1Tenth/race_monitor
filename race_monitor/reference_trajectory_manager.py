@@ -390,7 +390,11 @@ class ReferenceTrajectoryManager:
 
         try:
             os.makedirs(output_dir, exist_ok=True)
-            filepath = os.path.join(output_dir, "horizon_reference_trajectory.txt")
+
+            # Organize by extension
+            txt_dir = os.path.join(output_dir, 'txt')
+            os.makedirs(txt_dir, exist_ok=True)
+            filepath = os.path.join(txt_dir, "horizon_reference_trajectory.txt")
 
             with open(filepath, 'w') as f:
                 f.write("# Horizon Reference Trajectory Data\n")

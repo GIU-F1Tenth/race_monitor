@@ -787,10 +787,14 @@ class RaceEvaluator:
         eval_dir = os.path.join(self.base_output_dir, 'race_evaluations')
         os.makedirs(eval_dir, exist_ok=True)
 
-        # Generate filename
+        # Generate filename and organize by extension
         experiment_id = evaluation_data['race_evaluation']['metadata']['experiment_id']
         filename = f'{self.controller_name}_{experiment_id}_race_evaluation.json'
-        filepath = os.path.join(eval_dir, filename)
+
+        # Organize by extension
+        json_dir = os.path.join(eval_dir, 'json')
+        os.makedirs(json_dir, exist_ok=True)
+        filepath = os.path.join(json_dir, filename)
 
         # Save the file
         with open(filepath, 'w') as f:

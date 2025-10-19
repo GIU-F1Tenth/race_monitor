@@ -733,16 +733,16 @@ class EVOPlotter:
                 print(f"Warning: Could not process best lap {best_lap}: {e}")
                 return
 
-            # Add colorbar on the right side (fixed positioning)
-            cbar = plt.colorbar(scatter, ax=ax, shrink=0.8, location='right', pad=0.02)
-            cbar.set_label('Error (m)', rotation=270, labelpad=20, fontsize=12)
+            # Add colorbar at the bottom to avoid overlap with legend
+            cbar = plt.colorbar(scatter, ax=ax, shrink=0.8, location='bottom', pad=0.1)
+            cbar.set_label('Error (m)', fontsize=12)
             cbar.ax.tick_params(labelsize=10)
 
             # Formatting
             ax.set_xlabel('x (m)', fontsize=12)
             ax.set_ylabel('y (m)', fontsize=12)
             ax.set_title(f'Error Mapped onto Trajectory (Best Lap {best_lap})', fontsize=14, fontweight='bold')
-            ax.legend(loc='upper right', fontsize=10)
+            ax.legend(loc='upper left', fontsize=10)  # Moved to upper left to avoid colorbar
             ax.grid(True, alpha=0.3)
             ax.set_aspect('equal')
 
@@ -1035,7 +1035,11 @@ class EVOPlotter:
             try:
                 for fmt in graph_formats:
                     if fmt.lower() in ['png', 'pdf', 'svg', 'eps']:
-                        output_path = os.path.join(graph_dir, f"{plot_name}.{fmt.lower()}")
+                        # Create extension-specific subdirectory
+                        format_dir = os.path.join(graph_dir, fmt.lower())
+                        os.makedirs(format_dir, exist_ok=True)
+
+                        output_path = os.path.join(format_dir, f"{plot_name}.{fmt.lower()}")
                         print(f"Saving {plot_name} as {fmt.upper()} to {output_path}")
                         figure.savefig(output_path, format=fmt.lower(), dpi=dpi, bbox_inches='tight')
 
