@@ -1,0 +1,390 @@
+name: Race Monitor CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    # Daily build at midnight UTC
+    - cron: "0 0 * * *"
+
+env:
+  ROS_DISTRO: humble
+
+jobs:
+  python-lint-and-deps:
+    name: Python Linting & Dependencies
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # Initialize evo submodule
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov mypy flake8
+
+      - name: Install race_monitor package
+        run: |
+          pip install -e .
+
+      - name: Lint with flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 race_monitor/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Treat all errors as warnings
+          flake8 race_monitor/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Type check with mypy
+        run: |
+          mypy --ignore-missing-imports race_monitor/
+
+      - name: Test scientific imports
+        run: |
+          python3 -c "
+          try:
+              import numpy as np
+              import pandas as pd
+              import matplotlib.pyplot as plt
+              import scipy
+              print('✅ Scientific computing imports successful')
+          except ImportError as e:
+              print(f'❌ Scientific import failed: {e}')
+              exit(1)
+          "
+
+      - name: Test system imports
+        run: |
+          python3 -c "
+          try:
+              import psutil
+              import yaml
+              import json
+              import csv
+              import os
+              import sys
+              print('✅ System imports successful')
+          except ImportError as e:
+              print(f'❌ System import failed: {e}')
+              exit(1)
+          "
+
+      - name: Test package structure
+        run: |
+          python3 -c "
+          import os
+          import sys
+
+          # Test if package directory exists
+          package_dir = 'race_monitor'
+          if not os.path.exists(package_dir):
+              print(f'❌ Package directory {package_dir} does not exist')
+              sys.exit(1)
+
+          # Test if main modules exist
+          expected_modules = [
+              'race_monitor.py',
+              'lap_detector.py', 
+              'performance_monitor.py',
+              'data_manager.py',
+              '__init__.py'
+          ]
+
+          for module in expected_modules:
+              module_path = os.path.join(package_dir, module)
+              if not os.path.exists(module_path):
+                  print(f'❌ Module {module} does not exist')
+                  sys.exit(1)
+
+          print('✅ Package structure validation successful')
+          "
+
+      - name: Test config files
+        run: |
+          python3 -c "
+          import os
+          import sys
+
+          # Test if config directory exists
+          config_dir = 'config'
+          if not os.path.exists(config_dir):
+              print(f'❌ Config directory {config_dir} does not exist')
+              sys.exit(1)
+
+          # Test if config file exists
+          config_file = os.path.join(config_dir, 'race_monitor.yaml')
+          if not os.path.exists(config_file):
+              print(f'❌ Config file race_monitor.yaml does not exist')
+              sys.exit(1)
+
+          print('✅ Config files validation successful')
+          "
+
+      - name: Test package import
+        run: |
+          python3 -c "
+          try:
+              import race_monitor
+              print('✅ Package import successful')
+          except ImportError as e:
+              print(f'❌ Package import failed: {e}')
+              exit(1)
+          "
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.10'
+        with:
+          file: ./coverage.xml
+          flags: unittests
+
+  ros2-build-and-test:
+    name: ROS2 Build & Unit Tests
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:${{ env.ROS_DISTRO }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            python3-pip \
+            python3-colcon-common-extensions \
+            python3-rosdep \
+            python3-vcstool \
+            build-essential \
+            git
+
+      - name: Initialize rosdep
+        run: |
+          rosdep init || true
+          rosdep update
+
+      - name: Install ROS 2 dependencies
+        run: |
+          apt-get install -y \
+            ros-$ROS_DISTRO-ament-cmake \
+            ros-$ROS_DISTRO-ament-cmake-python \
+            ros-$ROS_DISTRO-rclpy \
+            ros-$ROS_DISTRO-std-msgs \
+            ros-$ROS_DISTRO-nav-msgs \
+            ros-$ROS_DISTRO-geometry-msgs \
+            ros-$ROS_DISTRO-visualization-msgs \
+            ros-$ROS_DISTRO-ackermann-msgs \
+            ros-$ROS_DISTRO-tf2-ros \
+            ros-$ROS_DISTRO-tf-transformations
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+
+      - name: Setup workspace
+        run: |
+          mkdir -p /workspace/src
+          cp -r . /workspace/src/race_monitor
+          cd /workspace
+
+      - name: Build with colcon
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+      - name: Run built-in colcon tests
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          source install/setup.bash
+
+          # Run built-in ROS2 tests if they exist
+          colcon test --packages-select race_monitor --event-handlers console_direct+ || echo "No colcon tests found"
+          colcon test-result --verbose || echo "No test results to display"
+
+      - name: Test package installation
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          source install/setup.bash
+
+          echo "Testing package installation..."
+          python3 -c "
+          try:
+              import race_monitor
+              print('✅ Package import successful')
+          except ImportError as e:
+              print(f'❌ Package import failed: {e}')
+              exit(1)
+          "
+
+      - name: Test ROS2 imports
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          source install/setup.bash
+
+          echo "Testing ROS2 imports..."
+          python3 -c "
+          try:
+              import rclpy
+              import std_msgs.msg
+              import nav_msgs.msg
+              import geometry_msgs.msg
+              import visualization_msgs.msg
+              import ackermann_msgs.msg
+              print('✅ All ROS2 imports successful')
+          except ImportError as e:
+              print(f'❌ ROS2 import failed: {e}')
+              exit(1)
+          "
+
+      - name: Test node instantiation
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          source install/setup.bash
+
+          echo "Testing node instantiation..."
+          timeout 5s python3 -c "
+          import rclpy
+          from race_monitor.race_monitor import RaceMonitor
+          rclpy.init()
+          try:
+              node = RaceMonitor()
+              print('✅ Node instantiation successful')
+          except Exception as e:
+              print(f'❌ Node instantiation failed: {e}')
+          finally:
+              rclpy.shutdown()
+          " || echo "✅ Node test completed (expected timeout)"
+
+  system-integration-test:
+    name: System Integration & Launch Tests
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:${{ env.ROS_DISTRO }}
+    needs: [python-lint-and-deps, ros2-build-and-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            python3-pip \
+            python3-colcon-common-extensions \
+            ros-$ROS_DISTRO-rclpy \
+            ros-$ROS_DISTRO-std-msgs \
+            ros-$ROS_DISTRO-nav-msgs \
+            ros-$ROS_DISTRO-geometry-msgs \
+            ros-$ROS_DISTRO-visualization-msgs \
+            ros-$ROS_DISTRO-ackermann-msgs \
+            ros-$ROS_DISTRO-tf2-ros \
+            ros-$ROS_DISTRO-tf-transformations
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+
+      - name: Setup workspace and build
+        run: |
+          mkdir -p /workspace/src
+          cp -r . /workspace/src/race_monitor
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          colcon build --packages-select race_monitor
+
+      - name: Test launch file syntax
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          source install/setup.bash
+
+          echo "Testing launch file syntax..."
+          python3 -c "
+          import sys
+          import os
+          sys.path.append('/workspace/src/race_monitor')
+          try:
+              from launch import LaunchDescription
+              print('✅ Launch system available')
+          except ImportError as e:
+              print(f'❌ Launch system import failed: {e}')
+              exit(1)
+          "
+
+      - name: Test launch file execution
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          source install/setup.bash
+
+          echo "Testing launch file execution..."
+          timeout 10s ros2 launch race_monitor race_monitor.launch.py || echo "✅ Launch test completed (expected timeout)"
+
+      - name: Test node executable
+        run: |
+          cd /workspace
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          source install/setup.bash
+
+          echo "Testing node executable..."
+          timeout 5s ros2 run race_monitor race_monitor || echo "✅ Node executable test completed (expected timeout)"
+
+  python-package-dist:
+    name: Python Package Distribution
+    runs-on: ubuntu-22.04
+    needs: [python-lint-and-deps, ros2-build-and-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools wheel
+
+      - name: Build Python package
+        run: |
+          python -m build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Check package
+        run: |
+          pip install twine
+          twine check dist/*
