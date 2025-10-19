@@ -14,6 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
+        (os.path.join('lib', 'python3.10', 'site-packages'), ['race_monitor_data.txt']),
     ],
     install_requires=['setuptools', 'evo', 'psutil', 'ackermann_msgs'],
     zip_safe=True,

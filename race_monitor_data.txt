@@ -2,8 +2,8 @@
 # This file contains maintainer and version information for the Race Monitor system
 
 [MAINTAINER]
-name=GIU F1Tenth Team
-email=f1tenth@giu.edu.eg
+name=Mohammed Abdeazim - GIU F1Tenth Team
+email=mohammed@azab.io
 
 [VERSION]
 race_monitor_version=2.1.0

@@ -18,7 +18,7 @@ class DataAnalyzer:
         base_path = Path(__file__).parent.parent.parent
         self.data_dir = base_path / "race_monitor" / "evaluation_results"
         self.graphs_dir = self.data_dir / "graphs"
-        self.performance_dir = self.data_dir / "performance_data"
+        self.performance_dir = self.data_dir / "cpu_performance_data"
         self.research_dir = self.data_dir / "research_data"
 
     def get_experiments(self, filter_params: Optional[Dict] = None) -> Dict[str, Any]:

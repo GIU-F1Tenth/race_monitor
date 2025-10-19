@@ -883,7 +883,7 @@ class RaceMonitor(Node):
         # Save performance data
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.save_performance_data_to_csv(
-                os.path.join(self.config['trajectory_output_directory'], 'performance_data')
+                os.path.join(self.config['trajectory_output_directory'], 'cpu_performance_data')
             )
 
         # Auto-shutdown after race completion if enabled
@@ -943,7 +943,7 @@ class RaceMonitor(Node):
         # Save performance data
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.save_performance_data_to_csv(
-                os.path.join(self.config['trajectory_output_directory'], 'performance_data')
+                os.path.join(self.config['trajectory_output_directory'], 'cpu_performance_data')
             )
 
     def _evaluate_lap_trajectory(self, lap_number: int):
@@ -1231,18 +1231,19 @@ class RaceMonitor(Node):
                         'distance_per_second': total_distance / race_data.get('total_race_time', 1.0)
                     }
 
-            # Calculate averaged advanced metrics from research evaluator
-            if hasattr(self, 'research_evaluator') and self.research_evaluator:
-                try:
-                    advanced_metrics = self._calculate_averaged_metrics()
-                    if advanced_metrics:
-                        summary['advanced_metrics'] = advanced_metrics
-                        self.get_logger().info(
-                            f"Added {len(advanced_metrics)} averaged advanced metrics to race summary")
-                    else:
-                        self.get_logger().warn("No advanced metrics calculated from research evaluator")
-                except Exception as e:
-                    self.get_logger().error(f"Error calculating averaged metrics: {e}")
+            # Calculate averaged advanced metrics from research evaluator or lap files
+            try:
+                advanced_metrics = self._calculate_averaged_metrics()
+                if advanced_metrics:
+                    summary['advanced_metrics'] = advanced_metrics
+                    self.get_logger().info(
+                        f"Added {len(advanced_metrics)} averaged advanced metrics to race summary")
+                else:
+                    self.get_logger().warn("No advanced metrics calculated - adding empty dictionary")
+                    summary['advanced_metrics'] = {}
+            except Exception as e:
+                self.get_logger().error(f"Error calculating averaged metrics: {e}")
+                summary['advanced_metrics'] = {}
 
             return summary
 
@@ -1256,13 +1257,14 @@ class RaceMonitor(Node):
             detailed_metrics = {}
 
             # First try to get metrics from research evaluator in-memory storage
-            if hasattr(self.research_evaluator, 'detailed_metrics') and self.research_evaluator.detailed_metrics:
+            if (hasattr(self, 'research_evaluator') and self.research_evaluator and
+                    hasattr(self.research_evaluator, 'detailed_metrics') and self.research_evaluator.detailed_metrics):
                 detailed_metrics = self.research_evaluator.detailed_metrics
                 self.get_logger().info(
                     f"Using in-memory detailed metrics from research evaluator: {len(detailed_metrics)} laps")
             else:
                 # Fallback: Load metrics from saved lap files
-                self.get_logger().warn("No in-memory detailed metrics, loading from saved lap files")
+                self.get_logger().info("Research evaluator not available or no in-memory metrics, loading from saved lap files")
                 detailed_metrics = self._load_metrics_from_files()
 
             if not detailed_metrics:
@@ -1339,7 +1341,8 @@ class RaceMonitor(Node):
             detailed_metrics = {}
 
             # Get the metrics directory path
-            if hasattr(self.research_evaluator, 'experiment_dir') and self.research_evaluator.experiment_dir:
+            if (hasattr(self, 'research_evaluator') and self.research_evaluator and
+                    hasattr(self.research_evaluator, 'experiment_dir') and self.research_evaluator.experiment_dir):
                 metrics_dir = os.path.join(self.research_evaluator.experiment_dir, 'metrics')
                 self.get_logger().debug(f"Using research evaluator experiment_dir for metrics: {metrics_dir}")
             else:

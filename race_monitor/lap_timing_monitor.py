@@ -1705,7 +1705,7 @@ class RaceMonitor(Node):
 
         try:
             # Create performance data directory
-            perf_dir = os.path.join(self.trajectory_output_directory, 'performance_data')
+            perf_dir = os.path.join(self.trajectory_output_directory, 'cpu_performance_data')
             os.makedirs(perf_dir, exist_ok=True)
 
             # Generate clean filename
