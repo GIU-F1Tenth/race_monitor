@@ -1,60 +1,46 @@
-# Race Monitor Python Dependencies
-# 
-# IMPORTANT: Use with constraints.txt to ensure compatibility:
+# File: requirements.txt
+# List the runtime and development dependencies for the project.
+
+# Use together with constraints.txt by installing with:
 # pip install -c constraints.txt -r requirements.txt
-#
-# Core ROS2 Python dependencies (installed via apt in CI/system)
-# rclpy - ROS2 Python client library
-# std_msgs - Standard ROS2 message types  
-# nav_msgs - Navigation message types (Odometry, Path)
-# geometry_msgs - Geometry message types (Pose, Twist, etc.)
-# visualization_msgs - Visualization message types (Marker, MarkerArray)
-# ackermann_msgs - Ackermann steering message types
-# tf2_ros - Transform library for ROS2
-# tf_transformations - Transform utilities (installed via ros-humble-tf-transformations)
 
-# Core Python scientific computing
-numpy>=1.21.0,<2.0.0
-pandas>=1.5.0
-scipy>=1.9.0
+# Core scientific / analysis
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+plotly
+transforms3d
 
-# Transforms and geometry (required for tf_transformations compatibility)
-transforms3d>=0.4.1
-# tf_transformations is provided by ROS2 system packages
+# ROS-related Python packages
+rclpy
+std-msgs
+nav-msgs
+geometry-msgs
+visualization-msgs
+ackermann-msgs
 
-# Trajectory evaluation and analysis (EVO submodule)
-evo>=1.26.0
+# Trajectory evaluation
+evo
 
-# Visualization and plotting
-matplotlib>=3.5.0
-seaborn>=0.12.0
-plotly>=5.0.0
+# Utilities
+psutil
+PyYAML
+json5
 
-# System monitoring and performance
-psutil>=5.8.0
+# Dev/test
+pytest
+pytest-cov
+mypy
+flake8
+black
 
-# Data serialization and I/O
-PyYAML>=6.0
-json5>=0.9.0
+# Packaging/build
+setuptools
+wheel
+build
 
-# NOTE: tf_transformations is installed via ROS2 system packages, not pip
-
-# Scientific computing utilities
-colorama>=0.4.4
-tqdm>=4.64.0
-
-# Development and testing dependencies
-pytest>=7.0.0
-pytest-cov>=4.0.0
-mypy>=1.0.0
-flake8>=5.0.0
-black>=22.0.0
-
-# Build tools
-setuptools>=65.0.0
-wheel>=0.37.0
-build>=0.8.0
-
-# Optional: Enhanced analysis capabilities
-scikit-learn>=1.1.0
-statsmodels>=0.13.0
+# Optional ML/Analysis
+scikit-learn
+statsmodels

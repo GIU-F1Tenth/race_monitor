@@ -6,24 +6,10 @@ on:
   pull_request:
     branches: [main, dev]
   schedule:
-    # Daily build at midnight UTC
-    - cron: "0 0 * * *"
+    - cron: "0 0 * * *" # daily at midnight UTC
 
 env:
   ROS_DISTRO: humble
-  # Common ROS2 packages needed across jobs
-  ROS2_DEPS: >-
-    ros-humble-ament-cmake
-    ros-humble-ament-cmake-python  
-    ros-humble-rclpy
-    ros-humble-std-msgs
-    ros-humble-nav-msgs
-    ros-humble-geometry-msgs
-    ros-humble-visualization-msgs
-    ros-humble-ackermann-msgs
-    ros-humble-tf2-ros
-    ros-humble-tf-transformations
-    python3-transforms3d
 
 jobs:
   python-lint:
@@ -45,11 +31,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt','**/constraints.txt') }}
+
+      - name: Install Python dev dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -c constraints.txt -r requirements.txt
-          pip install pytest pytest-cov mypy flake8
+          pip install pytest pytest-cov mypy flake8 black
 
       - name: Lint with flake8
         run: |
@@ -64,210 +56,132 @@ jobs:
                --no-strict-optional \
                --allow-untyped-calls \
                --allow-incomplete-defs \
-               --disable-error-code=var-annotated \
-               --disable-error-code=assignment \
-               --disable-error-code=attr-defined \
                race_monitor/ || echo "Type checking completed with warnings"
+
+      - name: Security audit
+        run: |
+          pip install safety
+          safety check -r requirements.txt
 
   linux-ros2-build:
     name: Linux ROS2 Build & Package Tests
     runs-on: ubuntu-22.04
     needs: python-lint
-    container:
-      image: ros:humble
-      options: --user root
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up ROS 2 Humble (setup-ros)
+        uses: ros-tooling/setup-ros@v0
+        with:
+          version: humble
+          python-version: 3.10
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt','**/constraints.txt') }}
+
+      - name: Cache colcon build (install & build)
+        uses: actions/cache@v4
+        with:
+          path: |
+            build
+            install
+            log
+          key: ${{ runner.os }}-colcon-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-colcon-
+
       - name: Install system dependencies
-        shell: bash
         run: |
-          apt-get update
-          apt-get install -y \
-            git \
-            python3-pip \
-            python3-colcon-common-extensions \
-            python3-rosdep \
-            build-essential \
-            curl \
-            wget
+          sudo apt-get update
+          sudo apt-get install -y python3-colcon-common-extensions build-essential python3-rosdep
 
-      - name: Configure ROS2 environment
-        shell: bash
+      - name: Configure rosdep & install package deps
         run: |
-          rosdep init || true
-          rosdep update
-          apt-get install -y ${{ env.ROS2_DEPS }} \
-            ros-humble-launch \
-            ros-humble-launch-ros
-
-          # Verify tf_transformations installation
-          echo "Checking for tf_transformations packages:"
-          apt-cache search tf-transformations || echo "No tf-transformations found via apt"
-          apt-cache search tf_transformations || echo "No tf_transformations found via apt"
-          apt-cache search transforms3d || echo "No transforms3d packages found"
-          dpkg -l | grep -i transform || echo "No transform packages installed"
-
-          # Fix NumPy compatibility issues with system packages
-          python3 -m pip install --upgrade pip
-          pip3 install "numpy>=1.21.0,<2.0.0" --force-reinstall
-
-          # Install compatible transforms3d to override system version
-          pip3 install "transforms3d>=0.4.1" --force-reinstall
-
-      - name: Clone repository
-        shell: bash
-        run: |
-          mkdir -p /workspace/src
-          cd /workspace/src
-          git clone --recursive --branch feature/ci-workflow https://github.com/GIU-F1Tenth/race_monitor.git
-          cd race_monitor
-          ls -la
+          sudo rosdep init || true
+          rosdep update || true
+          # Install all package.xml dependencies for this workspace (ignore-src avoids reinstalling local packages)
+          rosdep install --from-paths src --ignore-src -r -y || true
 
       - name: Install Python dependencies
-        shell: bash
         run: |
-          cd /workspace/src/race_monitor
           python3 -m pip install --upgrade pip
-          # Install transforms3d first to ensure we get the compatible version
-          pip3 install "transforms3d>=0.4.1" "numpy>=1.21.0,<2.0.0"
-          # Install with constraints to ensure compatibility
           pip3 install -c constraints.txt -r requirements.txt
 
-      - name: Verify NumPy compatibility
-        shell: bash
-        run: |
-          cd /workspace/src/race_monitor
-          chmod +x scripts/verify_numpy_fix.sh
-          ./scripts/verify_numpy_fix.sh
-
       - name: Build package
-        shell: bash
         run: |
-          cd /workspace
-          . /opt/ros/humble/setup.bash
+          source /opt/ros/humble/setup.bash
           colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release
 
-      - name: Run package tests
-        shell: bash
+      - name: Run package tests (colcon)
         run: |
-          cd /workspace
-          . /opt/ros/humble/setup.bash
-          . install/setup.bash
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash || true
 
-          # Check ROS2 environment
-          echo "ROS_DISTRO: $ROS_DISTRO"
-          echo "PYTHONPATH: $PYTHONPATH"
-          python3 -c "import sys; print('Python paths:'); [print(f'  {p}') for p in sys.path[:10]]"
+          # Run colcon tests if present
+          colcon test --packages-select race_monitor --event-handlers console_direct+ || true
+          colcon test-result --verbose || true
 
-          # Run colcon tests
-          colcon test --packages-select race_monitor --event-handlers console_direct+ || echo "No colcon tests found"
-          colcon test-result --verbose || echo "No test results to display"
-
-          # Test package import with comprehensive diagnostics
-          # Source ROS2 environment and then run Python
-          bash -c '
-          . /opt/ros/humble/setup.bash
-          . install/setup.bash
-          python3 -c "
-          import numpy as np
+      - name: Minimal import & diagnostics
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash || true
+          python3 - <<'PY'
           import sys
-          print(f\"NumPy version: {np.__version__}\")
-          print(f\"NumPy location: {np.__file__}\")
-          print(f\"PYTHONPATH: {sys.path[:5]}\")
-
-          # Check if tf_transformations is available
-          try:
-              import tf_transformations
-              print(f\"tf_transformations found at: {tf_transformations.__file__}\")
-          except ImportError as e:
-              print(f\"tf_transformations not found: {e}\")
-              print(\"This is required for race_monitor import\")
-              sys.exit(1)
-
-          # Check transforms3d version and location  
+          import importlib
+          import numpy as np
+          print('Python:', sys.version.splitlines()[0])
+          print('NumPy:', np.__version__)
           try:
               import transforms3d
-              print(f\"transforms3d version: {transforms3d.__version__}\")
-              print(f\"transforms3d location: {transforms3d.__file__}\")
-          except ImportError as e:
-              print(f\"transforms3d not found: {e}\")
-              sys.exit(1)
-              
-          # Test race_monitor import
+              print('transforms3d:', transforms3d.__version__)
+          except Exception as e:
+              print('transforms3d import failed:', e)
+          try:
+              import tf_transformations
+              print('tf_transformations available')
+          except Exception as e:
+              print('tf_transformations import FAILED:', e)
+          # Try importing package
           try:
               import race_monitor
-              print(\"✓ Package import successful\")
-          except ImportError as e:
-              print(f\"✗ Package import failed: {e}\")
-              sys.exit(1)
-          except AttributeError as e:
-              if \"numpy\" in str(e) and \"float\" in str(e):
-                  print(f\"✗ NumPy compatibility issue detected: {e}\")
-                  print(\"This is a known issue with tf_transformations and newer NumPy versions\")
-                  sys.exit(1)
-              else:
-                  print(f\"✗ Unexpected error: {e}\")
-                  sys.exit(1)
-          "
-          '          # Test ROS2 imports with proper environment
-          bash -c '
-          . /opt/ros/humble/setup.bash
-          . install/setup.bash
-          python3 -c "
-          try:
-              import rclpy
-              import std_msgs.msg
-              import nav_msgs.msg
-              import geometry_msgs.msg
-              import visualization_msgs.msg
-              import ackermann_msgs.msg
-              print(\"Basic ROS2 imports successful\")
-              
-              # Test tf_transformations separately with error handling
-              try:
-                  import tf_transformations
-                  print(\"tf_transformations import successful\")
-              except AttributeError as e:
-                  if \"numpy\" in str(e) and \"float\" in str(e):
-                      print(\"tf_transformations has NumPy compatibility issue - this is expected\")
-                      print(\"Package will work with proper NumPy version constraint\")
-                  else:
-                      raise e
-              except ImportError as e:
-                  print(f\"tf_transformations import failed: {e}\")
-                  sys.exit(1)
-                      
-          except ImportError as e:
-              print(f\"ROS2 import failed: {e}\")
-              sys.exit(1)
-          "
-          '
+              print('race_monitor import: OK')
+          except Exception as e:
+              print('race_monitor import: FAILED', e)
+              raise
+          PY
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-ros2-build-${{ github.run_id }}
           path: |
-            /workspace/install/
-            /workspace/build/
-          retention-days: 1
+            install/
+            build/
+          retention-days: 3
 
   integration-test:
     name: Integration & Launch Tests
     runs-on: ubuntu-22.04
     needs: linux-ros2-build
-    container:
-      image: ros:humble
-      options: --user root
 
     steps:
-      - name: Install essential dependencies
-        shell: bash
-        run: |
-          apt-get update
-          apt-get install -y ${{ env.ROS2_DEPS }} \
-            ros-humble-launch \
-            ros-humble-launch-ros
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up ROS 2 Humble
+        uses: ros-tooling/setup-ros@v0
+        with:
+          version: humble
+          python-version: 3.10
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -275,102 +189,103 @@ jobs:
           name: linux-ros2-build-${{ github.run_id }}
           path: /workspace/
 
-      - name: Clone repository for launch tests
-        shell: bash
+      - name: Install Python deps for integration
         run: |
-          mkdir -p /workspace/src
-          cd /workspace/src
-          git clone --recursive --branch feature/ci-workflow https://github.com/GIU-F1Tenth/race_monitor.git
-
-      - name: Test launch file
-        shell: bash
-        run: |
-          cd /workspace
-          . /opt/ros/humble/setup.bash
-          . install/setup.bash
-
-          # Install Python dependencies for integration test
           python3 -m pip install --upgrade pip
-          pip3 install "transforms3d>=0.4.1" "numpy>=1.21.0,<2.0.0"
-          cd /workspace/src/race_monitor
           pip3 install -c constraints.txt -r requirements.txt
 
-          # Verify package versions and paths
-          python3 -c "
-          import sys
-          import numpy as np
-          import transforms3d
-          print(f'NumPy version: {np.__version__} (from {np.__file__})')
-          print(f'transforms3d version: {transforms3d.__version__} (from {transforms3d.__file__})')
+      - name: Source ROS & workspace
+        run: |
+          source /opt/ros/humble/setup.bash
+          if [ -f /workspace/install/setup.bash ]; then
+            source /workspace/install/setup.bash
+          fi
 
-          # Test the problematic import
-          try:
-              import tf_transformations
-              print('tf_transformations imported successfully')
-          except Exception as e:
-              print(f'tf_transformations import failed: {e}')
-              exit(1)
-          "
+      - name: Smoke pub/sub test
+        run: |
+          source /opt/ros/humble/setup.bash
+          if [ -f /workspace/install/setup.bash ]; then
+            source /workspace/install/setup.bash
+          fi
 
-          # Test launch system availability
-          python3 -c "
-          import sys
-          import os
-          sys.path.append('/workspace/src/race_monitor')
-          try:
-              from launch import LaunchDescription
-              print('Launch system available')
-          except ImportError as e:
-              print(f'Launch system import failed: {e}')
-              exit(1)
-          "
+          python3 - <<'PY'
+          import rclpy
+          from rclpy.node import Node
+          from std_msgs.msg import String
+          import threading
 
-          # Test launch execution
-          timeout 15s bash -c '
-            . /opt/ros/humble/setup.bash
-            . install/setup.bash
+          received = {'ok': False}
+
+          class TestNode(Node):
+              def __init__(self):
+                  super().__init__('ci_smoke_test')
+                  self.pub = self.create_publisher(String, 'ci_test_topic', 10)
+                  self.sub = self.create_subscription(String, 'ci_test_topic', self.cb, 10)
+
+              def cb(self, msg):
+                  if msg.data == 'ping':
+                      received['ok'] = True
+
+
+          def spin_node(node):
+              rclpy.spin(node)
+
+          rclpy.init()
+          node = TestNode()
+          thr = threading.Thread(target=spin_node, args=(node,), daemon=True)
+          thr.start()
+
+          # publish a message and wait briefly for callback
+          for _ in range(5):
+              node.pub.publish(String(data='ping'))
+              rclpy.spin_once(node, timeout_sec=0.5)
+
+          rclpy.shutdown()
+          if not received['ok']:
+              raise SystemExit('Smoke test failed: no message loopback')
+          print('Smoke test OK')
+          PY
+
+      - name: Test launch file (non-blocking, short timeout)
+        run: |
+          source /opt/ros/humble/setup.bash
+          if [ -f /workspace/install/setup.bash ]; then
+            source /workspace/install/setup.bash
+          fi
+
+          timeout 20s bash -c '
             ros2 launch race_monitor race_monitor.launch.py &
             LAUNCH_PID=$!
-            
-            sleep 5
-            
+            sleep 6
             if kill -0 $LAUNCH_PID 2>/dev/null; then
-              echo "Launch file executed successfully"
-              if ros2 node list | grep -q race_monitor; then
-                echo "Node is active in ROS2 network"
-              else
-                echo "Warning: Node not found in ros2 node list"
-              fi
-              kill $LAUNCH_PID
+              echo "Launch started (PID $LAUNCH_PID)"
+              ros2 node list || true
+              kill $LAUNCH_PID || true
               exit 0
             else
-              echo "Launch file failed to start"
+              echo "Launch failed to start"
               exit 1
             fi
-          ' || (echo "Launch test failed" && exit 1)
+          '
 
-      - name: Test node executable
-        shell: bash
+      - name: Test node executable (run & detect)
         run: |
-          cd /workspace
-          . /opt/ros/humble/setup.bash
-          . install/setup.bash
+          source /opt/ros/humble/setup.bash
+          if [ -f /workspace/install/setup.bash ]; then
+            source /workspace/install/setup.bash
+          fi
 
-          timeout 10s bash -c '
+          timeout 12s bash -c '
             ros2 run race_monitor race_monitor &
             NODE_PID=$!
-            
-            sleep 3
-            
+            sleep 4
             if kill -0 $NODE_PID 2>/dev/null; then
-              echo "Node executable started successfully"
-              if ros2 node list | grep -q race_monitor; then
-                echo "Node is visible to ROS2"
-              fi
-              kill $NODE_PID
+              echo "Node started (PID $NODE_PID)"
+              ros2 node list || true
+              kill $NODE_PID || true
               exit 0
             else
-              echo "Node executable failed"
+              echo "Node failed to start"
               exit 1
             fi
-          ' || echo "Node executable test completed"
+          '

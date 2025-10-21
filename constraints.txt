@@ -1,17 +1,13 @@
-# Constraints file for Race Monitor package
-# This file defines version constraints to ensure compatibility
+# File: constraints.txt
+# Pin versions that are known to work well together in CI.
 
 # NumPy compatibility constraint
-# tf_transformations requires NumPy < 2.0 due to deprecated np.float usage
 numpy>=1.21.0,<2.0.0
 
-# transforms3d compatibility
-# Ensure we have a version that works with our NumPy constraint
-# Must use pip version, not system package
+# transforms3d (pip package) - ensure pip installs a compatible version
 transforms3d>=0.4.1,<1.0.0
 
 # EVO trajectory evaluation constraints
-# Pin to known working versions
 evo>=1.26.0,<2.0.0
 
 # Core scientific computing stack
@@ -22,3 +18,22 @@ matplotlib>=3.5.0,<4.0.0
 # Ensure compatible pytest versions
 pytest>=7.0.0,<9.0.0
 pytest-cov>=4.0.0,<6.0.0
+
+# Dev tooling
+mypy>=1.0.0
+flake8>=5.0.0
+black>=22.0.0
+
+# Packaging
+setuptools>=65.0.0
+wheel>=0.37.0
+build>=0.8.0
+
+# Optional: ML/analysis
+scikit-learn>=1.1.0
+statsmodels>=0.13.0
+
+# Utilities
+psutil>=5.8.0
+PyYAML>=6.0
+json5>=0.9.0
