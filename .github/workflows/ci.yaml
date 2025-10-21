@@ -35,8 +35,16 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # Install only pure Python dependencies for linting/testing
           pip install pytest pytest-cov mypy flake8
+          # Install scientific computing dependencies
+          pip install numpy pandas scipy matplotlib seaborn plotly
+          pip install psutil PyYAML json5 colorama tqdm
+          pip install scikit-learn statsmodels
+          # Install build tools
+          pip install setuptools wheel build
+          # Install EVO for trajectory evaluation
+          pip install evo
 
       - name: Install race_monitor package
         run: |
@@ -192,7 +200,9 @@ jobs:
             ros-humble-visualization-msgs \
             ros-humble-ackermann-msgs \
             ros-humble-tf2-ros \
-            ros-humble-tf-transformations
+            ros-humble-tf-transformations \
+            ros-humble-launch \
+            ros-humble-launch-ros
 
       - name: Install Python dependencies
         run: |
@@ -252,7 +262,8 @@ jobs:
               import geometry_msgs.msg
               import visualization_msgs.msg
               import ackermann_msgs.msg
-              print('All ROS2 imports successful')
+              import tf_transformations
+              print('✅ All ROS2 imports successful')
           except ImportError as e:
               print(f'❌ ROS2 import failed: {e}')
               exit(1)
@@ -304,7 +315,9 @@ jobs:
             ros-humble-visualization-msgs \
             ros-humble-ackermann-msgs \
             ros-humble-tf2-ros \
-            ros-humble-tf-transformations
+            ros-humble-tf-transformations \
+            ros-humble-launch \
+            ros-humble-launch-ros
           python3 -m pip install --upgrade pip
           pip3 install -r requirements.txt
 

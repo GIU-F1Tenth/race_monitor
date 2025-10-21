@@ -1,4 +1,4 @@
-# Core ROS2 Python dependencies (installed via rosdep)
+# Core ROS2 Python dependencies (installed via apt in CI/system)
 # rclpy - ROS2 Python client library
 # std_msgs - Standard ROS2 message types  
 # nav_msgs - Navigation message types (Odometry, Path)
@@ -6,6 +6,7 @@
 # visualization_msgs - Visualization message types (Marker, MarkerArray)
 # ackermann_msgs - Ackermann steering message types
 # tf2_ros - Transform library for ROS2
+# tf_transformations - Transform utilities (installed via ros-humble-tf-transformations)
 
 # Core Python scientific computing
 numpy>=1.21.0
@@ -27,8 +28,7 @@ psutil>=5.8.0
 PyYAML>=6.0
 json5>=0.9.0
 
-# Transforms and quaternions
-tf-transformations>=1.0.0
+# NOTE: tf_transformations is installed via ROS2 system packages, not pip
 
 # Scientific computing utilities
 colorama>=0.4.4
