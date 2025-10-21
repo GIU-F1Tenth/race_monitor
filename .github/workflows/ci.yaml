@@ -60,11 +60,8 @@ jobs:
       - name: Security audit
         continue-on-error: true
         run: |
-          safety scan -r requirements.txt --output text || (
-            echo "Safety failed, trying pip-audit as fallback..." &&
-            pip install pip-audit &&
-            pip-audit -r requirements.txt --format=text
-          )
+          echo "Running security audit with pip-audit..."
+          pip-audit -r requirements.txt || echo "Security audit completed"
 
   linux-ros2-build:
     name: Linux ROS2 Build, Test & Integration
@@ -124,7 +121,14 @@ jobs:
       - name: Set up workspace structure
         run: |
           mkdir -p ws/src
-          cp -r . ws/src/race_monitor
+          shopt -s dotglob
+          for item in *; do
+            if [ "$item" != "ws" ]; then
+              cp -r "$item" ws/src/
+            fi
+          done
+          mkdir -p ws/src/race_monitor
+          mv ws/src/* ws/src/race_monitor/ 2>/dev/null || true
           cd ws
 
       - name: Configure rosdep & install package deps

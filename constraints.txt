@@ -25,9 +25,7 @@ pytest-cov>=4.0.0,<6.0.0
 mypy>=1.0.0,<2.0.0
 flake8>=5.0.0,<8.0.0
 black>=22.0.0,<25.0.0
-safety>=3.0.0,<4.0.0
 pip-audit>=2.0.0,<3.0.0
-typer>=0.9.0,<0.10.0
 
 # Packaging
 setuptools>=65.0.0

@@ -37,7 +37,6 @@ pytest-cov>=4.0.0
 mypy>=1.0.0
 flake8>=5.0.0
 black>=22.0.0
-safety>=3.0.0
 pip-audit>=2.0.0
 
 # Build tools
