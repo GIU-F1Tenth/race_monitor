@@ -67,7 +67,7 @@ jobs:
           )
 
   linux-ros2-build:
-    name: Linux ROS2 Build & Package Tests
+    name: Linux ROS2 Build, Test & Integration
     runs-on: ubuntu-22.04
     needs: python-lint
 
@@ -121,25 +121,34 @@ jobs:
             ros-humble-tf-transformations \
             python3-transforms3d
 
+      - name: Set up workspace structure
+        run: |
+          mkdir -p ws/src
+          cp -r . ws/src/race_monitor
+          cd ws
+
       - name: Configure rosdep & install package deps
         run: |
+          cd ws
           sudo rosdep init || true
           rosdep update || true
-          # Install all package.xml dependencies for this workspace (ignore-src avoids reinstalling local packages)
           rosdep install --from-paths src --ignore-src -r -y || true
 
       - name: Install Python dependencies
         run: |
+          cd ws/src/race_monitor
           python3 -m pip install --upgrade pip
           pip3 install -c constraints.txt -r requirements.txt
 
       - name: Build package
         run: |
+          cd ws
           source /opt/ros/humble/setup.bash
           colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release
 
       - name: Run package tests (colcon)
         run: |
+          cd ws
           source /opt/ros/humble/setup.bash
           source install/setup.bash || true
 
@@ -149,6 +158,7 @@ jobs:
 
       - name: Minimal import & diagnostics
         run: |
+          cd ws
           source /opt/ros/humble/setup.bash
           source install/setup.bash || true
           python3 - <<'PY'
@@ -176,61 +186,14 @@ jobs:
               raise
           PY
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-ros2-build-${{ github.run_id }}
-          path: |
-            install/
-            build/
-          retention-days: 3
-
-  integration-test:
-    name: Integration & Launch Tests
-    runs-on: ubuntu-22.04
-    needs: linux-ros2-build
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up ROS 2 Humble
+      - name: ROS2 Integration Tests
         run: |
-          sudo apt update
-          sudo apt install -y software-properties-common
-          sudo add-apt-repository universe
-          sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
-          sudo apt update
-          sudo apt install -y ros-humble-desktop python3-rosdep
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-ros2-build-${{ github.run_id }}
-          path: /workspace/
-
-      - name: Install Python deps for integration
-        run: |
-          python3 -m pip install --upgrade pip
-          pip3 install -c constraints.txt -r requirements.txt
-
-      - name: Source ROS & workspace
-        run: |
+          cd ws
           source /opt/ros/humble/setup.bash
-          if [ -f /workspace/install/setup.bash ]; then
-            source /workspace/install/setup.bash
-          fi
+          source install/setup.bash
 
-      - name: Smoke pub/sub test
-        run: |
-          source /opt/ros/humble/setup.bash
-          if [ -f /workspace/install/setup.bash ]; then
-            source /workspace/install/setup.bash
-          fi
-
+          # Smoke pub/sub test
+          echo "Running ROS2 pub/sub smoke test..."
           python3 - <<'PY'
           import rclpy
           from rclpy.node import Node
@@ -249,7 +212,6 @@ jobs:
                   if msg.data == 'ping':
                       received['ok'] = True
 
-
           def spin_node(node):
               rclpy.spin(node)
 
@@ -266,49 +228,58 @@ jobs:
           rclpy.shutdown()
           if not received['ok']:
               raise SystemExit('Smoke test failed: no message loopback')
-          print('Smoke test OK')
+          print('✓ ROS2 pub/sub smoke test passed')
           PY
 
-      - name: Test launch file (non-blocking, short timeout)
+      - name: Test Launch File
         run: |
+          cd ws
           source /opt/ros/humble/setup.bash
-          if [ -f /workspace/install/setup.bash ]; then
-            source /workspace/install/setup.bash
-          fi
+          source install/setup.bash
 
+          echo "Testing launch file..."
           timeout 20s bash -c '
             ros2 launch race_monitor race_monitor.launch.py &
             LAUNCH_PID=$!
             sleep 6
             if kill -0 $LAUNCH_PID 2>/dev/null; then
-              echo "Launch started (PID $LAUNCH_PID)"
+              echo "✓ Launch file started successfully (PID $LAUNCH_PID)"
               ros2 node list || true
               kill $LAUNCH_PID || true
               exit 0
             else
-              echo "Launch failed to start"
+              echo "✗ Launch file failed to start"
               exit 1
             fi
           '
 
-      - name: Test node executable (run & detect)
+      - name: Test Node Executable
         run: |
+          cd ws
           source /opt/ros/humble/setup.bash
-          if [ -f /workspace/install/setup.bash ]; then
-            source /workspace/install/setup.bash
-          fi
+          source install/setup.bash
 
+          echo "Testing node executable..."
           timeout 12s bash -c '
             ros2 run race_monitor race_monitor &
             NODE_PID=$!
             sleep 4
             if kill -0 $NODE_PID 2>/dev/null; then
-              echo "Node started (PID $NODE_PID)"
+              echo "✓ Node executable started successfully (PID $NODE_PID)"
               ros2 node list || true
               kill $NODE_PID || true
               exit 0
             else
-              echo "Node failed to start"
+              echo "✗ Node executable failed to start"
               exit 1
             fi
           '
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-ros2-build-${{ github.run_id }}
+          path: |
+            install/
+            build/
+          retention-days: 3
