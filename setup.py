@@ -6,15 +6,18 @@ package_name = 'race_monitor'
 
 setup(
     name=package_name,
-    version='2.0.5',
+    version='2.0.6',
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
-        (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
-        (os.path.join('lib', 'python3.10', 'site-packages'), ['race_monitor_data.txt']),
+        (os.path.join('share', package_name, 'launch'), glob(
+            os.path.join('launch', '*launch.[pxy][yma]*'))),
+        (os.path.join('share', package_name, 'config'),
+         glob(os.path.join('config', '*.yaml'))),
+        (os.path.join('lib', 'python3.10', 'site-packages'),
+         ['race_monitor_data.txt']),
     ],
     install_requires=[
         'setuptools',
@@ -28,7 +31,6 @@ setup(
         'psutil>=5.8.0',
         'PyYAML>=6.0',
         'json5>=0.9.0',
-        'tf-transformations>=1.0.0',
         'colorama>=0.4.4',
         'tqdm>=4.64.0',
         'scikit-learn>=1.1.0',
