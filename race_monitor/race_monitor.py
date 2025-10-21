@@ -34,7 +34,7 @@ from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PointStamped, Twist, PoseWithCovarianceStamped
 from visualization_msgs.msg import Marker
 from ackermann_msgs.msg import AckermannDriveStamped
-from giu_f1t_interfaces.msg import VehicleState, ConstrainedVehicleState
+# F1Tenth interface imports moved to conditional sections where used
 
 import numpy as np
 import tf_transformations
@@ -138,9 +138,12 @@ class RaceMonitor(Node):
         self.declare_parameter('crash_detection.max_stationary_time', 5.0)
         self.declare_parameter('crash_detection.min_velocity_threshold', 0.1)
         self.declare_parameter('crash_detection.max_odometry_timeout', 3.0)
-        self.declare_parameter('crash_detection.enable_collision_detection', True)
-        self.declare_parameter('crash_detection.collision_velocity_threshold', 2.0)
-        self.declare_parameter('crash_detection.collision_detection_window', 0.5)
+        self.declare_parameter(
+            'crash_detection.enable_collision_detection', True)
+        self.declare_parameter(
+            'crash_detection.collision_velocity_threshold', 2.0)
+        self.declare_parameter(
+            'crash_detection.collision_detection_window', 0.5)
 
         # Manual mode parameters
         self.declare_parameter('manual_mode.save_intermediate_results', True)
@@ -156,7 +159,8 @@ class RaceMonitor(Node):
         self.declare_parameter('enable_smart_controller_detection', True)
 
         self.declare_parameter('experiment_id', 'exp_001')
-        self.declare_parameter('test_description', 'Controller performance evaluation and analysis')
+        self.declare_parameter(
+            'test_description', 'Controller performance evaluation and analysis')
 
         # Auto-shutdown parameters
         self.declare_parameter('auto_shutdown_on_race_complete', True)
@@ -185,14 +189,8 @@ class RaceMonitor(Node):
         # ========================================
         # REFERENCE TRAJECTORY CONFIGURATION
         # ========================================
-        self.declare_parameter(
-            'reference_trajectory_file',
-            '/home/mohammedazab/ws/src/race_stack/horizon_mapper/horizon_mapper/optimal_trajectory.csv')
+        self.declare_parameter('reference_trajectory_file', '')
         self.declare_parameter('reference_trajectory_format', 'csv')
-        self.declare_parameter('enable_horizon_mapper_reference', False)
-        self.declare_parameter('horizon_mapper_reference_topic', '/horizon_mapper/reference_trajectory')
-        self.declare_parameter('use_complete_reference_path', True)
-        self.declare_parameter('horizon_mapper_path_topic', '/horizon_mapper/reference_path')
 
         # ========================================
         # ADVANCED FILE OUTPUT FOR RESEARCH
@@ -201,7 +199,8 @@ class RaceMonitor(Node):
         self.declare_parameter('save_detailed_statistics', True)
         self.declare_parameter('save_filtered_trajectories', True)
         self.declare_parameter('export_research_summary', True)
-        self.declare_parameter('output_formats', ['csv', 'tum', 'json', 'pickle', 'mat'])
+        self.declare_parameter(
+            'output_formats', ['csv', 'tum', 'json', 'pickle', 'mat'])
         self.declare_parameter('include_timestamps', False)
         self.declare_parameter('save_intermediate_results', True)
 
@@ -220,8 +219,10 @@ class RaceMonitor(Node):
         self.declare_parameter('evaluate_stability', True)
 
         # Advanced EVO metrics
-        self.declare_parameter('pose_relations', ['translation_part', 'rotation_part', 'full_transformation'])
-        self.declare_parameter('statistics_types', ['rmse', 'mean', 'median', 'std', 'min', 'max', 'sse'])
+        self.declare_parameter(
+            'pose_relations', ['translation_part', 'rotation_part', 'full_transformation'])
+        self.declare_parameter('statistics_types', [
+                               'rmse', 'mean', 'median', 'std', 'min', 'max', 'sse'])
 
         # Filtering options
         self.declare_parameter('apply_trajectory_filtering', True)
@@ -258,7 +259,8 @@ class RaceMonitor(Node):
         # ========================================
         self.declare_parameter('enable_f1tenth_interface', True)
         self.declare_parameter('f1tenth_vehicle_state_topic', '/vehicle_state')
-        self.declare_parameter('f1tenth_constrained_state_topic', '/constrained_vehicle_state')
+        self.declare_parameter(
+            'f1tenth_constrained_state_topic', '/constrained_vehicle_state')
 
         # ========================================
         # COMPUTATIONAL PERFORMANCE MONITORING
@@ -290,18 +292,22 @@ class RaceMonitor(Node):
 
         # Race evaluation settings
         self.declare_parameter('race_evaluation.enable_export', True)
-        self.declare_parameter('race_evaluation.auto_increment_experiment', True)
+        self.declare_parameter(
+            'race_evaluation.auto_increment_experiment', True)
         self.declare_parameter('race_evaluation.include_recommendations', True)
         self.declare_parameter('race_evaluation.enable_comparison', True)
         self.declare_parameter('race_evaluation.grading_strictness', 'normal')
 
         # Evaluation focus areas
         self.declare_parameter('race_evaluation.focus_on_consistency', True)
-        self.declare_parameter('race_evaluation.focus_on_trajectory_accuracy', True)
-        self.declare_parameter('race_evaluation.focus_on_racing_efficiency', True)
+        self.declare_parameter(
+            'race_evaluation.focus_on_trajectory_accuracy', True)
+        self.declare_parameter(
+            'race_evaluation.focus_on_racing_efficiency', True)
 
         # Output preferences
-        self.declare_parameter('race_evaluation.include_detailed_metrics', True)
+        self.declare_parameter(
+            'race_evaluation.include_detailed_metrics', True)
         self.declare_parameter('race_evaluation.max_recommendations', 5)
 
         # Store comprehensive configuration
@@ -339,10 +345,6 @@ class RaceMonitor(Node):
             # Reference trajectory
             'reference_trajectory_file': self.get_parameter('reference_trajectory_file').value,
             'reference_trajectory_format': self.get_parameter('reference_trajectory_format').value,
-            'enable_horizon_mapper_reference': self.get_parameter('enable_horizon_mapper_reference').value,
-            'horizon_mapper_reference_topic': self.get_parameter('horizon_mapper_reference_topic').value,
-            'use_complete_reference_path': self.get_parameter('use_complete_reference_path').value,
-            'horizon_mapper_path_topic': self.get_parameter('horizon_mapper_path_topic').value,
 
             # Advanced file output
             'export_to_pandas': self.get_parameter('export_to_pandas').value,
@@ -442,8 +444,10 @@ class RaceMonitor(Node):
         # Core components
         self.lap_detector = LapDetector(self.get_logger(), self.get_clock())
         self.reference_manager = ReferenceTrajectoryManager(self.get_logger())
-        self.performance_monitor = PerformanceMonitor(self.get_logger(), self.get_clock())
-        self.visualization_publisher = VisualizationPublisher(self.get_logger(), self._publish_marker)
+        self.performance_monitor = PerformanceMonitor(
+            self.get_logger(), self.get_clock())
+        self.visualization_publisher = VisualizationPublisher(
+            self.get_logger(), self._publish_marker)
         self.data_manager = DataManager(self.get_logger())
 
         # Smart controller detection variables
@@ -459,11 +463,16 @@ class RaceMonitor(Node):
     def _setup_ros_interfaces(self):
         """Set up ROS2 publishers, subscribers, and services."""
         # Publishers
-        self.lap_count_pub = self.create_publisher(Int32, '/race_monitor/lap_count', 10)
-        self.lap_time_pub = self.create_publisher(Float32, '/race_monitor/lap_time', 10)
-        self.race_status_pub = self.create_publisher(String, '/race_monitor/race_status', 10)
-        self.race_running_pub = self.create_publisher(Bool, '/race_monitor/race_running', 10)
-        self.start_line_marker_pub = self.create_publisher(Marker, '/race_monitor/start_line_marker', 10)
+        self.lap_count_pub = self.create_publisher(
+            Int32, '/race_monitor/lap_count', 10)
+        self.lap_time_pub = self.create_publisher(
+            Float32, '/race_monitor/lap_time', 10)
+        self.race_status_pub = self.create_publisher(
+            String, '/race_monitor/race_status', 10)
+        self.race_running_pub = self.create_publisher(
+            Bool, '/race_monitor/race_running', 10)
+        self.start_line_marker_pub = self.create_publisher(
+            Marker, '/race_monitor/start_line_marker', 10)
 
         # Subscribers
         self.odom_sub = self.create_subscription(
@@ -474,17 +483,6 @@ class RaceMonitor(Node):
         )
 
         # Optional subscribers based on configuration
-        if self.config['enable_horizon_mapper_reference']:
-            self.reference_trajectory_sub = self.create_subscription(
-                Path, '/horizon_mapper/reference_trajectory',
-                self.reference_manager.update_reference_trajectory, 10
-            )
-
-        if self.config['use_complete_reference_path']:
-            self.reference_path_sub = self.create_subscription(
-                Path, '/horizon_mapper/reference_path',
-                self.reference_manager.update_reference_path, 10
-            )
 
         # Control command subscriber for performance monitoring
         if self.config['enable_computational_monitoring']:
@@ -503,10 +501,12 @@ class RaceMonitor(Node):
         self.data_manager.configure(self.config)
 
         # Store the original base directory before it gets modified
-        self.original_base_output_dir = self.config.get('trajectory_output_directory', 'evaluation_results')
+        self.original_base_output_dir = self.config.get(
+            'trajectory_output_directory', 'evaluation_results')
 
         # Create dedicated run directory for this session
-        controller_name = self.config.get('controller_name', 'unknown_controller')
+        controller_name = self.config.get(
+            'controller_name', 'unknown_controller')
         experiment_id = self.config.get('experiment_id', 'exp_001')
 
         # Only auto-generate experiment ID if we have a valid controller name
@@ -515,13 +515,16 @@ class RaceMonitor(Node):
             # Auto-generate next experiment ID if using default or if experiment already exists
             if experiment_id == 'exp_001' or self._experiment_directory_exists(controller_name, experiment_id):
                 experiment_id = self._get_next_experiment_id(controller_name)
-                self.config['experiment_id'] = experiment_id  # Update config with new experiment ID
+                # Update config with new experiment ID
+                self.config['experiment_id'] = experiment_id
 
-            run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
+            run_directory = self.data_manager.create_run_directory(
+                controller_name, experiment_id)
 
             # Update configuration paths for all components to use the run directory
             if self.config.get('auto_generate_graphs', False):
-                self.config['graph_output_directory'] = os.path.join(run_directory, "graphs")
+                self.config['graph_output_directory'] = os.path.join(
+                    run_directory, "graphs")
 
             # Update trajectory output directory for research evaluator to use the run directory directly
             self.config['trajectory_output_directory'] = run_directory
@@ -543,7 +546,8 @@ class RaceMonitor(Node):
         """Initialize analysis components after run directory is configured."""
         if RESEARCH_EVALUATOR_AVAILABLE and self.config['enable_trajectory_evaluation']:
             try:
-                self.research_evaluator = create_research_evaluator(self.config)
+                self.research_evaluator = create_research_evaluator(
+                    self.config)
 
                 # Connect data manager for proper directory handling
                 if hasattr(self.research_evaluator, 'set_data_manager'):
@@ -557,19 +561,22 @@ class RaceMonitor(Node):
                         self.research_evaluator.reference_trajectory = reference_trajectory
 
             except Exception as e:
-                self.get_logger().error(f"Failed to initialize research evaluator: {e}")
+                self.get_logger().error(
+                    f"Failed to initialize research evaluator: {e}")
 
         if RACE_EVALUATOR_AVAILABLE and self.config.get('enable_race_evaluation', True):
             try:
                 self.race_evaluator = create_race_evaluator(self.config)
             except Exception as e:
-                self.get_logger().error(f"Failed to initialize race evaluator: {e}")
+                self.get_logger().error(
+                    f"Failed to initialize race evaluator: {e}")
 
         if EVO_PLOTTER_AVAILABLE and self.config['auto_generate_graphs']:
             try:
                 self.evo_plotter = EVOPlotter(self.config)
             except Exception as e:
-                self.get_logger().warn(f"EVO plotter initialization failed: {e}")
+                self.get_logger().warn(
+                    f"EVO plotter initialization failed: {e}")
                 self.evo_plotter = None
                 # Disable auto_generate_graphs to prevent further attempts
                 self.config['auto_generate_graphs'] = False
@@ -602,11 +609,13 @@ class RaceMonitor(Node):
             )
 
         # Set up periodic visualization timer to ensure raceline stays visible
-        self.visualization_timer = self.create_timer(5.0, self._periodic_visualization_update)
+        self.visualization_timer = self.create_timer(
+            5.0, self._periodic_visualization_update)
 
         # Set up smart controller detection timer
         if self.config['enable_smart_controller_detection']:
-            self.controller_detection_timer = self.create_timer(2.0, self._detect_active_controller)
+            self.controller_detection_timer = self.create_timer(
+                2.0, self._detect_active_controller)
 
         # Initial enhanced visualization
         self.visualization_publisher.publish_start_line_marker()
@@ -630,7 +639,8 @@ class RaceMonitor(Node):
                                msg.twist.twist.linear.z**2) ** 0.5
 
             # Update lap detector with position, velocity, and heading
-            self.lap_detector.update_position(x, y, msg.header.stamp, velocity=linear_velocity, heading=heading)
+            self.lap_detector.update_position(
+                x, y, msg.header.stamp, velocity=linear_velocity, heading=heading)
 
             # Add point to current trajectory
             if self.lap_detector.is_race_active():
@@ -642,11 +652,13 @@ class RaceMonitor(Node):
                     'linear_velocity': linear_velocity,
                     'angular_velocity': msg.twist.twist.angular.z
                 }
-                self.data_manager.add_trajectory_point(x, y, z, msg.header.stamp, additional_data)
+                self.data_manager.add_trajectory_point(
+                    x, y, z, msg.header.stamp, additional_data)
 
             # Performance monitoring
             if self.config['enable_computational_monitoring']:
-                self.performance_monitor.record_odometry_timestamp('car_state/odom', msg.header.stamp)
+                self.performance_monitor.record_odometry_timestamp(
+                    'car_state/odom', msg.header.stamp)
 
             # Publish race status
             self._publish_race_status()
@@ -657,7 +669,8 @@ class RaceMonitor(Node):
     def _control_command_callback(self, msg: AckermannDriveStamped):
         """Handle control command messages for performance monitoring."""
         if self.config['enable_computational_monitoring']:
-            self.performance_monitor.record_control_command_timestamp('/drive', msg.header.stamp)
+            self.performance_monitor.record_control_command_timestamp(
+                '/drive', msg.header.stamp)
 
     def _detect_active_controller(self):
         """Detect which controller is actively publishing to control topics."""
@@ -674,16 +687,19 @@ class RaceMonitor(Node):
 
             # Get topic info for control command topics
             topic_names_and_types = self.get_topic_names_and_types()
-            control_topics = self.config.get('control_command_topics', ['/drive'])
+            control_topics = self.config.get(
+                'control_command_topics', ['/drive'])
 
             for topic in control_topics:
                 # Check if topic exists
-                topic_exists = any(name == topic for name, _ in topic_names_and_types)
+                topic_exists = any(name == topic for name,
+                                   _ in topic_names_and_types)
 
                 if topic_exists:
                     # Get publishers for this topic
                     try:
-                        publishers_info = self.get_publishers_info_by_topic(topic)
+                        publishers_info = self.get_publishers_info_by_topic(
+                            topic)
 
                         for publisher_info in publishers_info:
                             node_name = publisher_info.node_name
@@ -700,13 +716,15 @@ class RaceMonitor(Node):
                                 if self.controller_first_detection_time is None:
                                     self.controller_first_detection_time = self.get_clock().now()
 
-                                self.get_logger().info(f"Detected controller: {node_name} publishing to {topic}")
+                                self.get_logger().info(
+                                    f"Detected controller: {node_name} publishing to {topic}")
 
                                 # Update controller name if this is the first one or if multiple detected
                                 if len(self.detected_controller_names) == 1:
                                     new_name = node_name
                                     if new_name.startswith('/'):
-                                        new_name = new_name[1:]  # Remove leading slash
+                                        # Remove leading slash
+                                        new_name = new_name[1:]
 
                                     self.config['controller_name'] = new_name
 
@@ -715,12 +733,15 @@ class RaceMonitor(Node):
                                                                    Parameter.Type.STRING,
                                                                    new_name)])
 
-                                    self.get_logger().info(f"Controller name automatically updated to: {new_name}")
+                                    self.get_logger().info(
+                                        f"Controller name automatically updated to: {new_name}")
 
                                 elif len(self.detected_controller_names) > 1:
                                     # Multiple controllers detected
-                                    controller_list = sorted(list(self.detected_controller_names))
-                                    combined_name = "_".join([name.lstrip('/') for name in controller_list])
+                                    controller_list = sorted(
+                                        list(self.detected_controller_names))
+                                    combined_name = "_".join(
+                                        [name.lstrip('/') for name in controller_list])
 
                                     self.config['controller_name'] = combined_name
                                     self.set_parameters([Parameter('controller_name',
@@ -731,7 +752,8 @@ class RaceMonitor(Node):
                                         f"Multiple controllers detected. Name updated to: {combined_name}")
 
                     except Exception as e:
-                        self.get_logger().debug(f"Could not get publisher info for {topic}: {e}")
+                        self.get_logger().debug(
+                            f"Could not get publisher info for {topic}: {e}")
 
             # Stop detection after 30 seconds to avoid continuous polling
             if (self.controller_first_detection_time and
@@ -748,7 +770,8 @@ class RaceMonitor(Node):
     def _clicked_point_callback(self, msg: PointStamped):
         """Handle clicked point messages for manual start line setup."""
         point = [msg.point.x, msg.point.y]
-        self.get_logger().info(f"Clicked point received: ({point[0]:.2f}, {point[1]:.2f})")
+        self.get_logger().info(
+            f"Clicked point received: ({point[0]:.2f}, {point[1]:.2f})")
 
         if not hasattr(self, 'pending_start_point'):
             self.pending_start_point = None
@@ -756,7 +779,8 @@ class RaceMonitor(Node):
         if self.pending_start_point is None:
             # First click - store as pending point
             self.pending_start_point = point
-            self.get_logger().info(f"Pending start/finish point set. Click second point to complete the line.")
+            self.get_logger().info(
+                f"Pending start/finish point set. Click second point to complete the line.")
         else:
             # Second click - update start line
             self.config['start_line_p1'] = self.pending_start_point
@@ -796,7 +820,8 @@ class RaceMonitor(Node):
         if not controller_name and hasattr(self, 'detected_controller_names') and self.detected_controller_names:
             controller_name = list(self.detected_controller_names)[0]
             self.config['controller_name'] = controller_name
-            self.get_logger().info(f"Using detected controller: {controller_name}")
+            self.get_logger().info(
+                f"Using detected controller: {controller_name}")
 
         # Auto-generate next experiment ID if using default or if experiment already exists
         if controller_name and (
@@ -804,19 +829,23 @@ class RaceMonitor(Node):
                 controller_name,
                 experiment_id)):
             experiment_id = self._get_next_experiment_id(controller_name)
-            self.config['experiment_id'] = experiment_id  # Update config with new experiment ID
-            self.get_logger().info(f"Auto-generated experiment ID for race start: {experiment_id}")
+            # Update config with new experiment ID
+            self.config['experiment_id'] = experiment_id
+            self.get_logger().info(
+                f"Auto-generated experiment ID for race start: {experiment_id}")
 
         # Create experiment directory if we have a controller name and haven't created one yet
         if controller_name and not hasattr(self.data_manager, 'run_directory_created'):
-            run_directory = self.data_manager.create_run_directory(controller_name, experiment_id)
+            run_directory = self.data_manager.create_run_directory(
+                controller_name, experiment_id)
             self.data_manager.run_directory_created = True
             # self.get_logger().info(f"Created experiment directory for {controller_name}: {run_directory}")
 
             # Update config paths to point to the experiment directory
             self.config['trajectory_output_directory'] = run_directory
             if self.config.get('auto_generate_graphs', False):
-                self.config['graph_output_directory'] = os.path.join(run_directory, "graphs")
+                self.config['graph_output_directory'] = os.path.join(
+                    run_directory, "graphs")
 
             # Initialize analysis components now that we have the run directory
             self._initialize_analysis_components()
@@ -825,7 +854,8 @@ class RaceMonitor(Node):
         self.data_manager.start_new_lap_trajectory(1)
 
         # Update visualization
-        self.visualization_publisher.publish_race_status_marker("RACING", 1, self.config['required_laps'])
+        self.visualization_publisher.publish_race_status_marker(
+            "RACING", 1, self.config['required_laps'])
 
         # Reset performance monitoring data
         if self.config['enable_computational_monitoring']:
@@ -833,7 +863,8 @@ class RaceMonitor(Node):
 
     def _on_lap_complete(self, lap_number: int, lap_time: float):
         """Handle lap completion event."""
-        self.get_logger().info(f"Lap {lap_number} completed in {lap_time:.3f}s")
+        self.get_logger().info(
+            f"Lap {lap_number} completed in {lap_time:.3f}s")
 
         # Complete current lap trajectory
         self.data_manager.complete_lap_trajectory(lap_number, lap_time)
@@ -844,7 +875,8 @@ class RaceMonitor(Node):
 
         # Update visualization
         race_stats = self.lap_detector.get_race_stats()
-        self.visualization_publisher.publish_lap_completion_marker(lap_number, lap_time)
+        self.visualization_publisher.publish_lap_completion_marker(
+            lap_number, lap_time)
 
         if not race_stats['race_completed']:
             self.visualization_publisher.publish_race_status_marker(
@@ -860,13 +892,15 @@ class RaceMonitor(Node):
         race_stats = self.lap_detector.get_race_stats()
         reason = race_stats['race_ending_reason']
 
-        self.get_logger().info(f"Race completed in {total_time:.3f}s! (Reason: {reason})")
+        self.get_logger().info(
+            f"Race completed in {total_time:.3f}s! (Reason: {reason})")
 
         # Update visualization based on ending reason
         status_text = "FINISHED" if reason == "Laps completed" else f"ENDED-{reason.upper()}"
         required_laps = self.config['required_laps'] if self.config['race_ending_mode'] == 'lap_complete' else len(
             lap_times)
-        self.visualization_publisher.publish_race_status_marker(status_text, len(lap_times), required_laps)
+        self.visualization_publisher.publish_race_status_marker(
+            status_text, len(lap_times), required_laps)
 
         # Save race results
         race_data = {
@@ -887,13 +921,15 @@ class RaceMonitor(Node):
         # Save performance data
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.save_performance_data_to_csv(
-                os.path.join(self.config['trajectory_output_directory'], 'cpu_performance_data')
+                os.path.join(
+                    self.config['trajectory_output_directory'], 'cpu_performance_data')
             )
 
         # Auto-shutdown after race completion if enabled
         if self.config['auto_shutdown_on_race_complete']:
             delay = self.config['shutdown_delay_seconds']
-            self.get_logger().info(f"Race complete! Shutting down in {delay} seconds...")
+            self.get_logger().info(
+                f"Race complete! Shutting down in {delay} seconds...")
 
             # Create a timer for delayed shutdown
             self.shutdown_timer = self.create_timer(delay, self._shutdown_node)
@@ -922,10 +958,12 @@ class RaceMonitor(Node):
     def _on_race_crash(self, crash_reason: str, total_time: float, lap_times: list):
         """Handle race crash event."""
         self.get_logger().warning(f"Race ended due to crash: {crash_reason}")
-        self.get_logger().info(f"  Duration: {total_time:.3f}s, Laps: {len(lap_times)}")
+        self.get_logger().info(
+            f"  Duration: {total_time:.3f}s, Laps: {len(lap_times)}")
 
         # Update visualization
-        self.visualization_publisher.publish_race_status_marker("CRASHED", len(lap_times), len(lap_times))
+        self.visualization_publisher.publish_race_status_marker(
+            "CRASHED", len(lap_times), len(lap_times))
 
         # Save race results with crash information
         race_data = {
@@ -947,14 +985,16 @@ class RaceMonitor(Node):
         # Save performance data
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.save_performance_data_to_csv(
-                os.path.join(self.config['trajectory_output_directory'], 'cpu_performance_data')
+                os.path.join(
+                    self.config['trajectory_output_directory'], 'cpu_performance_data')
             )
 
     def _evaluate_lap_trajectory(self, lap_number: int):
         """Evaluate individual lap trajectory."""
         try:
             # Create EVO trajectory for the lap
-            evo_trajectory = self.data_manager.create_evo_trajectory(lap_number)
+            evo_trajectory = self.data_manager.create_evo_trajectory(
+                lap_number)
             if not evo_trajectory:
                 return
 
@@ -977,7 +1017,8 @@ class RaceMonitor(Node):
             all_trajectories = self.data_manager.get_trajectory_data()
 
             # Generate comprehensive race summary
-            race_summary = self._generate_race_summary(race_data, all_trajectories)
+            race_summary = self._generate_race_summary(
+                race_data, all_trajectories)
 
             # Save comprehensive race summary
             self.data_manager.save_race_summary(race_summary)
@@ -993,7 +1034,8 @@ class RaceMonitor(Node):
                         self.get_logger().warning("Failed to save APE/RPE metrics files")
                     # Note: APE/RPE plot generation has been removed to reduce storage overhead
                 except Exception as e:
-                    self.get_logger().error(f"Error saving APE/RPE metrics files: {e}")
+                    self.get_logger().error(
+                        f"Error saving APE/RPE metrics files: {e}")
 
             # Initialize variables for consolidated save
             race_evaluation = None
@@ -1041,7 +1083,8 @@ class RaceMonitor(Node):
                     # Generate research summary
                     evaluation_results = self.research_evaluator.generate_research_summary()
                     if evaluation_results:
-                        self.data_manager.save_evaluation_summary(evaluation_results)
+                        self.data_manager.save_evaluation_summary(
+                            evaluation_results)
                         self.get_logger().info("Research evaluation completed successfully")
                 except Exception as e:
                     self.get_logger().error(f"Research evaluation failed: {e}")
@@ -1051,7 +1094,8 @@ class RaceMonitor(Node):
                 self.get_logger().info("Running custom race evaluation...")
                 try:
                     # Create research data summary for race evaluator
-                    research_summary = self._generate_race_summary(race_data, all_trajectories)
+                    research_summary = self._generate_race_summary(
+                        race_data, all_trajectories)
 
                     # Extract advanced metrics for EVO evaluation
                     evo_metrics = {}
@@ -1077,14 +1121,17 @@ class RaceMonitor(Node):
                     # Pass lap times from race_data to race_evaluator
                     if 'lap_times' in race_data:
                         self.race_evaluator.lap_times_from_monitor = race_data['lap_times']
-                        self.get_logger().info(f"Set lap times for evaluator: {len(race_data['lap_times'])} laps")
+                        self.get_logger().info(
+                            f"Set lap times for evaluator: {len(race_data['lap_times'])} laps")
 
-                    race_evaluation = self.race_evaluator.create_race_evaluation(research_summary, evo_metrics)
+                    race_evaluation = self.race_evaluator.create_race_evaluation(
+                        research_summary, evo_metrics)
                     if race_evaluation:
                         self.data_manager.save_race_evaluation(race_evaluation)
                         self.get_logger().info("Custom race evaluation completed successfully")
                 except Exception as e:
-                    self.get_logger().error(f"Custom race evaluation failed: {e}")
+                    self.get_logger().error(
+                        f"Custom race evaluation failed: {e}")
 
             if self.evo_plotter and all_trajectories:
                 # Generate visualization plots
@@ -1118,7 +1165,8 @@ class RaceMonitor(Node):
                                             def __init__(self, ts):
                                                 if ts is not None:
                                                     self.sec = int(ts)
-                                                    self.nanosec = int((ts - int(ts)) * 1e9)
+                                                    self.nanosec = int(
+                                                        (ts - int(ts)) * 1e9)
                                                 else:
                                                     self.sec = 0
                                                     self.nanosec = 0
@@ -1129,7 +1177,8 @@ class RaceMonitor(Node):
                                 # Calculate theta from quaternion if not provided
                                 qz = point.get('qz', 0.0)
                                 qw = point.get('qw', 1.0)
-                                theta = 2.0 * np.arctan2(qz, qw) if qw != 0 else 0.0
+                                theta = 2.0 * \
+                                    np.arctan2(qz, qw) if qw != 0 else 0.0
 
                                 pose_data = {
                                     'pose': MockPose(
@@ -1147,7 +1196,8 @@ class RaceMonitor(Node):
                                 poses.append(pose_data)
 
                             if poses:
-                                self.evo_plotter.add_lap_trajectory(lap_num, poses)
+                                self.evo_plotter.add_lap_trajectory(
+                                    lap_num, poses)
 
                     # Generate all plots
                     plot_success = self.evo_plotter.generate_all_plots()
@@ -1160,10 +1210,12 @@ class RaceMonitor(Node):
 
             # Save consolidated race_results.json file with all important information
             try:
-                self.data_manager.save_consolidated_race_results(race_summary, race_evaluation)
+                self.data_manager.save_consolidated_race_results(
+                    race_summary, race_evaluation)
                 self.get_logger().info("Saved consolidated race_results.json file")
             except Exception as e:
-                self.get_logger().error(f"Error saving consolidated results: {e}")
+                self.get_logger().error(
+                    f"Error saving consolidated results: {e}")
 
             self.get_logger().info("Comprehensive analysis completed!")
 
@@ -1246,7 +1298,8 @@ class RaceMonitor(Node):
                     # No advanced metrics available - this is normal for basic monitoring
                     summary['advanced_metrics'] = {}
             except Exception as e:
-                self.get_logger().error(f"Error calculating averaged metrics: {e}")
+                self.get_logger().error(
+                    f"Error calculating averaged metrics: {e}")
                 summary['advanced_metrics'] = {}
 
             return summary
@@ -1268,11 +1321,13 @@ class RaceMonitor(Node):
                     f"Using in-memory detailed metrics from research evaluator: {len(detailed_metrics)} laps")
             else:
                 # Fallback: Load metrics from saved lap files
-                self.get_logger().debug("Research evaluator not available or no in-memory metrics, loading from saved lap files")
+                self.get_logger().debug(
+                    "Research evaluator not available or no in-memory metrics, loading from saved lap files")
                 detailed_metrics = self._load_metrics_from_files()
 
             if not detailed_metrics:
-                self.get_logger().debug("No detailed metrics available from research evaluator or saved files")
+                self.get_logger().debug(
+                    "No detailed metrics available from research evaluator or saved files")
                 return {}
 
             # Collect all metrics from all laps
@@ -1282,7 +1337,8 @@ class RaceMonitor(Node):
             if lap_count == 0:
                 return {}
 
-            self.get_logger().info(f"Processing {lap_count} laps for advanced metrics calculation")
+            self.get_logger().info(
+                f"Processing {lap_count} laps for advanced metrics calculation")
 
             # Aggregate metrics across all laps
             for lap_num, lap_metrics in detailed_metrics.items():
@@ -1297,26 +1353,35 @@ class RaceMonitor(Node):
             for metric_name, values in all_metrics.items():
                 if len(values) > 0:
                     try:
-                        averaged_metrics[f'{metric_name}_mean'] = float(np.mean(values))
-                        averaged_metrics[f'{metric_name}_std'] = float(np.std(values))
-                        averaged_metrics[f'{metric_name}_min'] = float(np.min(values))
-                        averaged_metrics[f'{metric_name}_max'] = float(np.max(values))
-                        averaged_metrics[f'{metric_name}_median'] = float(np.median(values))
+                        averaged_metrics[f'{metric_name}_mean'] = float(
+                            np.mean(values))
+                        averaged_metrics[f'{metric_name}_std'] = float(
+                            np.std(values))
+                        averaged_metrics[f'{metric_name}_min'] = float(
+                            np.min(values))
+                        averaged_metrics[f'{metric_name}_max'] = float(
+                            np.max(values))
+                        averaged_metrics[f'{metric_name}_median'] = float(
+                            np.median(values))
 
                         # Add coefficient of variation for key metrics
                         if metric_name.startswith(('ape_', 'rpe_', 'velocity_', 'acceleration_')):
                             mean_val = np.mean(values)
                             if mean_val > 0:
-                                averaged_metrics[f'{metric_name}_cv'] = float(np.std(values) / mean_val * 100)
+                                averaged_metrics[f'{metric_name}_cv'] = float(
+                                    np.std(values) / mean_val * 100)
                     except Exception as e:
-                        self.get_logger().warn(f"Error calculating statistics for {metric_name}: {e}")
+                        self.get_logger().warn(
+                            f"Error calculating statistics for {metric_name}: {e}")
                         continue
 
             # Calculate overall performance indicators
             if averaged_metrics:
                 # APE/RPE consistency scores
-                ape_keys = [k for k in averaged_metrics.keys() if k.startswith('ape_') and k.endswith('_mean')]
-                rpe_keys = [k for k in averaged_metrics.keys() if k.startswith('rpe_') and k.endswith('_mean')]
+                ape_keys = [k for k in averaged_metrics.keys(
+                ) if k.startswith('ape_') and k.endswith('_mean')]
+                rpe_keys = [k for k in averaged_metrics.keys(
+                ) if k.startswith('rpe_') and k.endswith('_mean')]
 
                 if ape_keys:
                     ape_mean = np.mean([averaged_metrics[k] for k in ape_keys])
@@ -1327,12 +1392,16 @@ class RaceMonitor(Node):
                     averaged_metrics['overall_rpe_mean'] = float(rpe_mean)
 
                 # Overall consistency score
-                cv_keys = [k for k in averaged_metrics.keys() if k.endswith('_cv')]
+                cv_keys = [k for k in averaged_metrics.keys()
+                           if k.endswith('_cv')]
                 if cv_keys:
-                    overall_cv = np.mean([averaged_metrics[k] for k in cv_keys])
-                    averaged_metrics['overall_consistency_cv'] = float(overall_cv)
+                    overall_cv = np.mean([averaged_metrics[k]
+                                         for k in cv_keys])
+                    averaged_metrics['overall_consistency_cv'] = float(
+                        overall_cv)
 
-            self.get_logger().info(f"Calculated {len(averaged_metrics)} averaged metrics from {lap_count} laps")
+            self.get_logger().info(
+                f"Calculated {len(averaged_metrics)} averaged metrics from {lap_count} laps")
             return averaged_metrics
 
         except Exception as e:
@@ -1347,22 +1416,28 @@ class RaceMonitor(Node):
             # Get the metrics directory path
             if (hasattr(self, 'research_evaluator') and self.research_evaluator and
                     hasattr(self.research_evaluator, 'experiment_dir') and self.research_evaluator.experiment_dir):
-                metrics_dir = os.path.join(self.research_evaluator.experiment_dir, 'metrics')
-                self.get_logger().debug(f"Using research evaluator experiment_dir for metrics: {metrics_dir}")
+                metrics_dir = os.path.join(
+                    self.research_evaluator.experiment_dir, 'metrics')
+                self.get_logger().debug(
+                    f"Using research evaluator experiment_dir for metrics: {metrics_dir}")
             else:
                 # Fallback to data manager's path
                 metrics_dir = self.data_manager.get_metrics_directory()
-                self.get_logger().debug(f"Using data manager metrics directory: {metrics_dir}")
+                self.get_logger().debug(
+                    f"Using data manager metrics directory: {metrics_dir}")
 
             if not os.path.exists(metrics_dir):
-                self.get_logger().warn(f"Metrics directory not found: {metrics_dir}")
+                self.get_logger().warn(
+                    f"Metrics directory not found: {metrics_dir}")
                 return {}
 
             # Load all lap metric files
-            lap_files = [f for f in os.listdir(metrics_dir) if f.startswith('lap_') and f.endswith('_metrics.json')]
+            lap_files = [f for f in os.listdir(metrics_dir) if f.startswith(
+                'lap_') and f.endswith('_metrics.json')]
             lap_files.sort()
 
-            self.get_logger().debug(f"Found {len(lap_files)} lap metric files in {metrics_dir}")
+            self.get_logger().debug(
+                f"Found {len(lap_files)} lap metric files in {metrics_dir}")
 
             for lap_file in lap_files:
                 try:
@@ -1375,13 +1450,16 @@ class RaceMonitor(Node):
                         lap_metrics = json.load(f)
 
                     detailed_metrics[lap_num] = lap_metrics
-                    self.get_logger().debug(f"Loaded {len(lap_metrics)} metrics for lap {lap_num}")
+                    self.get_logger().debug(
+                        f"Loaded {len(lap_metrics)} metrics for lap {lap_num}")
 
                 except Exception as e:
-                    self.get_logger().warn(f"Error loading lap file {lap_file}: {e}")
+                    self.get_logger().warn(
+                        f"Error loading lap file {lap_file}: {e}")
                     continue
 
-            self.get_logger().debug(f"Successfully loaded metrics for {len(detailed_metrics)} laps from files")
+            self.get_logger().debug(
+                f"Successfully loaded metrics for {len(detailed_metrics)} laps from files")
             return detailed_metrics
 
         except Exception as e:
@@ -1392,11 +1470,13 @@ class RaceMonitor(Node):
         """Check if an experiment directory already exists for this controller and experiment ID."""
         try:
             # Use the original base directory, not the current trajectory_output_directory
-            base_output_dir = getattr(self, 'original_base_output_dir', 'evaluation_results')
+            base_output_dir = getattr(
+                self, 'original_base_output_dir', 'evaluation_results')
             controller_dir = os.path.join(base_output_dir, controller_name)
 
             if not os.path.exists(controller_dir):
-                self.get_logger().info(f"Controller directory does not exist: {controller_dir}")
+                self.get_logger().info(
+                    f"Controller directory does not exist: {controller_dir}")
                 return False
 
             # Look for any directory that starts with the experiment_id
@@ -1404,13 +1484,15 @@ class RaceMonitor(Node):
             exp_pattern = os.path.join(controller_dir, f'{experiment_id}_*')
             existing_dirs = glob.glob(exp_pattern)
 
-            self.get_logger().info(f"Checking for existing experiment {experiment_id} in {controller_dir}")
+            self.get_logger().info(
+                f"Checking for existing experiment {experiment_id} in {controller_dir}")
             self.get_logger().info(f"Pattern: {exp_pattern}")
             self.get_logger().info(f"Found: {existing_dirs}")
 
             return len(existing_dirs) > 0
         except Exception as e:
-            self.get_logger().warn(f"Error checking experiment directory existence: {e}")
+            self.get_logger().warn(
+                f"Error checking experiment directory existence: {e}")
             return False
 
     def _get_next_experiment_id(self, controller_name: str) -> str:
@@ -1420,7 +1502,8 @@ class RaceMonitor(Node):
             import glob
 
             # Use the original base directory, not the current trajectory_output_directory
-            base_output_dir = getattr(self, 'original_base_output_dir', 'evaluation_results')
+            base_output_dir = getattr(
+                self, 'original_base_output_dir', 'evaluation_results')
             controller_dir = os.path.join(base_output_dir, controller_name)
 
             max_exp_num = 0
@@ -1442,7 +1525,8 @@ class RaceMonitor(Node):
             return next_id
 
         except Exception as e:
-            self.get_logger().error(f"Error generating next experiment ID: {e}")
+            self.get_logger().error(
+                f"Error generating next experiment ID: {e}")
             # Fallback to timestamp-based ID
             from datetime import datetime
             timestamp = datetime.now().strftime("%H%M%S")
@@ -1492,7 +1576,8 @@ class RaceMonitor(Node):
             self.visualization_publisher.publish_start_line_marker()
 
         except Exception as e:
-            self.get_logger().error(f"Error in periodic visualization update: {e}")
+            self.get_logger().error(
+                f"Error in periodic visualization update: {e}")
 
     def _save_intermediate_results(self):
         """Save intermediate results for manual mode."""
@@ -1500,7 +1585,8 @@ class RaceMonitor(Node):
 
         if race_stats['race_started'] and not race_stats['race_completed']:
             current_time = self.get_clock().now()
-            elapsed_time = (current_time.nanoseconds - race_stats.get('race_start_time', 0)) / 1e9
+            elapsed_time = (current_time.nanoseconds -
+                            race_stats.get('race_start_time', 0)) / 1e9
 
             self.get_logger().info(f"💾 Saving intermediate results (Manual mode) - "
                                    f"Elapsed: {elapsed_time:.1f}s, Laps: {len(race_stats['lap_times'])}")
@@ -1520,7 +1606,8 @@ class RaceMonitor(Node):
 
             # Save intermediate results with clean filename
             filename = "intermediate_results.csv"
-            self.data_manager.save_race_results_to_csv(race_data, filename_override=filename)
+            self.data_manager.save_race_results_to_csv(
+                race_data, filename_override=filename)
 
     def destroy_node(self):
         """Clean up resources before node destruction."""
@@ -1543,7 +1630,8 @@ class RaceMonitor(Node):
 
             # Calculate elapsed time if race is still active
             if not race_stats['race_completed'] and race_stats.get('race_start_time'):
-                elapsed_time = (current_time.nanoseconds - race_stats['race_start_time']) / 1e9
+                elapsed_time = (current_time.nanoseconds -
+                                race_stats['race_start_time']) / 1e9
             else:
                 elapsed_time = race_stats['total_race_time']
 

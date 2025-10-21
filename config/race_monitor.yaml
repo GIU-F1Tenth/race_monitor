@@ -195,12 +195,3 @@ race_monitor:
 
     # Enable/disable CPU performance monitoring
     enable_computational_monitoring: false
-
-    # ========================================
-    # F1TENTH INTERFACE SETTINGS
-    # ========================================
-
-    # Enable/disable F1Tenth vehicle state interface
-    enable_f1tenth_interface: true
-    f1tenth_vehicle_state_topic: "/vehicle_state"
-    f1tenth_constrained_state_topic: "/constrained_vehicle_state"

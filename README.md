@@ -2,8 +2,9 @@
 
 <div align="center">
 
+[![CI](https://github.com/GIU-F1Tenth/race_monitor/workflows/Race%20Monitor%20CI/badge.svg)](https://github.com/GIU-F1Tenth/race_monitor/actions)
 [![ROS2 Humble](https://img.shields.io/badge/ROS2-Humble-blue?style=for-the-badge&logo=ros)](https://docs.ros.org/en/humble/)
-[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-green?style=for-the-badge&logo=python)](https://www.python.org/)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-green?style=for-the-badge&logo=python)](https://www.python.org/)
 [![EVO Integration](https://img.shields.io/badge/EVO-Integrated-orange?style=for-the-badge)](https://github.com/MichaelGrupp/evo)
 [![MIT License](https://img.shields.io/badge/License-MIT-red?style=for-the-badge)](LICENSE)
 
