@@ -99,6 +99,9 @@ jobs:
             ros-humble-launch \
             ros-humble-launch-ros
 
+          # Remove problematic system transforms3d package
+          apt-get remove -y python3-transforms3d || echo "python3-transforms3d not installed"
+
           # Fix NumPy compatibility issues with system packages
           python3 -m pip install --upgrade pip
           pip3 install "numpy>=1.21.0,<2.0.0" --force-reinstall
@@ -117,6 +120,8 @@ jobs:
         run: |
           cd /workspace/src/race_monitor
           python3 -m pip install --upgrade pip
+          # Install transforms3d first to ensure we get the compatible version
+          pip3 install "transforms3d>=0.4.1" "numpy>=1.21.0,<2.0.0"
           # Install with constraints to ensure compatibility
           pip3 install -c constraints.txt -r requirements.txt
 
@@ -245,6 +250,29 @@ jobs:
           cd /workspace
           . /opt/ros/humble/setup.bash
           . install/setup.bash
+
+          # Install Python dependencies for integration test
+          python3 -m pip install --upgrade pip
+          pip3 install "transforms3d>=0.4.1" "numpy>=1.21.0,<2.0.0"
+          cd /workspace/src/race_monitor
+          pip3 install -c constraints.txt -r requirements.txt
+
+          # Verify package versions and paths
+          python3 -c "
+          import sys
+          import numpy as np
+          import transforms3d
+          print(f'NumPy version: {np.__version__} (from {np.__file__})')
+          print(f'transforms3d version: {transforms3d.__version__} (from {transforms3d.__file__})')
+          
+          # Test the problematic import
+          try:
+              import tf_transformations
+              print('tf_transformations imported successfully')
+          except Exception as e:
+              print(f'tf_transformations import failed: {e}')
+              exit(1)
+          "
 
           # Test launch system availability
           python3 -c "

@@ -18,7 +18,17 @@ python3 -c "import tf_transformations; print('✓ tf_transformations imported su
 
 echo
 echo "3. Testing transforms3d import (used by tf_transformations)..."
-python3 -c "import transforms3d; print('✓ transforms3d imported successfully')"
+python3 -c "
+import transforms3d
+import sys
+print(f'✓ transforms3d imported successfully')
+print(f'  Version: {transforms3d.__version__}')
+print(f'  Location: {transforms3d.__file__}')
+if '/usr/lib/python3/dist-packages' in transforms3d.__file__:
+    print('  WARNING: Using system package - this may cause NumPy compatibility issues')
+elif '/usr/local/lib/python3' in transforms3d.__file__:
+    print('  ✓ Using pip-installed package - good for NumPy compatibility')
+"
 
 echo
 echo "4. Testing race_monitor import..."
