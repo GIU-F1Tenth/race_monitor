@@ -47,6 +47,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install NumPy with version constraint first to avoid conflicts
+          pip install "numpy>=1.21.0,<2.0.0"
           pip install -r requirements.txt
           pip install pytest pytest-cov mypy flake8
 
@@ -127,6 +129,8 @@ jobs:
         run: |
           cd /workspace/src/race_monitor
           python3 -m pip install --upgrade pip
+          # Install NumPy with version constraint first to avoid conflicts
+          pip3 install "numpy>=1.21.0,<2.0.0"
           pip3 install -r requirements.txt
 
       - name: Build package

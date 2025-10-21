@@ -21,7 +21,7 @@ setup(
     ],
     install_requires=[
         'setuptools',
-        'numpy>=1.21.0',
+        'numpy>=1.21.0,<2.0.0',
         'pandas>=1.5.0',
         'scipy>=1.9.0',
         'evo>=1.26.0',
@@ -41,7 +41,9 @@ setup(
     maintainer_email='mohammed@azab.io',
     description='ROS2 node for tracking laps, lap times, and race statistics in autonomous racing with EVO trajectory analysis',
     license='MIT',
-    tests_require=['pytest'],
+    extras_require={
+        'test': ['pytest>=7.0.0', 'pytest-cov>=4.0.0']
+    },
     entry_points={
         'console_scripts': [
             'race_monitor = race_monitor.race_monitor:main',

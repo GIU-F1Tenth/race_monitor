@@ -9,7 +9,7 @@
 # tf_transformations - Transform utilities (installed via ros-humble-tf-transformations)
 
 # Core Python scientific computing
-numpy>=1.21.0
+numpy>=1.21.0,<2.0.0
 pandas>=1.5.0
 scipy>=1.9.0
 
