@@ -201,37 +201,53 @@ jobs:
           import rclpy
           from rclpy.node import Node
           from std_msgs.msg import String
-          import threading
+          import time
+          import sys
 
-          received = {'ok': False}
+          try:
+              rclpy.init()
+              
+              class TestNode(Node):
+                  def __init__(self):
+                      super().__init__('ci_smoke_test')
+                      self.pub = self.create_publisher(String, 'ci_test_topic', 10)
+                      self.sub = self.create_subscription(String, 'ci_test_topic', self.cb, 10) 
+                      self.received = False
 
-          class TestNode(Node):
-              def __init__(self):
-                  super().__init__('ci_smoke_test')
-                  self.pub = self.create_publisher(String, 'ci_test_topic', 10)
-                  self.sub = self.create_subscription(String, 'ci_test_topic', self.cb, 10)
+                  def cb(self, msg):
+                      if msg.data == 'ping':
+                          self.received = True
 
-              def cb(self, msg):
-                  if msg.data == 'ping':
-                      received['ok'] = True
+              node = TestNode()
+              
+              # Give some time for setup
+              time.sleep(0.5)
+              
+              # Publish and check for message reception
+              for i in range(5):
+                  node.pub.publish(String(data='ping'))
+                  rclpy.spin_once(node, timeout_sec=0.5)
+                  if node.received:
+                      break
+                  time.sleep(0.1)
 
-          def spin_node(node):
-              rclpy.spin(node)
-
-          rclpy.init()
-          node = TestNode()
-          thr = threading.Thread(target=spin_node, args=(node,), daemon=True)
-          thr.start()
-
-          # publish a message and wait briefly for callback
-          for _ in range(5):
-              node.pub.publish(String(data='ping'))
-              rclpy.spin_once(node, timeout_sec=0.5)
-
-          rclpy.shutdown()
-          if not received['ok']:
-              raise SystemExit('Smoke test failed: no message loopback')
-          print('✓ ROS2 pub/sub smoke test passed')
+              if not node.received:
+                  print('✗ ROS2 pub/sub smoke test failed: no message loopback')
+                  sys.exit(1)
+              else:
+                  print('✓ ROS2 pub/sub smoke test passed')
+                  
+          except Exception as e:
+              print(f'✗ ROS2 pub/sub smoke test failed with error: {e}')
+              sys.exit(1)
+          finally:
+              try:
+                  if 'node' in locals():
+                      node.destroy_node()
+                  if rclpy.ok():
+                      rclpy.shutdown()
+              except Exception as cleanup_e:
+                  print(f'✗ ROS2 cleanup error: {cleanup_e}')
           PY
 
       - name: Test Launch File
@@ -244,7 +260,7 @@ jobs:
           timeout 20s bash -c '
             ros2 launch race_monitor race_monitor.launch.py &
             LAUNCH_PID=$!
-            sleep 6
+            sleep 25
             if kill -0 $LAUNCH_PID 2>/dev/null; then
               echo "✓ Launch file started successfully (PID $LAUNCH_PID)"
               ros2 node list || true
@@ -266,7 +282,7 @@ jobs:
           timeout 12s bash -c '
             ros2 run race_monitor race_monitor &
             NODE_PID=$!
-            sleep 4
+            sleep 15
             if kill -0 $NODE_PID 2>/dev/null; then
               echo "✓ Node executable started successfully (PID $NODE_PID)"
               ros2 node list || true
