@@ -1,0 +1,51 @@
+# Core ROS2 Python dependencies (installed via rosdep)
+# rclpy - ROS2 Python client library
+# std_msgs - Standard ROS2 message types  
+# nav_msgs - Navigation message types (Odometry, Path)
+# geometry_msgs - Geometry message types (Pose, Twist, etc.)
+# visualization_msgs - Visualization message types (Marker, MarkerArray)
+# ackermann_msgs - Ackermann steering message types
+# tf2_ros - Transform library for ROS2
+
+# Core Python scientific computing
+numpy>=1.21.0
+pandas>=1.5.0
+scipy>=1.9.0
+
+# Trajectory evaluation and analysis (EVO submodule)
+evo>=1.26.0
+
+# Visualization and plotting
+matplotlib>=3.5.0
+seaborn>=0.12.0
+plotly>=5.0.0
+
+# System monitoring and performance
+psutil>=5.8.0
+
+# Data serialization and I/O
+PyYAML>=6.0
+json5>=0.9.0
+
+# Transforms and quaternions
+tf-transformations>=1.0.0
+
+# Scientific computing utilities
+colorama>=0.4.4
+tqdm>=4.64.0
+
+# Development and testing dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+mypy>=1.0.0
+flake8>=5.0.0
+black>=22.0.0
+
+# Build tools
+setuptools>=65.0.0
+wheel>=0.37.0
+build>=0.8.0
+
+# Optional: Enhanced analysis capabilities
+scikit-learn>=1.1.0
+statsmodels>=0.13.0
