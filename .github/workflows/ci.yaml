@@ -120,15 +120,14 @@ jobs:
 
       - name: Set up workspace structure
         run: |
-          mkdir -p ws/src
+          mkdir -p ws/src/race_monitor
+          # Copy all files directly to race_monitor package directory
           shopt -s dotglob
           for item in *; do
             if [ "$item" != "ws" ]; then
-              cp -r "$item" ws/src/
+              cp -r "$item" ws/src/race_monitor/
             fi
           done
-          mkdir -p ws/src/race_monitor
-          mv ws/src/* ws/src/race_monitor/ 2>/dev/null || true
           cd ws
 
       - name: Configure rosdep & install package deps
