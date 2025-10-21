@@ -60,7 +60,11 @@ jobs:
       - name: Security audit
         continue-on-error: true
         run: |
-          safety scan -r requirements.txt --output text
+          safety scan -r requirements.txt --output text || (
+            echo "Safety failed, trying pip-audit as fallback..." &&
+            pip install pip-audit &&
+            pip-audit -r requirements.txt --format=text
+          )
 
   linux-ros2-build:
     name: Linux ROS2 Build & Package Tests
