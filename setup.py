@@ -4,6 +4,14 @@ from glob import glob
 
 package_name = 'race_monitor'
 
+def get_data_files(directory):
+    """Get all files in directory, excluding subdirectories"""
+    files = []
+    for item in glob(os.path.join(directory, '*')):
+        if os.path.isfile(item):
+            files.append(item)
+    return files if files else [os.path.join(directory, '.gitkeep')]
+
 setup(
     name=package_name,
     version='2.0.6',
@@ -16,6 +24,10 @@ setup(
             os.path.join('launch', '*launch.[pxy][yma]*'))),
         (os.path.join('share', package_name, 'config'),
          glob(os.path.join('config', '*.yaml'))),
+        (os.path.join('share', package_name, 'ref_trajectory'),
+         get_data_files('ref_trajectory')),
+        (os.path.join('share', package_name, 'data'),
+         get_data_files('data')),
         (os.path.join('lib', 'python3.10', 'site-packages'),
          ['race_monitor_data.txt']),
     ],

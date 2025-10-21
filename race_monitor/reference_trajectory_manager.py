@@ -24,6 +24,7 @@ from typing import Optional, List, Dict, Any
 import rclpy
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
+from ament_index_python.packages import get_package_share_directory
 
 # EVO imports
 try:
@@ -74,8 +75,53 @@ class ReferenceTrajectoryManager:
             config: Dictionary containing configuration parameters
         """
         # File-based reference trajectory configuration
-        self.reference_trajectory_file = config.get(
-            'reference_trajectory_file', "")
+        raw_ref_file = config.get('reference_trajectory_file', "")
+
+        # Resolve path relative to package if not absolute
+        if raw_ref_file and not os.path.isabs(raw_ref_file):
+            try:
+                package_share_dir = get_package_share_directory('race_monitor')
+
+                # Find actual source directory by searching for package.xml
+                # This works regardless of workspace structure
+                ref_base_dir = package_share_dir
+
+                if '/install/' in package_share_dir:
+                    workspace_root = package_share_dir.split('/install/')[0]
+                    src_dir = os.path.join(workspace_root, 'src')
+
+                    if os.path.isdir(src_dir):
+                        # Search for race_monitor package in src tree
+                        for root, dirs, files in os.walk(src_dir):
+                            if 'package.xml' in files:
+                                package_xml_path = os.path.join(root, 'package.xml')
+                                try:
+                                    with open(package_xml_path, 'r') as f:
+                                        if '<name>race_monitor</name>' in f.read():
+                                            ref_base_dir = root
+                                            break
+                                except Exception:
+                                    pass
+                            if ref_base_dir != package_share_dir:
+                                break
+
+                # If it's just a filename, look in ref_trajectory directory
+                if os.path.basename(raw_ref_file) == raw_ref_file:
+                    self.reference_trajectory_file = os.path.join(
+                        ref_base_dir, 'ref_trajectory', raw_ref_file)
+                else:
+                    # Otherwise, treat as relative path from package
+                    self.reference_trajectory_file = os.path.join(
+                        ref_base_dir, raw_ref_file)
+                self.logger.info(
+                    f"Resolved relative reference path: {raw_ref_file} -> {self.reference_trajectory_file}")
+            except Exception as e:
+                self.logger.warn(
+                    f"Could not resolve package path, using as-is: {e}")
+                self.reference_trajectory_file = raw_ref_file
+        else:
+            self.reference_trajectory_file = raw_ref_file
+
         self.reference_trajectory_format = config.get(
             'reference_trajectory_format', "csv")
 

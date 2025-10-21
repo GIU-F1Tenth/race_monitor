@@ -208,8 +208,7 @@ class RaceMonitor(Node):
         # TRAJECTORY ANALYSIS SETTINGS
         # ========================================
         self.declare_parameter('save_trajectories', True)
-        self.declare_parameter('trajectory_output_directory',
-                               '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results')
+        self.declare_parameter('trajectory_output_directory', '')
 
         # Metrics to calculate
         self.declare_parameter('evaluate_smoothness', True)
@@ -235,9 +234,7 @@ class RaceMonitor(Node):
         # GRAPH GENERATION SETTINGS
         # ========================================
         self.declare_parameter('auto_generate_graphs', True)
-        self.declare_parameter(
-            'graph_output_directory',
-            '/home/mohammedazab/ws/src/race_stack/race_monitor/race_monitor/evaluation_results/graphs')
+        self.declare_parameter('graph_output_directory', 'graphs')
         self.declare_parameter('graph_formats', ['png', 'pdf'])
 
         # Plot appearance settings

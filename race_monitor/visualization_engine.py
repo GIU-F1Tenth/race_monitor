@@ -350,6 +350,11 @@ class EVOPlotter:
             return False
 
         print(f"✅ Starting plot generation...")
+        # Warn if no reference trajectory
+        if not self.reference_trajectory:
+            import warnings
+            warnings.warn("No reference trajectory provided. Comparison plots will be skipped.", UserWarning)
+            print("⚠️  No reference trajectory - comparison plots will be skipped")
 
         try:
             # Initialize plot collection
@@ -439,9 +444,18 @@ class EVOPlotter:
             positions = traj.positions_xyz
             ax_traj.plot(positions[:, 0], positions[:, 1],
                          '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
-            # Add only start marker
-            ax_traj.scatter(positions[0, 0], positions[0, 1],
-                            color=color, s=80, marker='o', alpha=0.9, zorder=4)
+            # Add only start marker for first lap
+            if i == 0 and not self.reference_trajectory:
+                # Only show start if no reference trajectory
+                ax_traj.scatter(positions[0, 0], positions[0, 1],
+                                color='darkgreen', s=100, marker='o', label='Start', zorder=5)
+            elif i == 0:
+                # Don't add duplicate start label
+                ax_traj.scatter(positions[0, 0], positions[0, 1],
+                                color=color, s=80, marker='o', alpha=0.9, zorder=4)
+            else:
+                ax_traj.scatter(positions[0, 0], positions[0, 1],
+                                color=color, s=80, marker='o', alpha=0.9, zorder=4)
 
         ax_traj.set_title('Trajectory Comparison')
         ax_traj.set_xlabel('X (m)')

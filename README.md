@@ -20,13 +20,6 @@
 
 Race Monitor is a **comprehensive performance analysis system** for F1Tenth autonomous racing. It provides real-time lap timing, trajectory evaluation, computational performance monitoring, and advanced statistical analysis to help you optimize your racing algorithms.
 
-<<<<<<< HEAD
-**🎯 Perfect for:**
-- **Racing Teams** - Optimize lap times and racing performance
-- **Researchers** - Collect publication-ready trajectory data  
-- **Algorithm Developers** - Debug and improve control algorithms
-- **Students** - Learn trajectory analysis and performance optimization
-=======
 ### Important: EVO Library Setup
 
 **⚠️ Critical Requirement:** The EVO trajectory evaluation library must be available in your workspace. This package includes EVO as a submodule, but you need to ensure it's properly initialized.
@@ -68,7 +61,6 @@ pip install -e .
 ```
 
 ### Build
->>>>>>> 719f753 (docs: Add EVO library setup instructions to README)
 
 ---
 
@@ -174,6 +166,55 @@ ros2 launch race_monitor race_monitor.launch.py \
 ## 🎛️ Configuration System
 
 The main configuration file is `config/race_monitor.yaml`. Here's what you can customize:
+
+### 📁 Path Configuration (New in v2.1)
+
+Race Monitor now supports **package-relative paths**, making configuration portable across systems and Docker containers!
+
+#### Reference Trajectory Setup
+```yaml
+# Simple: Just place your file in ref_trajectory/ and use the filename
+reference_trajectory_file: "my_track.csv"
+reference_trajectory_format: "csv"  # or "tum" or "kitti"
+```
+
+**Steps:**
+1. Copy your reference trajectory: `cp my_track.csv race_monitor/ref_trajectory/`
+2. Set the filename in config (no path needed!)
+3. Launch normally
+
+**Path Resolution:**
+- `"track.csv"` → `<package>/ref_trajectory/track.csv` (automatic!)
+- `"custom/track.csv"` → `<package>/custom/track.csv` (relative)
+- `"/abs/path/track.csv"` → `/abs/path/track.csv` (absolute, still supported)
+
+#### Output Directory Setup
+```yaml
+# Default: Empty string uses package data directory (recommended)
+trajectory_output_directory: ""
+
+# Custom relative directory
+trajectory_output_directory: "experiments"  # → <package>/experiments/
+
+# Custom absolute path (backward compatible)
+trajectory_output_directory: "/home/user/race_data"
+```
+
+**Output Structure:**
+```
+race_monitor/data/
+└── <controller_name>/
+    └── <experiment_id>/
+        ├── trajectories/
+        │   ├── actual_trajectory.csv
+        │   └── reference_trajectory.csv
+        ├── graphs/
+        │   └── *.png, *.pdf
+        └── results/
+            └── race_results.json
+```
+
+See [`ref_trajectory/README.md`](ref_trajectory/README.md) and [`data/README.md`](data/README.md) for detailed documentation.
 
 ### 🏁 Race Setup Parameters
 ```yaml
