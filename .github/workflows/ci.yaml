@@ -61,7 +61,7 @@ jobs:
               import pandas as pd
               import matplotlib.pyplot as plt
               import scipy
-              print('✅ Scientific computing imports successful')
+              print('  Scientific computing imports successful')
           except ImportError as e:
               print(f'❌ Scientific import failed: {e}')
               exit(1)
@@ -77,7 +77,7 @@ jobs:
               import csv
               import os
               import sys
-              print('✅ System imports successful')
+              print('  System imports successful')
           except ImportError as e:
               print(f'❌ System import failed: {e}')
               exit(1)
@@ -110,7 +110,7 @@ jobs:
                   print(f'❌ Module {module} does not exist')
                   sys.exit(1)
 
-          print('✅ Package structure validation successful')
+          print('  Package structure validation successful')
           "
 
       - name: Test config files
@@ -131,7 +131,7 @@ jobs:
               print(f'❌ Config file race_monitor.yaml does not exist')
               sys.exit(1)
 
-          print('✅ Config files validation successful')
+          print('  Config files validation successful')
           "
 
       - name: Test package import
@@ -139,7 +139,7 @@ jobs:
           python3 -c "
           try:
               import race_monitor
-              print('✅ Package import successful')
+              print('  Package import successful')
           except ImportError as e:
               print(f'❌ Package import failed: {e}')
               exit(1)
@@ -156,7 +156,7 @@ jobs:
     name: ROS2 Build & Unit Tests
     runs-on: ubuntu-22.04
     container:
-      image: ros:${{ env.ROS_DISTRO }}
+      image: ros:humble
 
     steps:
       - name: Checkout code
@@ -183,16 +183,16 @@ jobs:
       - name: Install ROS 2 dependencies
         run: |
           apt-get install -y \
-            ros-$ROS_DISTRO-ament-cmake \
-            ros-$ROS_DISTRO-ament-cmake-python \
-            ros-$ROS_DISTRO-rclpy \
-            ros-$ROS_DISTRO-std-msgs \
-            ros-$ROS_DISTRO-nav-msgs \
-            ros-$ROS_DISTRO-geometry-msgs \
-            ros-$ROS_DISTRO-visualization-msgs \
-            ros-$ROS_DISTRO-ackermann-msgs \
-            ros-$ROS_DISTRO-tf2-ros \
-            ros-$ROS_DISTRO-tf-transformations
+            ros-humble-ament-cmake \
+            ros-humble-ament-cmake-python \
+            ros-humble-rclpy \
+            ros-humble-std-msgs \
+            ros-humble-nav-msgs \
+            ros-humble-geometry-msgs \
+            ros-humble-visualization-msgs \
+            ros-humble-ackermann-msgs \
+            ros-humble-tf2-ros \
+            ros-humble-tf-transformations
 
       - name: Install Python dependencies
         run: |
@@ -208,13 +208,13 @@ jobs:
       - name: Build with colcon
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release
 
       - name: Run built-in colcon tests
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           source install/setup.bash
 
           # Run built-in ROS2 tests if they exist
@@ -224,14 +224,14 @@ jobs:
       - name: Test package installation
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           source install/setup.bash
 
           echo "Testing package installation..."
           python3 -c "
           try:
               import race_monitor
-              print('✅ Package import successful')
+              print('  Package import successful')
           except ImportError as e:
               print(f'❌ Package import failed: {e}')
               exit(1)
@@ -240,7 +240,7 @@ jobs:
       - name: Test ROS2 imports
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           source install/setup.bash
 
           echo "Testing ROS2 imports..."
@@ -252,7 +252,7 @@ jobs:
               import geometry_msgs.msg
               import visualization_msgs.msg
               import ackermann_msgs.msg
-              print('✅ All ROS2 imports successful')
+              print('All ROS2 imports successful')
           except ImportError as e:
               print(f'❌ ROS2 import failed: {e}')
               exit(1)
@@ -261,7 +261,7 @@ jobs:
       - name: Test node instantiation
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           source install/setup.bash
 
           echo "Testing node instantiation..."
@@ -271,18 +271,18 @@ jobs:
           rclpy.init()
           try:
               node = RaceMonitor()
-              print('✅ Node instantiation successful')
+              print('Node instantiation successful')
           except Exception as e:
               print(f'❌ Node instantiation failed: {e}')
           finally:
               rclpy.shutdown()
-          " || echo "✅ Node test completed (expected timeout)"
+          " || echo "Node test completed"
 
   system-integration-test:
     name: System Integration & Launch Tests
     runs-on: ubuntu-22.04
     container:
-      image: ros:${{ env.ROS_DISTRO }}
+      image: ros:humble
     needs: [python-lint-and-deps, ros2-build-and-test]
 
     steps:
@@ -297,14 +297,14 @@ jobs:
           apt-get install -y \
             python3-pip \
             python3-colcon-common-extensions \
-            ros-$ROS_DISTRO-rclpy \
-            ros-$ROS_DISTRO-std-msgs \
-            ros-$ROS_DISTRO-nav-msgs \
-            ros-$ROS_DISTRO-geometry-msgs \
-            ros-$ROS_DISTRO-visualization-msgs \
-            ros-$ROS_DISTRO-ackermann-msgs \
-            ros-$ROS_DISTRO-tf2-ros \
-            ros-$ROS_DISTRO-tf-transformations
+            ros-humble-rclpy \
+            ros-humble-std-msgs \
+            ros-humble-nav-msgs \
+            ros-humble-geometry-msgs \
+            ros-humble-visualization-msgs \
+            ros-humble-ackermann-msgs \
+            ros-humble-tf2-ros \
+            ros-humble-tf-transformations
           python3 -m pip install --upgrade pip
           pip3 install -r requirements.txt
 
@@ -313,13 +313,13 @@ jobs:
           mkdir -p /workspace/src
           cp -r . /workspace/src/race_monitor
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           colcon build --packages-select race_monitor
 
       - name: Test launch file syntax
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           source install/setup.bash
 
           echo "Testing launch file syntax..."
@@ -329,7 +329,7 @@ jobs:
           sys.path.append('/workspace/src/race_monitor')
           try:
               from launch import LaunchDescription
-              print('✅ Launch system available')
+              print('Launch system available')
           except ImportError as e:
               print(f'❌ Launch system import failed: {e}')
               exit(1)
@@ -338,20 +338,20 @@ jobs:
       - name: Test launch file execution
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           source install/setup.bash
 
           echo "Testing launch file execution..."
-          timeout 10s ros2 launch race_monitor race_monitor.launch.py || echo "✅ Launch test completed (expected timeout)"
+          timeout 10s ros2 launch race_monitor race_monitor.launch.py || echo "  Launch test completed (expected timeout)"
 
       - name: Test node executable
         run: |
           cd /workspace
-          source /opt/ros/$ROS_DISTRO/setup.bash
+          source /opt/ros/humble/setup.bash
           source install/setup.bash
 
           echo "Testing node executable..."
-          timeout 5s ros2 run race_monitor race_monitor || echo "✅ Node executable test completed (expected timeout)"
+          timeout 5s ros2 run race_monitor race_monitor || echo "  Node executable test completed (expected timeout)"
 
   python-package-dist:
     name: Python Package Distribution
