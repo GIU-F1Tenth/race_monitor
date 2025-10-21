@@ -20,6 +20,7 @@ scipy>=1.9.0
 
 # Transforms and geometry (required for tf_transformations compatibility)
 transforms3d>=0.4.1
+# tf_transformations is provided by ROS2 system packages
 
 # Trajectory evaluation and analysis (EVO submodule)
 evo>=1.26.0

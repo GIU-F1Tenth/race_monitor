@@ -23,6 +23,7 @@ env:
     ros-humble-ackermann-msgs
     ros-humble-tf2-ros
     ros-humble-tf-transformations
+    python3-transforms3d
 
 jobs:
   python-lint:
@@ -99,12 +100,19 @@ jobs:
             ros-humble-launch \
             ros-humble-launch-ros
 
-          # Remove problematic system transforms3d package
-          apt-get remove -y python3-transforms3d || echo "python3-transforms3d not installed"
+          # Verify tf_transformations installation
+          echo "Checking for tf_transformations packages:"
+          apt-cache search tf-transformations || echo "No tf-transformations found via apt"
+          apt-cache search tf_transformations || echo "No tf_transformations found via apt"
+          apt-cache search transforms3d || echo "No transforms3d packages found"
+          dpkg -l | grep -i transform || echo "No transform packages installed"
 
           # Fix NumPy compatibility issues with system packages
           python3 -m pip install --upgrade pip
           pip3 install "numpy>=1.21.0,<2.0.0" --force-reinstall
+
+          # Install compatible transforms3d to override system version
+          pip3 install "transforms3d>=0.4.1" --force-reinstall
 
       - name: Clone repository
         shell: bash
@@ -146,39 +154,65 @@ jobs:
           . /opt/ros/humble/setup.bash
           . install/setup.bash
 
+          # Check ROS2 environment
+          echo "ROS_DISTRO: $ROS_DISTRO"
+          echo "PYTHONPATH: $PYTHONPATH"
+          python3 -c "import sys; print('Python paths:'); [print(f'  {p}') for p in sys.path[:10]]"
+
           # Run colcon tests
           colcon test --packages-select race_monitor --event-handlers console_direct+ || echo "No colcon tests found"
           colcon test-result --verbose || echo "No test results to display"
 
-          # Test package import with NumPy compatibility check
+          # Test package import with comprehensive diagnostics
+          # Source ROS2 environment and then run Python
+          bash -c '
+          . /opt/ros/humble/setup.bash
+          . install/setup.bash
           python3 -c "
           import numpy as np
-          print(f'NumPy version: {np.__version__}')
+          import sys
+          print(f\"NumPy version: {np.__version__}\")
+          print(f\"NumPy location: {np.__file__}\")
+          print(f\"PYTHONPATH: {sys.path[:5]}\")
 
-          # Check for NumPy compatibility
+          # Check if tf_transformations is available
           try:
-              # Try the old deprecated attribute to see if it exists
-              hasattr(np, 'float')
-          except:
-              pass
+              import tf_transformations
+              print(f\"tf_transformations found at: {tf_transformations.__file__}\")
+          except ImportError as e:
+              print(f\"tf_transformations not found: {e}\")
+              print(\"This is required for race_monitor import\")
+              sys.exit(1)
+
+          # Check transforms3d version and location  
+          try:
+              import transforms3d
+              print(f\"transforms3d version: {transforms3d.__version__}\")
+              print(f\"transforms3d location: {transforms3d.__file__}\")
+          except ImportError as e:
+              print(f\"transforms3d not found: {e}\")
+              sys.exit(1)
               
+          # Test race_monitor import
           try:
               import race_monitor
-              print('Package import successful')
+              print(\"✓ Package import successful\")
           except ImportError as e:
-              print(f'Package import failed: {e}')
-              exit(1)
+              print(f\"✗ Package import failed: {e}\")
+              sys.exit(1)
           except AttributeError as e:
-              if 'numpy' in str(e) and 'float' in str(e):
-                  print(f'NumPy compatibility issue detected: {e}')
-                  print('This is a known issue with tf_transformations and newer NumPy versions')
-                  exit(1)
+              if \"numpy\" in str(e) and \"float\" in str(e):
+                  print(f\"✗ NumPy compatibility issue detected: {e}\")
+                  print(\"This is a known issue with tf_transformations and newer NumPy versions\")
+                  sys.exit(1)
               else:
-                  print(f'Unexpected error: {e}')
-                  exit(1)
+                  print(f\"✗ Unexpected error: {e}\")
+                  sys.exit(1)
           "
-
-          # Test ROS2 imports
+          '          # Test ROS2 imports with proper environment
+          bash -c '
+          . /opt/ros/humble/setup.bash
+          . install/setup.bash
           python3 -c "
           try:
               import rclpy
@@ -187,23 +221,27 @@ jobs:
               import geometry_msgs.msg
               import visualization_msgs.msg
               import ackermann_msgs.msg
-              print('Basic ROS2 imports successful')
+              print(\"Basic ROS2 imports successful\")
               
               # Test tf_transformations separately with error handling
               try:
                   import tf_transformations
-                  print('tf_transformations import successful')
+                  print(\"tf_transformations import successful\")
               except AttributeError as e:
-                  if 'numpy' in str(e) and 'float' in str(e):
-                      print('tf_transformations has NumPy compatibility issue - this is expected')
-                      print('Package will work with proper NumPy version constraint')
+                  if \"numpy\" in str(e) and \"float\" in str(e):
+                      print(\"tf_transformations has NumPy compatibility issue - this is expected\")
+                      print(\"Package will work with proper NumPy version constraint\")
                   else:
                       raise e
+              except ImportError as e:
+                  print(f\"tf_transformations import failed: {e}\")
+                  sys.exit(1)
                       
           except ImportError as e:
-              print(f'ROS2 import failed: {e}')
-              exit(1)
+              print(f\"ROS2 import failed: {e}\")
+              sys.exit(1)
           "
+          '
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -264,7 +302,7 @@ jobs:
           import transforms3d
           print(f'NumPy version: {np.__version__} (from {np.__file__})')
           print(f'transforms3d version: {transforms3d.__version__} (from {transforms3d.__file__})')
-          
+
           # Test the problematic import
           try:
               import tf_transformations
