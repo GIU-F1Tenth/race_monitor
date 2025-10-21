@@ -29,12 +29,21 @@ echo "5. Testing specific NumPy compatibility issue..."
 python3 -c "
 import numpy as np
 try:
+    # Test the deprecated np.float attribute that was causing the CI failure
+    if hasattr(np, 'float'):
+        print('Warning: np.float attribute still exists (deprecated)')
+    else:
+        print('✓ np.float attribute properly removed (NumPy 2.0+)')
+    
     # This should work in NumPy < 2.0 but fail in NumPy 2.0+
     result = np.maximum_sctype(np.float64)
     print(f'✓ np.maximum_sctype available (NumPy < 2.0): {result}')
 except AttributeError as e:
     if 'maximum_sctype' in str(e):
         print(f'✗ NumPy 2.0+ detected - would cause tf_transformations failure: {e}')
+        exit(1)
+    elif 'float' in str(e):
+        print(f'✗ np.float deprecation issue detected: {e}')
         exit(1)
     else:
         raise

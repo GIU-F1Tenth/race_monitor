@@ -1,3 +1,8 @@
+# Race Monitor Python Dependencies
+# 
+# IMPORTANT: Use with constraints.txt to ensure compatibility:
+# pip install -c constraints.txt -r requirements.txt
+#
 # Core ROS2 Python dependencies (installed via apt in CI/system)
 # rclpy - ROS2 Python client library
 # std_msgs - Standard ROS2 message types  
