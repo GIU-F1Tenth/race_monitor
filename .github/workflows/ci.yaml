@@ -1,8 +1,8 @@
 name: Race Monitor CI
 
 on:
-  push:
-    branches: [main, dev]
+  #push:
+    #branches: [main, dev]
   pull_request:
     branches: [main, dev]
   schedule:
