@@ -10,7 +10,7 @@ def get_data_files(directory):
     for item in glob(os.path.join(directory, '*')):
         if os.path.isfile(item):
             files.append(item)
-    return files if files else [os.path.join(directory, '.gitkeep')]
+    return files
 
 setup(
     name=package_name,
