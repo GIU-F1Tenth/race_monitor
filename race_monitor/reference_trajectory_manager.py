@@ -24,6 +24,7 @@ from typing import Optional, List, Dict, Any
 import rclpy
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
+from ament_index_python.packages import get_package_share_directory
 
 # EVO imports
 try:
@@ -56,10 +57,6 @@ class ReferenceTrajectoryManager:
         # Configuration
         self.reference_trajectory_file = ""
         self.reference_trajectory_format = "csv"
-        self.enable_horizon_mapper_reference = False
-        self.horizon_mapper_reference_topic = '/horizon_mapper/reference_trajectory'
-        self.use_complete_reference_path = True
-        self.horizon_mapper_path_topic = '/horizon_mapper/reference_path'
 
         # Reference data storage
         self.reference_trajectory = None
@@ -78,25 +75,59 @@ class ReferenceTrajectoryManager:
             config: Dictionary containing configuration parameters
         """
         # File-based reference trajectory configuration
-        self.reference_trajectory_file = config.get('reference_trajectory_file', "")
-        self.reference_trajectory_format = config.get('reference_trajectory_format', "csv")
+        raw_ref_file = config.get('reference_trajectory_file', "")
 
-        # Horizon mapper interface configuration
-        self.enable_horizon_mapper_reference = config.get('enable_horizon_mapper_reference', False)
-        self.horizon_mapper_reference_topic = config.get(
-            'horizon_mapper_reference_topic',
-            '/horizon_mapper/reference_trajectory')
-        self.use_complete_reference_path = config.get('use_complete_reference_path', True)
-        self.horizon_mapper_path_topic = config.get('horizon_mapper_path_topic', '/horizon_mapper/reference_path')
+        # Resolve path relative to package if not absolute
+        if raw_ref_file and not os.path.isabs(raw_ref_file):
+            try:
+                package_share_dir = get_package_share_directory('race_monitor')
+
+                # Find actual source directory by searching for package.xml
+                # This works regardless of workspace structure
+                ref_base_dir = package_share_dir
+
+                if '/install/' in package_share_dir:
+                    workspace_root = package_share_dir.split('/install/')[0]
+                    src_dir = os.path.join(workspace_root, 'src')
+
+                    if os.path.isdir(src_dir):
+                        # Search for race_monitor package in src tree
+                        for root, dirs, files in os.walk(src_dir):
+                            if 'package.xml' in files:
+                                package_xml_path = os.path.join(root, 'package.xml')
+                                try:
+                                    with open(package_xml_path, 'r') as f:
+                                        if '<name>race_monitor</name>' in f.read():
+                                            ref_base_dir = root
+                                            break
+                                except Exception:
+                                    pass
+                            if ref_base_dir != package_share_dir:
+                                break
+
+                # If it's just a filename, look in ref_trajectory directory
+                if os.path.basename(raw_ref_file) == raw_ref_file:
+                    self.reference_trajectory_file = os.path.join(
+                        ref_base_dir, 'ref_trajectory', raw_ref_file)
+                else:
+                    # Otherwise, treat as relative path from package
+                    self.reference_trajectory_file = os.path.join(
+                        ref_base_dir, raw_ref_file)
+                self.logger.info(
+                    f"Resolved relative reference path: {raw_ref_file} -> {self.reference_trajectory_file}")
+            except Exception as e:
+                self.logger.warn(
+                    f"Could not resolve package path, using as-is: {e}")
+                self.reference_trajectory_file = raw_ref_file
+        else:
+            self.reference_trajectory_file = raw_ref_file
+
+        self.reference_trajectory_format = config.get(
+            'reference_trajectory_format', "csv")
 
         self.logger.info(f"Reference trajectory manager configured:")
         self.logger.info(f"  File: {self.reference_trajectory_file}")
         self.logger.info(f"  Format: {self.reference_trajectory_format}")
-        self.logger.info(f"  Horizon mapper enabled: {self.enable_horizon_mapper_reference}")
-        if self.enable_horizon_mapper_reference:
-            self.logger.info(f"  Reference topic: {self.horizon_mapper_reference_topic}")
-            self.logger.info(f"  Path topic: {self.horizon_mapper_path_topic}")
-            self.logger.info(f"  Use complete path: {self.use_complete_reference_path}")
 
         # Try to load reference trajectory from file if specified
         if self.reference_trajectory_file:
@@ -114,7 +145,8 @@ class ReferenceTrajectoryManager:
             return False
 
         if not os.path.exists(self.reference_trajectory_file):
-            self.logger.warn(f"Reference trajectory file not found: {self.reference_trajectory_file}")
+            self.logger.warn(
+                f"Reference trajectory file not found: {self.reference_trajectory_file}")
             return False
 
         try:
@@ -125,12 +157,14 @@ class ReferenceTrajectoryManager:
             elif self.reference_trajectory_format.lower() == "kitti":
                 success = self._load_kitti_reference()
             else:
-                self.logger.error(f"Unsupported reference trajectory format: {self.reference_trajectory_format}")
+                self.logger.error(
+                    f"Unsupported reference trajectory format: {self.reference_trajectory_format}")
                 return False
 
             if success:
                 self.reference_loaded = True
-                self.logger.info(f"Successfully loaded reference trajectory from {self.reference_trajectory_file}")
+                self.logger.info(
+                    f"Successfully loaded reference trajectory from {self.reference_trajectory_file}")
                 return True
             else:
                 return False
@@ -170,7 +204,8 @@ class ReferenceTrajectoryManager:
                             x = float(row[0])
                             y = float(row[1])
                             z = 0.0  # Assume 2D trajectory
-                            t = float(row_index)  # Use row index as synthetic timestamp
+                            # Use row index as synthetic timestamp
+                            t = float(row_index)
                         else:
                             # Format: timestamp, x, y, [z], [qx, qy, qz, qw]
                             if len(row) >= 3:
@@ -203,7 +238,8 @@ class ReferenceTrajectoryManager:
                             for row in reader:
                                 if len(row) >= 7:
                                     qx, qy, qz, qw = map(float, row[3:7])
-                                    orientations.append([qw, qx, qy, qz])  # EVO expects w,x,y,z format
+                                    # EVO expects w,x,y,z format
+                                    orientations.append([qw, qx, qy, qz])
 
                         if len(orientations) > 0:
                             orientations = np.array(orientations)
@@ -212,19 +248,22 @@ class ReferenceTrajectoryManager:
                             )
                         else:
                             # If orientation loading failed, create PoseTrajectory3D with identity orientations
-                            identity_orientations = np.tile([1.0, 0.0, 0.0, 0.0], (len(positions), 1))  # [w, x, y, z]
+                            identity_orientations = np.tile(
+                                [1.0, 0.0, 0.0, 0.0], (len(positions), 1))  # [w, x, y, z]
                             self.reference_trajectory = trajectory.PoseTrajectory3D(
                                 positions, identity_orientations, timestamps
                             )
                     else:
                         # For x,y,v format (no orientation data), create PoseTrajectory3D with identity orientations
                         # This ensures compatibility with APE/RPE calculations
-                        identity_orientations = np.tile([1.0, 0.0, 0.0, 0.0], (len(positions), 1))  # [w, x, y, z]
+                        identity_orientations = np.tile(
+                            [1.0, 0.0, 0.0, 0.0], (len(positions), 1))  # [w, x, y, z]
                         self.reference_trajectory = trajectory.PoseTrajectory3D(
                             positions, identity_orientations, timestamps
                         )
 
-                self.logger.info(f"Loaded {len(positions)} reference points from CSV")
+                self.logger.info(
+                    f"Loaded {len(positions)} reference points from CSV")
                 return True
 
         except Exception as e:
@@ -234,14 +273,16 @@ class ReferenceTrajectoryManager:
     def _load_tum_reference(self) -> bool:
         """Load reference trajectory from TUM format file."""
         if not EVO_AVAILABLE:
-            self.logger.error("EVO library not available for TUM format loading")
+            self.logger.error(
+                "EVO library not available for TUM format loading")
             return False
 
         try:
             self.reference_trajectory = file_interface.read_tum_trajectory_file(
                 self.reference_trajectory_file
             )
-            self.logger.info(f"Loaded TUM reference trajectory with {len(self.reference_trajectory.poses_se3)} poses")
+            self.logger.info(
+                f"Loaded TUM reference trajectory with {len(self.reference_trajectory.poses_se3)} poses")
             return True
         except Exception as e:
             self.logger.error(f"Error loading TUM reference: {e}")
@@ -250,14 +291,16 @@ class ReferenceTrajectoryManager:
     def _load_kitti_reference(self) -> bool:
         """Load reference trajectory from KITTI format file."""
         if not EVO_AVAILABLE:
-            self.logger.error("EVO library not available for KITTI format loading")
+            self.logger.error(
+                "EVO library not available for KITTI format loading")
             return False
 
         try:
             self.reference_trajectory = file_interface.read_kitti_poses_file(
                 self.reference_trajectory_file
             )
-            self.logger.info(f"Loaded KITTI reference trajectory with {len(self.reference_trajectory.poses_se3)} poses")
+            self.logger.info(
+                f"Loaded KITTI reference trajectory with {len(self.reference_trajectory.poses_se3)} poses")
             return True
         except Exception as e:
             self.logger.error(f"Error loading KITTI reference: {e}")
@@ -287,7 +330,8 @@ class ReferenceTrajectoryManager:
                 self.horizon_reference_data.append(point_data)
 
             self.reference_updated = True
-            self.logger.debug(f"Updated reference trajectory with {len(self.horizon_reference_data)} points")
+            self.logger.debug(
+                f"Updated reference trajectory with {len(self.horizon_reference_data)} points")
 
         except Exception as e:
             self.logger.error(f"Error updating reference trajectory: {e}")
@@ -316,7 +360,8 @@ class ReferenceTrajectoryManager:
                 self.reference_path_data.append(point_data)
 
             self.reference_updated = True
-            self.logger.debug(f"Updated reference path with {len(self.reference_path_data)} points")
+            self.logger.debug(
+                f"Updated reference path with {len(self.reference_path_data)} points")
 
         except Exception as e:
             self.logger.error(f"Error updating reference path: {e}")
@@ -337,11 +382,7 @@ class ReferenceTrajectoryManager:
         Returns:
             List of reference points with x, y, z coordinates
         """
-        if self.use_complete_reference_path and self.reference_path_data:
-            return self.reference_path_data
-        elif self.horizon_reference_data:
-            return self.horizon_reference_data
-        elif self.reference_trajectory is not None:
+        if self.reference_trajectory is not None:
             # Convert EVO trajectory to point list
             points = []
             positions = self.reference_trajectory.positions_xyz
@@ -350,7 +391,8 @@ class ReferenceTrajectoryManager:
             if len(positions.shape) == 1:
                 # If positions is 1D, it might be a single point
                 if len(positions) >= 3:
-                    points.append({'x': positions[0], 'y': positions[1], 'z': positions[2]})
+                    points.append(
+                        {'x': positions[0], 'y': positions[1], 'z': positions[2]})
                 return points
 
             if hasattr(self.reference_trajectory, 'orientations_quat_wxyz'):
@@ -366,14 +408,17 @@ class ReferenceTrajectoryManager:
                             })
                         else:
                             # If quaternion is not properly formatted, skip orientation
-                            points.append({'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
+                            points.append(
+                                {'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
                     elif len(pos) >= 3:
                         # No orientation available for this position
-                        points.append({'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
+                        points.append(
+                            {'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
             else:
                 for pos in positions:
                     if len(pos) >= 3:
-                        points.append({'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
+                        points.append(
+                            {'x': float(pos[0]), 'y': float(pos[1]), 'z': float(pos[2])})
             return points
         else:
             return []
@@ -394,7 +439,8 @@ class ReferenceTrajectoryManager:
             # Organize by extension
             txt_dir = os.path.join(output_dir, 'txt')
             os.makedirs(txt_dir, exist_ok=True)
-            filepath = os.path.join(txt_dir, "horizon_reference_trajectory.txt")
+            filepath = os.path.join(
+                txt_dir, "horizon_reference_trajectory.txt")
 
             with open(filepath, 'w') as f:
                 f.write("# Horizon Reference Trajectory Data\n")
@@ -404,10 +450,12 @@ class ReferenceTrajectoryManager:
                     f.write(f"{point['x']:.6f} {point['y']:.6f} {point['z']:.6f} "
                             f"{point['qx']:.6f} {point['qy']:.6f} {point['qz']:.6f} {point['qw']:.6f}\n")
 
-            self.logger.info(f"Saved horizon reference trajectory to: {filepath}")
+            self.logger.info(
+                f"Saved horizon reference trajectory to: {filepath}")
 
         except Exception as e:
-            self.logger.error(f"Error saving horizon reference trajectory: {e}")
+            self.logger.error(
+                f"Error saving horizon reference trajectory: {e}")
 
     def is_reference_available(self) -> bool:
         """Check if any reference trajectory is available."""
@@ -417,11 +465,7 @@ class ReferenceTrajectoryManager:
 
     def get_reference_source(self) -> str:
         """Get the current reference trajectory source."""
-        if self.use_complete_reference_path and self.reference_path_data:
-            return "reference_path"
-        elif self.horizon_reference_data:
-            return "horizon_reference"
-        elif self.reference_loaded:
+        if self.reference_loaded:
             return "file"
         else:
             return "none"

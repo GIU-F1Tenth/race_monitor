@@ -28,10 +28,15 @@ race_monitor:
     # DIRECTORY CONFIGURATION
     # ========================================
 
-    # Base directory for data storage (absolute path to race_monitor package)
-    trajectory_output_directory: "" # To be set by the user
+    # Base directory for data storage
+    # Default: "" (uses package's data/ directory)
+    # You can specify:
+    #   - Empty string "" to use default: <package_share>/data/
+    #   - Relative path "custom_dir" resolves to: <package_share>/custom_dir/
+    #   - Absolute path "/absolute/path/to/dir" uses as-is
+    trajectory_output_directory: ""
 
-    # Graph output directory
+    # Graph output directory (relative to trajectory_output_directory)
     graph_output_directory: "graphs" # ========================================
     # RACE ENDING CONDITIONS
     # ========================================
@@ -117,9 +122,19 @@ race_monitor:
     # REFERENCE TRAJECTORY CONFIGURATION
     # ========================================
 
-    # File-based reference trajectory
-    reference_trajectory_file: "" # To be set by the user
-    reference_trajectory_format: "csv" # csv, tum, kitti
+    # Reference trajectory file path
+    # Default: "" (no reference trajectory)
+    # You can specify:
+    #   - Just filename "ref_trajectory.csv" looks in: <package_share>/ref_trajectory/
+    #   - Relative path "custom_dir/traj.csv" resolves to: <package_share>/custom_dir/traj.csv
+    #   - Absolute path "/absolute/path/to/trajectory.csv" uses as-is
+    #
+    # To use: Place your reference trajectory file in race_monitor/ref_trajectory/
+    # and set this to the filename, e.g., "ref_trajectory.csv"
+    reference_trajectory_file: ""
+
+    # Reference trajectory format: csv, tum, kitti
+    reference_trajectory_format: "csv"
 
     # ========================================
     # ADVANCED FILE OUTPUT FOR RESEARCH
@@ -195,12 +210,3 @@ race_monitor:
 
     # Enable/disable CPU performance monitoring
     enable_computational_monitoring: false
-
-    # ========================================
-    # F1TENTH INTERFACE SETTINGS
-    # ========================================
-
-    # Enable/disable F1Tenth vehicle state interface
-    enable_f1tenth_interface: true
-    f1tenth_vehicle_state_topic: "/vehicle_state"
-    f1tenth_constrained_state_topic: "/constrained_vehicle_state"

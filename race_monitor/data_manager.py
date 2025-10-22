@@ -37,6 +37,7 @@ import gzip
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from .metadata_manager import MetadataManager
+from ament_index_python.packages import get_package_share_directory
 
 # MAT file support
 try:
@@ -164,8 +165,78 @@ class DataManager:
         # Core data storage configuration
         raw_trajectory_dir = config.get('trajectory_output_directory', "")
 
-        # Use the trajectory_output_directory directly (absolute paths are used as-is)
-        self.trajectory_output_directory = raw_trajectory_dir
+        # Resolve path relative to package if not provided or not absolute
+        if not raw_trajectory_dir:
+            # Default to data/ directory - prefer source workspace over install
+            try:
+                package_share_dir = get_package_share_directory('race_monitor')
+
+                # Strategy: Try to find the actual source directory by looking for package.xml
+                # This works regardless of workspace structure
+                source_data_dir = None
+
+                if '/install/' in package_share_dir:
+                    # We're in an install directory, try to find source
+                    # Get workspace root (everything before /install/)
+                    workspace_root = package_share_dir.split('/install/')[0]
+
+                    # Search for the package.xml in the src tree
+                    # This is more reliable than hardcoding paths
+                    src_dir = os.path.join(workspace_root, 'src')
+                    if os.path.isdir(src_dir):
+                        # Walk through src to find race_monitor package
+                        for root, dirs, files in os.walk(src_dir):
+                            if 'package.xml' in files:
+                                # Check if this is the race_monitor package
+                                package_xml_path = os.path.join(root, 'package.xml')
+                                try:
+                                    with open(package_xml_path, 'r') as f:
+                                        content = f.read()
+                                        if '<name>race_monitor</name>' in content:
+                                            # Found it! Use this directory
+                                            candidate_data_dir = os.path.join(root, 'data')
+                                            # Create directory if it doesn't exist
+                                            if not os.path.exists(candidate_data_dir):
+                                                os.makedirs(candidate_data_dir, exist_ok=True)
+                                            source_data_dir = candidate_data_dir
+                                            break
+                                except Exception:
+                                    pass
+                            if source_data_dir:
+                                break
+
+                if source_data_dir:
+                    self.trajectory_output_directory = source_data_dir
+                    self.logger.info(
+                        f"Using source workspace data directory: {self.trajectory_output_directory}")
+                else:
+                    # Fall back to install directory
+                    self.trajectory_output_directory = os.path.join(package_share_dir, 'data')
+                    # Ensure directory exists
+                    os.makedirs(self.trajectory_output_directory, exist_ok=True)
+                    self.logger.info(
+                        f"Using install directory: {self.trajectory_output_directory}")
+
+            except Exception as e:
+                self.logger.warn(
+                    f"Could not resolve package path, using current directory: {e}")
+                self.trajectory_output_directory = os.path.join(os.getcwd(), 'race_monitor_data')
+                os.makedirs(self.trajectory_output_directory, exist_ok=True)
+        elif not os.path.isabs(raw_trajectory_dir):
+            # Relative path provided, resolve from package share
+            try:
+                package_share_dir = get_package_share_directory('race_monitor')
+                self.trajectory_output_directory = os.path.join(
+                    package_share_dir, raw_trajectory_dir)
+                self.logger.info(
+                    f"Resolved relative output path: {raw_trajectory_dir} -> {self.trajectory_output_directory}")
+            except Exception as e:
+                self.logger.warn(
+                    f"Could not resolve package path, using as-is: {e}")
+                self.trajectory_output_directory = raw_trajectory_dir
+        else:
+            # Absolute path provided, use as-is
+            self.trajectory_output_directory = raw_trajectory_dir
 
         self.save_trajectories = config.get('save_trajectories', self.save_trajectories)
         self.save_intermediate_results = config.get('save_intermediate_results', self.save_intermediate_results)
