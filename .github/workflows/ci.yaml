@@ -184,12 +184,14 @@ jobs:
           cd ws
 
       - name: Build package
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
           colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release
 
       - name: Run package tests (colcon)
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
@@ -200,6 +202,7 @@ jobs:
           colcon test-result --verbose || true
 
       - name: Minimal import & diagnostics
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
@@ -229,6 +232,7 @@ jobs:
           PY
 
       - name: ROS2 Integration Tests
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
@@ -290,6 +294,7 @@ jobs:
           PY
 
       - name: Test Launch File
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
@@ -312,6 +317,7 @@ jobs:
           '
 
       - name: Test Node Executable
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
