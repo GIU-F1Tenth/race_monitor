@@ -49,10 +49,25 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Generate safe Docker tag
+        id: image-tag
+        run: |
+          # Generate a safe tag without slashes
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, use pr-NUMBER format
+            TAG="pr-${{ github.event.pull_request.number }}"
+          else
+            # For branches, sanitize the ref name
+            TAG="${{ github.ref_name }}"
+            TAG="${TAG//\//-}"  # Replace / with -
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Generated Docker tag: ${TAG}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -64,26 +79,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}:buildcache,mode=max
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}:${{ steps.image-tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           no-cache: true
 
   python-lint:
@@ -143,7 +147,8 @@ jobs:
     needs: [python-lint, check-docker-changes, docker-build]
     if: always() && needs.python-lint.result == 'success'
     container:
-      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/{0}:{1}', 'giu-f1tenth/race_monitor', github.ref_name) || 'ghcr.io/giu-f1tenth/race_monitor:main' }}
+      # Use the newly built image if available, otherwise fallback to main
+      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/giu-f1tenth/race_monitor:{0}', needs.docker-build.outputs.image-tag) || 'ghcr.io/giu-f1tenth/race_monitor:main' }}
       options: --user root
       credentials:
         username: ${{ github.actor }}
