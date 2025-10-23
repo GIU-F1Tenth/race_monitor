@@ -10,8 +10,53 @@ on:
 
 env:
   ROS_DISTRO: humble
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  docker-build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
   python-lint:
     name: Python Code Quality
     runs-on: ubuntu-22.04
@@ -66,29 +111,19 @@ jobs:
   linux-ros2-build:
     name: Linux ROS2 Build, Test & Integration
     runs-on: ubuntu-22.04
-    needs: python-lint
+    needs: [python-lint, docker-build]
+    container:
+      image: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Set up ROS 2 Humble
-        run: |
-          sudo apt update
-          sudo apt install -y software-properties-common
-          sudo add-apt-repository universe
-          sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
-          sudo apt update
-          sudo apt install -y ros-humble-desktop python3-rosdep
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt','**/constraints.txt') }}
 
       - name: Cache colcon build (install & build)
         uses: actions/cache@v4
@@ -101,23 +136,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-colcon-
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            python3-colcon-common-extensions \
-            build-essential \
-            python3-rosdep \
-            ros-humble-rclpy \
-            ros-humble-std-msgs \
-            ros-humble-nav-msgs \
-            ros-humble-geometry-msgs \
-            ros-humble-visualization-msgs \
-            ros-humble-ackermann-msgs \
-            ros-humble-tf2-ros \
-            ros-humble-tf-transformations \
-            python3-transforms3d
-
       - name: Set up workspace structure
         run: |
           mkdir -p ws/src/race_monitor
@@ -129,19 +147,6 @@ jobs:
             fi
           done
           cd ws
-
-      - name: Configure rosdep & install package deps
-        run: |
-          cd ws
-          sudo rosdep init || true
-          rosdep update || true
-          rosdep install --from-paths src --ignore-src -r -y || true
-
-      - name: Install Python dependencies
-        run: |
-          cd ws/src/race_monitor
-          python3 -m pip install --upgrade pip
-          pip3 install -c constraints.txt -r requirements.txt
 
       - name: Build package
         run: |
