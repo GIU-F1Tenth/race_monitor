@@ -81,8 +81,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/giu-f1tenth/race_monitor:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/giu-f1tenth/race_monitor:buildcache,mode=max
+          # Temporarily disable cache to rebuild with fixed transforms3d setup
+          # TODO: Re-enable after successful build
+          # cache-from: type=registry,ref=${{ env.REGISTRY }}/giu-f1tenth/race_monitor:buildcache
+          # cache-to: type=registry,ref=${{ env.REGISTRY }}/giu-f1tenth/race_monitor:buildcache,mode=max
+          no-cache: true
 
   python-lint:
     name: Python Code Quality
