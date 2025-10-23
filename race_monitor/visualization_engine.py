@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
 """
-EVO Plotter Module for Race Monitor
-Integrates EVO's plotting capabilities for automatic graph generation
+EVO Plotter Module
+
+Integrates EVO's plotting capabilities for automated race analysis graph generation.
+Provides comprehensive visualization of trajectory data, performance metrics, and
+comparative analysis across multiple laps.
+
+License: MIT
 """
 
 import json
@@ -15,8 +20,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for saving plots
 
-# Please ensure the 'evo' library is installed and available in your PYTHONPATH.
-# Add EVO library to Python path
+# EVO library setup for plotting
 evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
 if os.path.exists(evo_path) and evo_path not in sys.path:
     sys.path.insert(0, evo_path)

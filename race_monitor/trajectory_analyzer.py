@@ -44,7 +44,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 import logging
 
-# Add EVO library to Python path
+# EVO library setup for trajectory evaluation
 evo_path = os.path.join(os.path.dirname(__file__), '..', 'evo')
 if os.path.exists(evo_path) and evo_path not in sys.path:
     sys.path.insert(0, evo_path)

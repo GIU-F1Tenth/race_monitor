@@ -42,12 +42,21 @@ from rclpy.node import Node
 
 
 def time_to_nanoseconds(time_obj):
-    """Convert a time object to nanoseconds."""
+    """
+    Convert time object to nanoseconds.
+    
+    Args:
+        time_obj: ROS2 Time or builtin_interfaces Time object
+        
+    Returns:
+        int: Time in nanoseconds
+        
+    Raises:
+        ValueError: If time_obj is not a recognized time type
+    """
     if hasattr(time_obj, 'nanoseconds'):
-        # rclpy.time.Time object
         return time_obj.nanoseconds
     elif hasattr(time_obj, 'sec') and hasattr(time_obj, 'nanosec'):
-        # builtin_interfaces.msg.Time object
         return time_obj.sec * 1e9 + time_obj.nanosec
     else:
         raise ValueError(f"Unknown time object type: {type(time_obj)}")

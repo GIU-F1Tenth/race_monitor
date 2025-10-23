@@ -39,7 +39,7 @@ from typing import Dict, List, Any, Optional
 from .metadata_manager import MetadataManager
 from ament_index_python.packages import get_package_share_directory
 
-# MAT file support
+# Optional MATLAB file support
 try:
     from scipy.io import savemat
     MAT_AVAILABLE = True
@@ -48,18 +48,27 @@ except ImportError:
 
 
 def time_to_nanoseconds(time_obj):
-    """Convert a time object to nanoseconds."""
+    """
+    Convert time object to nanoseconds.
+    
+    Args:
+        time_obj: ROS2 Time or builtin_interfaces Time object
+        
+    Returns:
+        int: Time in nanoseconds
+        
+    Raises:
+        ValueError: If time_obj is not a recognized time type
+    """
     if hasattr(time_obj, 'nanoseconds'):
-        # rclpy.time.Time object
         return time_obj.nanoseconds
     elif hasattr(time_obj, 'sec') and hasattr(time_obj, 'nanosec'):
-        # builtin_interfaces.msg.Time object
         return time_obj.sec * 1e9 + time_obj.nanosec
     else:
         raise ValueError(f"Unknown time object type: {type(time_obj)}")
 
 
-# EVO imports for trajectory handling
+# EVO trajectory library support
 try:
     from evo.core import trajectory
     from evo.tools import file_interface

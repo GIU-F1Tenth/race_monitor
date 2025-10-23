@@ -82,7 +82,7 @@ demo_*.py
 *_demo.py
 analyze_*.py
 
-# Documentation (generated)
+# Documentation
 *.md
 !README.md
 

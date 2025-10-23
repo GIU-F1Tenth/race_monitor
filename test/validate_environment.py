@@ -3,12 +3,11 @@
 """
 Race Monitor Environment Validation Script
 
-This script validates that all necessary dependencies are installed
-and properly configured for the race_monitor package.
+Validates that all necessary dependencies are installed and properly configured
+for the race_monitor package.
 
 Usage:
     python3 validate_environment.py
-
 """
 
 import sys
@@ -19,7 +18,12 @@ from pathlib import Path
 
 
 def check_python_version():
-    """Check Python version compatibility."""
+    """
+    Check Python version compatibility.
+    
+    Returns:
+        True if Python 3.10+, False otherwise
+    """
     print("🐍 Checking Python version...")
     version = sys.version_info
     if version.major == 3 and version.minor >= 10:
@@ -33,7 +37,12 @@ def check_python_version():
 
 
 def check_ros2_installation():
-    """Check if ROS2 is installed and sourced."""
+    """
+    Check if ROS2 is installed and environment is sourced.
+    
+    Returns:
+        True if ROS_DISTRO environment variable is set, False otherwise
+    """
     print("\n🤖 Checking ROS2 installation...")
 
     # Check if ROS_DISTRO is set
@@ -47,7 +56,16 @@ def check_ros2_installation():
 
 
 def check_python_dependency(package_name, import_name=None):
-    """Check if a Python package is installed."""
+    """
+    Check if a Python package is installed.
+    
+    Args:
+        package_name: Display name of the package
+        import_name: Module name to import (defaults to package_name)
+        
+    Returns:
+        True if package can be imported, False otherwise
+    """
     if import_name is None:
         import_name = package_name
 
@@ -61,7 +79,12 @@ def check_python_dependency(package_name, import_name=None):
 
 
 def check_python_dependencies():
-    """Check all required Python dependencies."""
+    """
+    Check all required Python dependencies.
+    
+    Returns:
+        True if all core dependencies are available, False otherwise
+    """
     print("\n📦 Checking Python dependencies...")
 
     core_dependencies = [
@@ -79,39 +102,42 @@ def check_python_dependencies():
         ('statsmodels', 'statsmodels'),
     ]
 
-    # ROS2-specific dependencies (optional in pure Python environments)
+    # ROS2-specific dependencies
     ros2_dependencies = [
         ('tf_transformations', 'tf_transformations'),
     ]
 
     all_good = True
 
-    # Check core dependencies (required)
+    # Check core dependencies
     print("  Core dependencies:")
     for package_name, import_name in core_dependencies:
         if not check_python_dependency(package_name, import_name):
             all_good = False
 
-    # Check ROS2 dependencies (optional)
-    print("  ROS2 dependencies (optional in pure Python environments):")
+    # Check ROS2 dependencies
+    print("  ROS2 dependencies:")
     ros2_available = True
     for package_name, import_name in ros2_dependencies:
         if not check_python_dependency(package_name, import_name):
             ros2_available = False
-            print(
-                f"    ℹ️  {package_name} not available (normal in pure Python environments)")
+            print(f"    ℹ️  {package_name} not available")
 
     if ros2_available:
         print("  ✅ ROS2 dependencies are available")
     else:
-        print(
-            "  ⚠️  ROS2 dependencies not available (install via apt in ROS2 environments)")
+        print("  ⚠️  ROS2 dependencies not available")
 
     return all_good
 
 
 def check_evo_submodule():
-    """Check if EVO submodule is properly initialized."""
+    """
+    Check if EVO submodule is properly initialized.
+    
+    Returns:
+        True if EVO is available and can be imported, False otherwise
+    """
     print("\n📊 Checking EVO submodule...")
 
     evo_path = Path(__file__).parent / "evo"
@@ -134,7 +160,12 @@ def check_evo_submodule():
 
 
 def check_ros2_packages():
-    """Check if required ROS2 packages are available."""
+    """
+    Check if required ROS2 packages are available.
+    
+    Returns:
+        True if all ROS2 packages can be imported, False otherwise
+    """
     print("\n🔧 Checking ROS2 packages...")
 
     ros2_packages = [
@@ -161,7 +192,12 @@ def check_ros2_packages():
 
 
 def check_colcon():
-    """Check if colcon build tools are available."""
+    """
+    Check if colcon build tools are available.
+    
+    Returns:
+        True if colcon is installed and working, False otherwise
+    """
     print("\n🔨 Checking build tools...")
 
     try:
@@ -179,7 +215,12 @@ def check_colcon():
 
 
 def check_workspace_structure():
-    """Check if workspace has proper structure."""
+    """
+    Check if workspace has proper structure.
+    
+    Returns:
+        True if all required directories and files exist, False otherwise
+    """
     print("\n📁 Checking workspace structure...")
 
     base_path = Path(__file__).parent
@@ -218,7 +259,7 @@ def check_workspace_structure():
 
 
 def print_installation_help():
-    """Print helpful installation commands."""
+    """Print installation commands for missing dependencies."""
     print("\n" + "="*60)
     print("🚀 INSTALLATION HELP")
     print("="*60)
@@ -250,7 +291,12 @@ def print_installation_help():
 
 
 def main():
-    """Run all validation checks."""
+    """
+    Run all validation checks.
+    
+    Returns:
+        True if all checks passed, False otherwise
+    """
     print("Race Monitor Environment Validation")
     print("="*50)
 

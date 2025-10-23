@@ -18,15 +18,35 @@ class PortManager:
         self.base_frontend_port = 4000
         
     def find_free_port(self, start_port: int, max_attempts: int = 100) -> int:
-        """Find a free port starting from start_port"""
+        """
+        Find a free port starting from start_port.
+        
+        Args:
+            start_port: Starting port number to search from
+            max_attempts: Maximum number of ports to try
+            
+        Returns:
+            First available port number
+            
+        Raises:
+            RuntimeError: If no free port found within max_attempts
+        """
         for port in range(start_port, start_port + max_attempts):
             if self.is_port_free(port):
                 return port
         raise RuntimeError(f"Could not find free port starting from {start_port}")
     
     def is_port_free(self, port: int) -> bool:
-        """Check if a port is free"""
-        # Use a more robust method to check port availability
+        """
+        Check if a port is available for binding.
+        
+        Args:
+            port: Port number to check
+            
+        Returns:
+            True if port is free, False otherwise
+        """
+        # Use robust method to check port availability
         import subprocess
         try:
             # Check if port is in use with netstat
@@ -49,7 +69,12 @@ class PortManager:
                 return False
     
     def allocate_ports(self) -> Dict[str, int]:
-        """Allocate free ports for backend and frontend"""
+        """
+        Allocate free ports for backend and frontend.
+        
+        Returns:
+            Dictionary with allocated backend and frontend ports
+        """
         backend_port = self.find_free_port(self.base_backend_port)
         frontend_port = self.find_free_port(self.base_frontend_port)
         
@@ -66,7 +91,12 @@ class PortManager:
         return ports
     
     def get_ports(self) -> Optional[Dict[str, int]]:
-        """Get currently allocated ports"""
+        """
+        Get currently allocated ports.
+        
+        Returns:
+            Dictionary with port configuration or None if not allocated
+        """
         if not self.config_file.exists():
             return None
         
