@@ -1,12 +1,16 @@
 name: Race Monitor CI
 
 on:
-  #push:
-    #branches: [main, dev]
   pull_request:
     branches: [main, dev]
-  schedule:
-    - cron: "0 0 * * *" # daily at midnight UTC
+  push:
+    branches: [main, dev]
+    paths:
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'constraints.txt'
+      - '.github/workflows/ci.yaml'
+  workflow_dispatch:
 
 env:
   ROS_DISTRO: humble
@@ -14,9 +18,32 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Check if Docker files changed
+  check-docker-changes:
+    name: Check if Docker rebuild needed
+    runs-on: ubuntu-22.04
+    outputs:
+      docker-changed: ${{ steps.filter.outputs.docker }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Check for Docker-related changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'Dockerfile'
+              - 'requirements.txt'
+              - 'constraints.txt'
+
   docker-build:
     name: Build ubuntu-Ros2-Docker Image
     runs-on: ubuntu-22.04
+    needs: check-docker-changes
+    # Only build if Docker files changed OR workflow was manually triggered
+    if: needs.check-docker-changes.outputs.docker-changed == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
       contents: read
       packages: write
@@ -111,9 +138,10 @@ jobs:
   linux-ros2-build:
     name: Linux ROS2 Build, Test & Integration
     runs-on: ubuntu-22.04
-    needs: [python-lint, docker-build]
+    needs: [python-lint, check-docker-changes, docker-build]
+    if: always() && needs.python-lint.result == 'success'
     container:
-      image: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/{0}:{1}', github.repository, github.ref_name) || 'ghcr.io/giu-f1tenth/race_monitor:main' }}
       options: --user root
       credentials:
         username: ${{ github.actor }}
