@@ -15,7 +15,7 @@ env:
 
 jobs:
   docker-build:
-    name: Build and Push Docker Image
+    name: Build ubuntu-Ros2-Docker Image
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -44,7 +44,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha,prefix=sha-
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push Docker image
