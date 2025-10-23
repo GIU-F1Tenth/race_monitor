@@ -205,15 +205,13 @@ jobs:
         shell: bash
         run: |
           cd ws
-          # Source ROS2 to get tf_transformations in PYTHONPATH
           source /opt/ros/humble/setup.bash
           source install/setup.bash || true
           
           # Verify PYTHONPATH includes ROS2
           echo "PYTHONPATH: $PYTHONPATH"
-          
-          # Create a test script to ensure environment is properly inherited
-          cat > /tmp/test_imports.py <<'EOF'
+
+          python3 - <<'EOF'
           import sys
           import importlib
           import numpy as np
@@ -237,8 +235,6 @@ jobs:
               print('race_monitor import: FAILED', e)
               raise
           EOF
-          
-          python3 /tmp/test_imports.py
 
       - name: ROS2 Integration Tests
         shell: bash
