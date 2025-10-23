@@ -46,7 +46,9 @@ RUN apt-get update && apt-get install -y \
     ros-humble-tf2-ros \
     ros-humble-tf-transformations \
     python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get purge -y python3-transforms3d || true \
+    && rm -rf /usr/lib/python3/dist-packages/transforms3d*
 
 # Initialize rosdep
 RUN rosdep init && rosdep update
