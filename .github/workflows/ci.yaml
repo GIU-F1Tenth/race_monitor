@@ -15,8 +15,7 @@ on:
 env:
   ROS_DISTRO: humble
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  IMAGE_NAME_LOWERCASE: giu-f1tenth/race_monitor
+  IMAGE_NAME: giu-f1tenth/race_monitor
 
 jobs:
   # Check if Docker files changed
@@ -84,7 +83,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}:${{ steps.image-tag.outputs.tag }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -172,6 +171,7 @@ jobs:
             ${{ runner.os }}-colcon-
 
       - name: Set up workspace structure
+        shell: bash
         run: |
           mkdir -p ws/src/race_monitor
           # Copy all files directly to race_monitor package directory
@@ -220,7 +220,6 @@ jobs:
               print('tf_transformations available')
           except Exception as e:
               print('tf_transformations import FAILED:', e)
-          # Try importing package
           try:
               import race_monitor
               print('race_monitor import: OK')
