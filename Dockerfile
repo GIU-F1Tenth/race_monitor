@@ -57,8 +57,12 @@ COPY requirements.txt constraints.txt /tmp/
 
 # Install Python dependencies with constraints
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
-    python3 -m pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt && \
-    rm /tmp/requirements.txt /tmp/constraints.txt
+    grep -v "^transforms3d" /tmp/requirements.txt > /tmp/requirements_filtered.txt && \
+    python3 -m pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements_filtered.txt && \
+    rm /tmp/requirements.txt /tmp/requirements_filtered.txt /tmp/constraints.txt
+
+# Verify transforms3d is available (from system package)
+RUN python3 -c "import transforms3d; print(f'transforms3d {transforms3d.__version__} available from system packages')"
 
 # Source ROS2 setup in bashrc for interactive sessions
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
