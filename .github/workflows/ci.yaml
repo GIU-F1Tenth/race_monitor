@@ -141,7 +141,7 @@ jobs:
           pip-audit -r requirements.txt || echo "Security audit completed"
 
   linux-ros2-build:
-    name: Linux ROS2 Build, Test & Integration
+    name: Test Race Monitor Pkg
     runs-on: ubuntu-22.04
     needs: [python-lint, check-docker-changes, docker-build]
     if: always() && needs.python-lint.result == 'success'
@@ -205,9 +205,15 @@ jobs:
         shell: bash
         run: |
           cd ws
+          # Source ROS2 to get tf_transformations in PYTHONPATH
           source /opt/ros/humble/setup.bash
           source install/setup.bash || true
-          python3 - <<'PY'
+          
+          # Verify PYTHONPATH includes ROS2
+          echo "PYTHONPATH: $PYTHONPATH"
+          
+          # Create a test script to ensure environment is properly inherited
+          cat > /tmp/test_imports.py <<'EOF'
           import sys
           import importlib
           import numpy as np
@@ -223,13 +229,16 @@ jobs:
               print('tf_transformations available')
           except Exception as e:
               print('tf_transformations import FAILED:', e)
+              raise
           try:
               import race_monitor
               print('race_monitor import: OK')
           except Exception as e:
               print('race_monitor import: FAILED', e)
               raise
-          PY
+          EOF
+          
+          python3 /tmp/test_imports.py
 
       - name: ROS2 Integration Tests
         shell: bash
