@@ -45,7 +45,6 @@ RUN apt-get update && apt-get install -y \
     ros-humble-ackermann-msgs \
     ros-humble-tf2-ros \
     ros-humble-tf-transformations \
-    python3-transforms3d \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
@@ -57,12 +56,11 @@ COPY requirements.txt constraints.txt /tmp/
 
 # Install Python dependencies with constraints
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
-    grep -v "^transforms3d" /tmp/requirements.txt > /tmp/requirements_filtered.txt && \
-    python3 -m pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements_filtered.txt && \
-    rm /tmp/requirements.txt /tmp/requirements_filtered.txt /tmp/constraints.txt
+    python3 -m pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt /tmp/constraints.txt
 
-# Verify transforms3d is available (from system package)
-RUN python3 -c "import transforms3d; print(f'transforms3d {transforms3d.__version__} available from system packages')"
+# Verify critical dependencies are available
+RUN python3 -c "import transforms3d; import numpy; print(f'✓ transforms3d {transforms3d.__version__} with NumPy {numpy.__version__}')"
 
 # Source ROS2 setup in bashrc for interactive sessions
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
