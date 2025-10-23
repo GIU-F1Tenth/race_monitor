@@ -16,6 +16,7 @@ env:
   ROS_DISTRO: humble
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME_LOWERCASE: giu-f1tenth/race_monitor
 
 jobs:
   # Check if Docker files changed
@@ -67,7 +68,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -81,10 +82,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Temporarily disable cache to rebuild with fixed transforms3d setup
-          # TODO: Re-enable after successful build
-          # cache-from: type=registry,ref=${{ env.REGISTRY }}/giu-f1tenth/race_monitor:buildcache
-          # cache-to: type=registry,ref=${{ env.REGISTRY }}/giu-f1tenth/race_monitor:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWERCASE }}:buildcache,mode=max
           no-cache: true
 
   python-lint:
@@ -144,7 +143,7 @@ jobs:
     needs: [python-lint, check-docker-changes, docker-build]
     if: always() && needs.python-lint.result == 'success'
     container:
-      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/{0}:{1}', github.repository, github.ref_name) || 'ghcr.io/giu-f1tenth/race_monitor:main' }}
+      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/{0}:{1}', 'giu-f1tenth/race_monitor', github.ref_name) || 'ghcr.io/giu-f1tenth/race_monitor:main' }}
       options: --user root
       credentials:
         username: ${{ github.actor }}
