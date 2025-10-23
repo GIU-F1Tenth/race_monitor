@@ -65,18 +65,18 @@ class MetadataManager:
         """Load race monitor maintainer and version information from data file."""
         race_monitor_data = {
             'maintainer': {
-                'name': 'Unknown',
-                'email': 'unknown@unknown.com'
+                'name': 'Mohammed Abdelazim',
+                'email': 'mohammed@azab.io'
             },
             'version': {
-                'race_monitor_version': '2.0.0',
+                'race_monitor_version': '1.0.0',
                 'build_date': 'unknown',
                 'license': 'MIT'
             },
             'system': {
                 'package_name': 'race_monitor',
                 'description': 'Race Monitoring System',
-                'repository': 'unknown'
+                'repository': 'https://github.com/GIU-F1Tenth/race_monitor/'
             }
         }
 

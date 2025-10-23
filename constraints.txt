@@ -4,7 +4,7 @@
 # NumPy compatibility constraint
 numpy>=1.21.0,<2.0.0
 
-# transforms3d (pip package) - ensure pip installs a compatible version
+# transforms3d (pip package) 
 transforms3d>=0.4.1,<1.0.0
 
 # EVO trajectory evaluation constraints

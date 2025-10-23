@@ -3,13 +3,11 @@
   "version": "1.0.0",
   "description": "F1Tenth Race Monitor System with Web UI",
   "scripts": {
-    "dev": "cd web_ui && ./dev-simple.sh",
+    "dev": "cd web_ui && npm run dev",
     "start": "cd web_ui && ./start.sh",
-    "test": "cd web_ui && ./test-run.sh",
-    "setup": "cd web_ui && ./setup-simple.sh",
     "quick-start": "cd web_ui && ./quick-start.sh"
   },
-  "keywords": ["f1tenth", "race", "monitor", "ros2", "web-ui"],
+  "keywords": ["f1tenth", "race", "monitor", "ros2", "web-ui", "humble", "roboracer"],
   "author": "GIU-F1Tenth",
   "license": "MIT"
 }

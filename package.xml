@@ -2,10 +2,10 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>race_monitor</name>
-  <version>2.0.5</version>
+  <version>1.0.0</version>
   <description>ROS2 node for tracking laps, lap times, and race statistics in autonomous racing with
     EVO trajectory analysis</description>
-  <maintainer email="mohammed@azab.io">Mohammed Azab</maintainer>
+  <maintainer email="mohammed@azab.io">Mohammed Abdelazim</maintainer>
   <license>MIT</license>
 
   <depend>rclpy</depend>
@@ -18,9 +18,7 @@
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <exec_depend>ros-humble-tf-transformations</exec_depend>
-  <!-- giu_f1t_interfaces dependency removed - using standard ROS2 messages -->
 
-  <!-- Python package dependencies -->
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-pandas</exec_depend>
   <exec_depend>python3-scipy</exec_depend>
