@@ -147,7 +147,7 @@ jobs:
     if: always() && needs.python-lint.result == 'success'
     container:
       # Use the newly built image if available, otherwise fallback to main
-      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/giu-f1tenth/race_monitor:{0}', needs.docker-build.outputs.image-tag) || 'ghcr.io/giu-f1tenth/race_monitor:main' }}
+      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/giu-f1tenth/race-monitor-ci:{0}', needs.docker-build.outputs.image-tag) || 'ghcr.io/giu-f1tenth/race-monitor-ci:main' }}
       options: --user root
       credentials:
         username: ${{ github.actor }}
