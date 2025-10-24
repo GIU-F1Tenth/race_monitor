@@ -44,6 +44,8 @@ RUN apt-get update && apt-get install -y \
     ros-humble-visualization-msgs \
     ros-humble-ackermann-msgs \
     ros-humble-tf2-ros \
+    ros-humble-ros2cli \
+    ros-humble-ros2launch \
     && rm -rf /var/lib/apt/lists/*
 
 # Remove conflicting system transforms3d package
