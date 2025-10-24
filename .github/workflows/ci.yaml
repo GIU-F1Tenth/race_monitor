@@ -414,9 +414,15 @@ jobs:
               except Exception as cleanup_e:
                   print(f'✗ ROS2 cleanup error: {cleanup_e}')
           PY
-      
-      - name: Add ROS2 to PATH
-        run: echo "/opt/ros/humble/bin" >> $GITHUB_PATH
+
+      - name: Set ROS2 environment variables
+        shell: bash
+        run: |
+          echo "PATH=/opt/ros/humble/bin:$PATH" >> $GITHUB_ENV
+          echo "PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:$PYTHONPATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/opt/ros/humble/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "AMENT_PREFIX_PATH=/opt/ros/humble" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=/opt/ros/humble" >> $GITHUB_ENV
 
       - name: Test Launch File
         shell: bash

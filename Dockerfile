@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y \
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2.list
 
-# Install ROS2 Humble and core packages (without tf-transformations initially)
+# Install ROS2 Humble and core packages
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-colcon-common-extensions \
@@ -63,9 +63,17 @@ RUN apt-get update && \
 
 # Initialize rosdep (as root in Docker)
 RUN rosdep init || echo "rosdep already initialized" \
-    && sudo rosdep fix-permissions && rosdep update
+    && rosdep update
 
-RUN which ros2 || echo "Ros2 command exist"
+# Add ROS2 binaries to PATH
+ENV PATH="/opt/ros/humble/bin:${PATH}"
+ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:${PYTHONPATH}"
+ENV LD_LIBRARY_PATH="/opt/ros/humble/lib:${LD_LIBRARY_PATH}"
+ENV AMENT_PREFIX_PATH="/opt/ros/humble"
+ENV CMAKE_PREFIX_PATH="/opt/ros/humble"
+
+# Verify ros2 command is available
+RUN which ros2 && ros2 --help | head -5 || (echo "✗ ros2 command not found" && exit 1)
 
 # Copy Python requirements and constraints
 COPY requirements.txt constraints.txt /tmp/
