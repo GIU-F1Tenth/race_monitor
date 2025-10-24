@@ -46,8 +46,9 @@ RUN apt-get update && apt-get install -y \
     ros-humble-tf2-ros \
     ros-humble-tf-transformations \
     python3-pip \
-    python3-transforms3d \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get purge -y python3-transforms3d 2>/dev/null || true \
+    && rm -rf /usr/lib/python3/dist-packages/transforms3d*
 
 # Initialize rosdep (as root in Docker)
 RUN rosdep init || echo "rosdep already initialized" \
