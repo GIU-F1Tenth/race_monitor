@@ -227,6 +227,7 @@ jobs:
               print('tf_transformations available')
           except Exception as e:
               print('tf_transformations import FAILED:', e)
+              print('sys.path:', sys.path)
               raise
           try:
               import race_monitor

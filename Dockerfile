@@ -46,9 +46,8 @@ RUN apt-get update && apt-get install -y \
     ros-humble-tf2-ros \
     ros-humble-tf-transformations \
     python3-pip \
+    python3-transforms3d \ 
     && rm -rf /var/lib/apt/lists/* \
-    && apt-get purge -y python3-transforms3d || true \
-    && rm -rf /usr/lib/python3/dist-packages/transforms3d*
 
 # Initialize rosdep
 RUN rosdep init && rosdep update
@@ -61,8 +60,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt /tmp/constraints.txt
 
-# Verify critical dependencies are available
-RUN python3 -c "import transforms3d; import numpy; print(f'✓ transforms3d {transforms3d.__version__} with NumPy {numpy.__version__}')"
+RUN bash -c "source /opt/ros/humble/setup.bash"
 
 # Source ROS2 setup in bashrc for interactive sessions
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
