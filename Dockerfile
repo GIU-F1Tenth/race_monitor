@@ -46,11 +46,12 @@ RUN apt-get update && apt-get install -y \
     ros-humble-tf2-ros \
     ros-humble-tf-transformations \
     python3-pip \
-    python3-transforms3d \ 
-    && rm -rf /var/lib/apt/lists/* \
+    python3-transforms3d \
+    && rm -rf /var/lib/apt/lists/*
 
-# Initialize rosdep
-RUN rosdep init && rosdep update
+# Initialize rosdep (as root in Docker)
+RUN rosdep init || echo "rosdep already initialized" \
+    && rosdep update
 
 # Copy Python requirements and constraints
 COPY requirements.txt constraints.txt /tmp/

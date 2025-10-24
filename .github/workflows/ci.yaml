@@ -183,6 +183,27 @@ jobs:
           done
           cd ws
 
+      - name: Verify ROS2 environment
+        shell: bash
+        run: |
+          # Verify rosdep is initialized
+          if [ ! -d "/etc/ros/rosdep" ]; then
+            echo "⚠️  rosdep not initialized, initializing now..."
+            rosdep init || echo "rosdep already initialized"
+          else
+            echo "✓ rosdep already initialized"
+          fi
+          
+          # Update rosdep
+          rosdep update || echo "rosdep update completed"
+          
+          # Source ROS2 and verify tf_transformations
+          source /opt/ros/humble/setup.bash
+          python3 -c "import tf_transformations; print('✓ tf_transformations available')" || {
+            echo "✗ tf_transformations not found"
+            exit 1
+          }
+
       - name: Build package
         shell: bash
         run: |
