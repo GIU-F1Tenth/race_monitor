@@ -44,7 +44,6 @@ RUN apt-get update && apt-get install -y \
     ros-humble-visualization-msgs \
     ros-humble-ackermann-msgs \
     ros-humble-tf2-ros \
-    ros-humble-tf-transformations \
     python3-pip \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get purge -y python3-transforms3d 2>/dev/null || true \
@@ -62,7 +61,20 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt /tmp/constraints.txt
 
-RUN bash -c "source /opt/ros/humble/setup.bash"
+# Debug: Verify installations
+RUN echo "=== Verifying Python package installations ===" && \
+    python3 -c "import numpy; print(f'✓ NumPy {numpy.__version__}')" && \
+    python3 -c "import transforms3d; print(f'✓ transforms3d {transforms3d.__version__}')" && \
+    python3 -c "import tf_transformations; print('✓ tf_transformations available')" && \
+    echo "=== All critical packages verified ==="
+
+# Debug: Check installed pip packages
+RUN echo "=== Installed pip packages ===" && \
+    pip3 list | grep -E "(numpy|transforms3d|tf-transformations)" && \
+    echo "=== Package list complete ==="
+
+# Debug: Verify ROS2 environment after sourcing
+RUN bash -c "source /opt/ros/humble/setup.bash && echo '=== ROS2 Environment ===' && echo 'ROS_DISTRO: '\$ROS_DISTRO && echo 'PYTHONPATH: '\$PYTHONPATH"
 
 # Source ROS2 setup in bashrc for interactive sessions
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc

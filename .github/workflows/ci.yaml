@@ -159,6 +159,21 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Debug - Container environment
+        shell: bash
+        run: |
+          echo "=== Container Environment Info ==="
+          echo "OS: $(cat /etc/os-release | grep PRETTY_NAME)"
+          echo "Python: $(python3 --version)"
+          echo "Pip: $(pip3 --version)"
+          echo "ROS_DISTRO: $ROS_DISTRO"
+          echo ""
+          echo "=== Pre-installed Python packages ==="
+          pip3 list | grep -E "(numpy|transforms3d|tf)" || echo "No matching packages found"
+          echo ""
+          echo "=== ROS2 installation check ==="
+          ls -la /opt/ros/humble/ | head -20 || echo "ROS2 directory not accessible"
+
       - name: Cache colcon build (install & build)
         uses: actions/cache@v4
         with:
@@ -186,6 +201,8 @@ jobs:
       - name: Verify ROS2 environment
         shell: bash
         run: |
+          echo "=== Starting ROS2 Environment Verification ==="
+          
           # Verify rosdep is initialized
           if [ ! -d "/etc/ros/rosdep" ]; then
             echo "⚠️  rosdep not initialized, initializing now..."
@@ -195,22 +212,71 @@ jobs:
           fi
           
           # Update rosdep
+          echo "=== Updating rosdep ==="
           rosdep update || echo "rosdep update completed"
           
-          # Source ROS2 and verify tf_transformations in the same shell
-          bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import tf_transformations; print(\"✓ tf_transformations available\")'" || {
-            echo "✗ tf_transformations not found"
-            echo "Checking if package exists..."
-            find /opt/ros/humble -name "tf_transformations*" -type f 2>/dev/null || echo "No tf_transformations files found"
-            exit 1
+          # Check what's installed
+          echo ""
+          echo "=== Checking installed ROS2 packages ==="
+          dpkg -l | grep -i "ros-humble" | grep -E "(tf|transform)" || echo "No ROS2 tf packages found via dpkg"
+          
+          echo ""
+          echo "=== Checking pip packages ==="
+          pip3 list | grep -iE "(transform|tf)" || echo "No transform packages found via pip"
+          
+          echo ""
+          echo "=== Searching for tf_transformations files ==="
+          find /opt/ros/humble /usr/local/lib /usr/lib -name "*tf_transformation*" 2>/dev/null | head -20 || echo "No tf_transformations files found"
+          
+          echo ""
+          echo "=== Python site-packages directories ==="
+          python3 -c "import site; print('\n'.join(site.getsitepackages()))"
+          
+          echo ""
+          echo "=== Testing Python import WITHOUT ROS2 sourcing ==="
+          python3 -c "import sys; print('sys.path:', sys.path)" || true
+          python3 -c "import tf_transformations; print('✓ tf_transformations available WITHOUT sourcing')" 2>&1 || echo "✗ tf_transformations NOT available without sourcing (expected)"
+          
+          echo ""
+          echo "=== Checking Python paths AFTER sourcing ROS2 ==="
+          bash -c "source /opt/ros/humble/setup.bash && echo 'PYTHONPATH:' && echo \$PYTHONPATH | tr ':' '\n'"
+          
+          echo ""
+          echo "=== Testing Python import WITH ROS2 sourcing ==="
+          bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import sys; print(\"Number of paths:\", len(sys.path)); import tf_transformations; print(\"✓ tf_transformations available WITH sourcing\")'" || {
+            echo "✗ tf_transformations import failed even with sourcing"
+            echo ""
+            echo "=== Installing tf_transformations via pip as fallback ==="
+            pip3 install tf-transformations
+            echo ""
+            echo "=== Verifying pip installation ==="
+            pip3 show tf-transformations || echo "Package info not available"
+            python3 -c "import tf_transformations; print('✓ tf_transformations available after pip install')"
           }
+          
+          echo ""
+          echo "=== ROS2 Environment Verification Complete ==="
 
       - name: Build package
         shell: bash
         run: |
           cd ws
+          echo "=== Starting colcon build ==="
+          echo "Working directory: $(pwd)"
+          echo "ROS_DISTRO: $ROS_DISTRO"
+          
           source /opt/ros/humble/setup.bash
-          colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release
+          
+          echo "AMENT_PREFIX_PATH: $AMENT_PREFIX_PATH"
+          echo "CMAKE_PREFIX_PATH: $CMAKE_PREFIX_PATH"
+          echo ""
+          
+          echo "=== Building race_monitor package ==="
+          colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+
+          
+          echo ""
+          echo "=== Build completed ==="
+          ls -la install/ || echo "Install directory not found"
 
       - name: Run package tests (colcon)
         shell: bash
@@ -230,33 +296,65 @@ jobs:
           source /opt/ros/humble/setup.bash
           source install/setup.bash || true
           
-          # Verify PYTHONPATH includes ROS2
+          echo "=== Import Diagnostics ==="
+          echo "Working directory: $(pwd)"
           echo "PYTHONPATH: $PYTHONPATH"
+          echo "ROS_DISTRO: $ROS_DISTRO"
+          echo ""
 
           python3 - <<'EOF'
           import sys
           import importlib
           import numpy as np
+          
+          print('=== Python Environment ===')
           print('Python:', sys.version.splitlines()[0])
+          print('Executable:', sys.executable)
+          print('')
+          
+          print('=== Package Versions ===')
           print('NumPy:', np.__version__)
+          
+          print('')
+          print('=== Testing transforms3d import ===')
           try:
               import transforms3d
-              print('transforms3d:', transforms3d.__version__)
+              print('✓ transforms3d:', transforms3d.__version__)
+              print('  Location:', transforms3d.__file__)
           except Exception as e:
-              print('transforms3d import failed:', e)
+              print('✗ transforms3d import failed:', e)
+              import traceback
+              traceback.print_exc()
+          
+          print('')
+          print('=== Testing tf_transformations import ===')
           try:
               import tf_transformations
-              print('tf_transformations available')
+              print('✓ tf_transformations available')
+              print('  Location:', tf_transformations.__file__)
           except Exception as e:
-              print('tf_transformations import FAILED:', e)
-              print('sys.path:', sys.path)
+              print('✗ tf_transformations import FAILED:', e)
+              print('  Python sys.path:')
+              for i, p in enumerate(sys.path):
+                  print(f'    [{i}] {p}')
+              import traceback
+              traceback.print_exc()
               raise
+          
+          print('')
+          print('=== Testing race_monitor import ===')
           try:
               import race_monitor
-              print('race_monitor import: OK')
+              print('✓ race_monitor import: OK')
+              print('  Location:', race_monitor.__file__)
           except Exception as e:
-              print('race_monitor import: FAILED', e)
+              print('✗ race_monitor import: FAILED', e)
+              import traceback
+              traceback.print_exc()
               raise
+          
+          print('')
+          print('=== All imports successful ===')
           EOF
 
       - name: ROS2 Integration Tests
