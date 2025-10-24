@@ -422,28 +422,15 @@ jobs:
           
           echo "Testing launch file..."
           timeout 30s bash -c '
-            set -x  # Debug mode
-            
             export PATH="/opt/ros/humble/bin:${PATH}"
-            
-            echo "PATH is: $PATH"
-            echo "Checking if ros2 exists:"
-            ls -la /opt/ros/humble/bin/ros2 || echo "ros2 binary not found"
-            which ros2 || echo "ros2 not in PATH"
-            
-            # Now source the setup files
             source /opt/ros/humble/setup.bash
             source install/setup.bash
-            
-            echo "After sourcing, PATH is: $PATH"
-            which ros2 || (echo "ros2 still not found" && exit 1)
             
             ros2 launch race_monitor race_monitor.launch.py &
             LAUNCH_PID=$!
             sleep 20
             if kill -0 $LAUNCH_PID 2>/dev/null; then
               echo "✓ Launch file started successfully (PID $LAUNCH_PID)"
-              ros2 node list || true
               kill $LAUNCH_PID || true
               exit 0
             else
@@ -459,12 +446,7 @@ jobs:
 
           echo "Testing node executable..."
           timeout 18s bash -c '
-            export PATH="/opt/ros/humble/bin:$PATH"
-            export PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages"
-            export LD_LIBRARY_PATH="/opt/ros/humble/lib:$LD_LIBRARY_PATH"
-            export AMENT_PREFIX_PATH="/opt/ros/humble"
-            export CMAKE_PREFIX_PATH="/opt/ros/humble"
-            
+            export PATH="/opt/ros/humble/bin:${PATH}"
             source /opt/ros/humble/setup.bash
             source install/setup.bash
             
@@ -473,7 +455,6 @@ jobs:
             sleep 12
             if kill -0 $NODE_PID 2>/dev/null; then
               echo "✓ Node executable started successfully (PID $NODE_PID)"
-              ros2 node list || true
               kill $NODE_PID || true
               exit 0
             else

@@ -46,6 +46,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-tf2-ros \
     ros-humble-ros2cli \
     ros-humble-ros2launch \
+    ros-humble-ros2run \
     && rm -rf /var/lib/apt/lists/*
 
 # Remove conflicting system transforms3d package
