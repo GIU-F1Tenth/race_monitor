@@ -415,26 +415,29 @@ jobs:
                   print(f'✗ ROS2 cleanup error: {cleanup_e}')
           PY
 
-      - name: Set ROS2 environment variables
-        shell: bash
-        run: |
-          echo "PATH=/opt/ros/humble/bin:$PATH" >> $GITHUB_ENV
-          echo "PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:$PYTHONPATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=/opt/ros/humble/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          echo "AMENT_PREFIX_PATH=/opt/ros/humble" >> $GITHUB_ENV
-          echo "CMAKE_PREFIX_PATH=/opt/ros/humble" >> $GITHUB_ENV
-
       - name: Test Launch File
         shell: bash
         run: |
           cd ws
-          source /opt/ros/humble/setup.bash
-          source install/setup.bash
-
+          
           echo "Testing launch file..."
           timeout 30s bash -c '
+            set -x  # Debug mode
+            
+            export PATH="/opt/ros/humble/bin:${PATH}"
+            
+            echo "PATH is: $PATH"
+            echo "Checking if ros2 exists:"
+            ls -la /opt/ros/humble/bin/ros2 || echo "ros2 binary not found"
+            which ros2 || echo "ros2 not in PATH"
+            
+            # Now source the setup files
             source /opt/ros/humble/setup.bash
             source install/setup.bash
+            
+            echo "After sourcing, PATH is: $PATH"
+            which ros2 || (echo "ros2 still not found" && exit 1)
+            
             ros2 launch race_monitor race_monitor.launch.py &
             LAUNCH_PID=$!
             sleep 20
@@ -453,13 +456,18 @@ jobs:
         shell: bash
         run: |
           cd ws
-          source /opt/ros/humble/setup.bash
-          source install/setup.bash
 
           echo "Testing node executable..."
           timeout 18s bash -c '
+            export PATH="/opt/ros/humble/bin:$PATH"
+            export PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages"
+            export LD_LIBRARY_PATH="/opt/ros/humble/lib:$LD_LIBRARY_PATH"
+            export AMENT_PREFIX_PATH="/opt/ros/humble"
+            export CMAKE_PREFIX_PATH="/opt/ros/humble"
+            
             source /opt/ros/humble/setup.bash
             source install/setup.bash
+            
             ros2 run race_monitor race_monitor &
             NODE_PID=$!
             sleep 12
