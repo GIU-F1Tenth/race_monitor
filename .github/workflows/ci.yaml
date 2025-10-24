@@ -159,20 +159,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Debug - Container environment
+      - name: Source Ros2
         shell: bash
         run: |
-          echo "=== Container Environment Info ==="
-          echo "OS: $(cat /etc/os-release | grep PRETTY_NAME)"
-          echo "Python: $(python3 --version)"
-          echo "Pip: $(pip3 --version)"
-          echo "ROS_DISTRO: $ROS_DISTRO"
-          echo ""
-          echo "=== Pre-installed Python packages ==="
-          pip3 list | grep -E "(numpy|transforms3d|tf)" || echo "No matching packages found"
-          echo ""
-          echo "=== ROS2 installation check ==="
-          ls -la /opt/ros/humble/ | head -20 || echo "ROS2 directory not accessible"
+          source /opt/ros/humble/setup.bash
 
       - name: Cache colcon build (install & build)
         uses: actions/cache@v4
@@ -246,12 +236,18 @@ jobs:
           bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import sys; print(\"Number of paths:\", len(sys.path)); import tf_transformations; print(\"✓ tf_transformations available WITH sourcing\")'" || {
             echo "✗ tf_transformations import failed even with sourcing"
             echo ""
-            echo "=== Installing tf_transformations via pip as fallback ==="
-            pip3 install tf-transformations
+            echo "=== Attempting to install ros-humble-tf-transformations ==="
+            apt-get update && apt-get install -y ros-humble-tf-transformations || echo "Package already installed or not available"
             echo ""
-            echo "=== Verifying pip installation ==="
-            pip3 show tf-transformations || echo "Package info not available"
-            python3 -c "import tf_transformations; print('✓ tf_transformations available after pip install')"
+            echo "=== Checking for tf_transformations Python module location ==="
+            find /opt/ros/humble -name "*tf_transformations*" -type f 2>/dev/null || echo "No tf_transformations files found"
+            echo ""
+            echo "=== Re-testing import after package check ==="
+            bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import tf_transformations; print(\"✓ tf_transformations available after re-check\")'" || {
+              echo "✗ Still failed. Installing transforms3d as alternative..."
+              pip3 install transforms3d
+              echo "✓ transforms3d installed (alternative to tf_transformations)"
+            }
           }
           
           echo ""

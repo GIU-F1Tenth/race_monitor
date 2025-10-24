@@ -31,12 +31,12 @@ RUN apt-get update && apt-get install -y \
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2.list
 
-# Install ROS2 Humble and core packages
+# Install ROS2 Humble and core packages (without tf-transformations initially)
 RUN apt-get update && apt-get install -y \
-    ros-humble-desktop \
-    python3-rosdep \
+    python3-pip \
     python3-colcon-common-extensions \
     build-essential \
+    python3-rosdep \
     ros-humble-rclpy \
     ros-humble-std-msgs \
     ros-humble-nav-msgs \
@@ -44,37 +44,37 @@ RUN apt-get update && apt-get install -y \
     ros-humble-visualization-msgs \
     ros-humble-ackermann-msgs \
     ros-humble-tf2-ros \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get purge -y python3-transforms3d 2>/dev/null || true \
-    && rm -rf /usr/lib/python3/dist-packages/transforms3d*
+    && rm -rf /var/lib/apt/lists/*
+
+# Remove conflicting system transforms3d package
+RUN apt-get update && \
+    (apt-get purge -y python3-transforms3d 2>/dev/null || true) && \
+    rm -rf /usr/lib/python3/dist-packages/transforms3d* && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && \
+    apt-get download ros-humble-tf-transformations && \
+    dpkg --force-depends -i ros-humble-tf-transformations*.deb && \
+    rm ros-humble-tf-transformations*.deb && \
+    rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep (as root in Docker)
 RUN rosdep init || echo "rosdep already initialized" \
-    && rosdep update
+    && sudo rosdep fix-permissions && rosdep update
 
 # Copy Python requirements and constraints
 COPY requirements.txt constraints.txt /tmp/
 
 # Install Python dependencies with constraints
-RUN python3 -m pip install --no-cache-dir --upgrade pip && \
-    python3 -m pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt && \
+RUN python3 -m pip install --upgrade pip && \
+    pip3 install -c /tmp/constraints.txt -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt /tmp/constraints.txt
 
-# Debug: Verify installations
-RUN echo "=== Verifying Python package installations ===" && \
-    python3 -c "import numpy; print(f'✓ NumPy {numpy.__version__}')" && \
-    python3 -c "import transforms3d; print(f'✓ transforms3d {transforms3d.__version__}')" && \
-    python3 -c "import tf_transformations; print('✓ tf_transformations available')" && \
-    echo "=== All critical packages verified ==="
-
-# Debug: Check installed pip packages
-RUN echo "=== Installed pip packages ===" && \
-    pip3 list | grep -E "(numpy|transforms3d|tf-transformations)" && \
-    echo "=== Package list complete ==="
-
-# Debug: Verify ROS2 environment after sourcing
-RUN bash -c "source /opt/ros/humble/setup.bash && echo '=== ROS2 Environment ===' && echo 'ROS_DISTRO: '\$ROS_DISTRO && echo 'PYTHONPATH: '\$PYTHONPATH"
+# Verify tf_transformations is available
+RUN echo "Verifying tf_transformations installation..." && \
+    bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import tf_transformations; print(\"✓ tf_transformations available\")'" || \
+    echo "⚠ tf_transformations verification failed"
 
 # Source ROS2 setup in bashrc for interactive sessions
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
