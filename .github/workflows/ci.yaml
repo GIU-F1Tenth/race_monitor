@@ -414,6 +414,9 @@ jobs:
               except Exception as cleanup_e:
                   print(f'✗ ROS2 cleanup error: {cleanup_e}')
           PY
+      
+      - name: Add ROS2 to PATH
+        run: echo "/opt/ros/humble/bin" >> $GITHUB_PATH
 
       - name: Test Launch File
         shell: bash

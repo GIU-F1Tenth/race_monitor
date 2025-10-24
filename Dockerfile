@@ -65,6 +65,8 @@ RUN apt-get update && \
 RUN rosdep init || echo "rosdep already initialized" \
     && sudo rosdep fix-permissions && rosdep update
 
+RUN which ros2 || echo "Ros2 command exist"
+
 # Copy Python requirements and constraints
 COPY requirements.txt constraints.txt /tmp/
 
