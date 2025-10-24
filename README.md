@@ -1,4 +1,4 @@
-# Race Monitor: Advanced Performance Analysis Framework for F1Tenth Autonomous Racing
+# Race Monitor: Advanced Performance Analysis Framework for Roboracer Autonomous Racing
 
 <div align="center">
 
@@ -18,7 +18,7 @@
 
 ## Abstract
 
-Race Monitor is a research-grade performance analysis framework designed for F1Tenth autonomous racing platforms. The system provides real-time lap timing, comprehensive trajectory evaluation using the EVO library, computational performance monitoring, and multi-format data export capabilities. Built on ROS2, Race Monitor enables systematic controller comparison, experimental reproducibility, and quantitative performance assessment essential for autonomous racing research.
+Race Monitor is a research-grade performance analysis framework designed for Roboracer autonomous racing platforms. The system provides real-time lap timing, comprehensive trajectory evaluation using the EVO library, computational performance monitoring, and multi-format data export capabilities. Built on ROS2, Race Monitor enables systematic controller comparison, experimental reproducibility, and quantitative performance assessment essential for autonomous racing research.
 
 **Key capabilities include:**
 - Real-time race monitoring with configurable lap detection
@@ -1059,18 +1059,6 @@ title('Lap 1 Trajectory');
 xlabel('X (m)'); ylabel('Y (m)');
 ```
 
-#### Command Line
-```bash
-# Quick statistics
-jq '.lap_statistics' data/lqr_controller_node/exp_002/results/json/race_summary.json
-
-# Extract best lap time
-jq -r '.lap_statistics.best_lap_time' data/lqr_controller_node/exp_002/results/json/race_summary.json
-
-# CSV analysis
-csvstat data/lqr_controller_node/exp_002/results/csv/race_summary.csv
-```
-
 ---
 
 ## Web UI Preview
@@ -1115,7 +1103,6 @@ A comprehensive web interface for Race Monitor is under active development and w
 
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS
 - **Backend**: FastAPI + Python
-- **Editor**: Monaco Editor (VS Code in browser)
 - **Visualization**: Plotly.js
 - **Real-time**: WebSocket communication
 
@@ -1140,12 +1127,9 @@ For more information, see [`web_ui/README.md`](web_ui/README.md).
 ### Core Documentation
 - **[User Guide](docs/USER_GUIDE.md)** - Comprehensive usage instructions
 - **[Configuration Reference](docs/CONFIGURATION.md)** - Detailed configuration options
-- **[API Documentation](docs/API.md)** - ROS2 interface reference
 
 ### Advanced Topics
 - **[Performance Monitoring](docs/COMPUTATIONAL_MONITORING.md)** - Computational performance analysis
-- **[EVO Integration](docs/EVO_INTEGRATION.md)** - Trajectory evaluation workflows
-- **[Multi-Controller Comparison](docs/CONTROLLER_COMPARISON.md)** - Benchmark methodology
 
 ### Data Management
 - **[Data Structure](data/README.md)** - Output organization
@@ -1166,10 +1150,10 @@ If you use Race Monitor in your research, please cite:
 ```bibtex
 @software{race_monitor2025,
   author       = {Azab, Mohammed},
-  title        = {Race Monitor: Advanced Performance Analysis Framework for F1Tenth Autonomous Racing},
+  title        = {Race Monitor: Advanced Performance Analysis Framework for Roboracer Autonomous Racing},
   year         = {2025},
   publisher    = {GitHub},
-  organization = {GIU F1Tenth Team},
+  organization = {GIU Roboracer Team},
   howpublished = {\url{https://github.com/GIU-F1Tenth/race_monitor}},
   version      = {1.0.0}
 }
@@ -1308,7 +1292,7 @@ cd race_monitor
 git checkout -b dev
 
 # Install development dependencies
-pip install -r requirements-dev.txt
+pip install -c constraints.txt -r requirements.txt
 
 # Run tests
 python -m pytest test/
@@ -1338,7 +1322,7 @@ Race Monitor is released under the MIT License. See [LICENSE](LICENSE) for detai
 ```
 MIT License
 
-Copyright (c) 2025 Mohammed Azab - GIU F1Tenth Team
+Copyright (c) 2025 Mohammed Azab - GIU Roboracer Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1376,17 +1360,13 @@ Race Monitor builds upon excellent open-source projects:
 
 ### Inspiration
 
-Race Monitor was inspired by the need for systematic performance evaluation in the F1Tenth autonomous racing community. Special thanks to:
-
-- The F1Tenth community for continuous feedback
-- Researchers worldwide using the platform for autonomous racing research
-- Contributors and testers who helped shape this tool
+Race Monitor was inspired by the need for systematic performance evaluation in the Roboracer autonomous racing community. 
 
 ### Support
 
 Development supported by:
 - **German International University (GIU)**
-- **F1Tenth Autonomous Racing Community**
+- **Roboracer Autonomous Racing Community**
 
 ---
 
@@ -1415,6 +1395,6 @@ Development supported by:
 [![GitHub stars](https://img.shields.io/github/stars/GIU-F1Tenth/race_monitor?style=social)](https://github.com/GIU-F1Tenth/race_monitor)
 [![GitHub forks](https://img.shields.io/github/forks/GIU-F1Tenth/race_monitor?style=social)](https://github.com/GIU-F1Tenth/race_monitor/fork)
 
-Built with ❤️ by the F1Tenth Community
+Built with ❤️ by the GIU Roboracer Team
 
 </div>

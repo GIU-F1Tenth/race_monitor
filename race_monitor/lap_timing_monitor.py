@@ -45,7 +45,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped, Twist, PoseWithCovarianceStamped
 from visualization_msgs.msg import Marker
 from ackermann_msgs.msg import AckermannDriveStamped
-# F1Tenth interface imports moved to conditional sections where used
+# Roboracer interface imports moved to conditional sections where used
 
 import numpy as np
 import tf_transformations
@@ -817,7 +817,7 @@ class RaceMonitor(Node):
         self.declare_parameter('generate_metrics_plots', True)
 
         # ========================================
-        # F1TENTH INTERFACE SETTINGS
+        # Roboracer INTERFACE SETTINGS
         # ========================================
         self.declare_parameter('enable_f1tenth_interface', True)
         self.declare_parameter('f1tenth_vehicle_state_topic', '/vehicle_state')

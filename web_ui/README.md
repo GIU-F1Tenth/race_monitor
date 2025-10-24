@@ -180,13 +180,6 @@ This installs all dependencies for both frontend and backend.
 
 **Manual Development:**
 ```bash
-# Backend only
-cd backend
-source venv/bin/activate
-uvicorn main:app --reload
-
-# Frontend only (separate terminal)
-cd frontend
 npm run dev
 ```
 
@@ -292,15 +285,6 @@ The system supports flexible port configuration:
 - Backend: Black + isort for Python
 - Commit messages: Conventional commits format
 
-### Running Tests
-```bash
-# Frontend tests
-cd frontend && npm test
-
-# Backend tests
-cd backend && pytest
-```
-
 ## 📄 License
 
-This project is part of the F1Tenth Race Monitor system. See the main project license for details.
+This project is part of the Mechabyte Roboracer Race Monitor system. See the main project license for details.

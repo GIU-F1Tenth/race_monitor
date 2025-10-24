@@ -258,7 +258,7 @@ class RaceMonitor(Node):
         self.declare_parameter('generate_metrics_plots', True)
 
         # ========================================
-        # F1TENTH INTERFACE SETTINGS
+        # Roboracer INTERFACE SETTINGS
         # ========================================
         self.declare_parameter('enable_f1tenth_interface', True)
         self.declare_parameter('f1tenth_vehicle_state_topic', '/vehicle_state')
@@ -391,7 +391,7 @@ class RaceMonitor(Node):
             'generate_error_plots': self.get_parameter('generate_error_plots').value,
             'generate_metrics_plots': self.get_parameter('generate_metrics_plots').value,
 
-            # F1Tenth interface
+            # Roboracer interface
             'enable_f1tenth_interface': self.get_parameter('enable_f1tenth_interface').value,
             'f1tenth_vehicle_state_topic': self.get_parameter('f1tenth_vehicle_state_topic').value,
             'f1tenth_constrained_state_topic': self.get_parameter('f1tenth_constrained_state_topic').value,

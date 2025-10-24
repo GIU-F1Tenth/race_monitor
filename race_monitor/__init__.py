@@ -30,7 +30,7 @@ License: MIT
 """
 
 __version__ = "1.0.0"
-__author__ = "GIU F1Tenth Team"
+__author__ = "GIU Roboracer Team"
 
 # Main exports for external usage
 from .race_monitor import RaceMonitor

@@ -253,7 +253,7 @@ class EVOPlotter:
                     y = pose['pose'].position.y
                     z = getattr(pose['pose'].position, 'z', 0.0)
                 else:
-                    # F1Tenth format
+                    # Roboracer format
                     x = pose['pose'].x
                     y = pose['pose'].y
                     z = 0.0
@@ -270,7 +270,7 @@ class EVOPlotter:
                         pose['pose'].orientation.z
                     ])
                 else:
-                    # F1Tenth format - convert theta to quaternion
+                    # Roboracer format - convert theta to quaternion
                     theta = pose['pose'].theta
                     orientations.append([
                         np.cos(theta / 2),  # w
@@ -284,7 +284,7 @@ class EVOPlotter:
                     # ROS2 message with header
                     timestamp = pose['header'].stamp.sec + pose['header'].stamp.nanosec * 1e-9
                 else:
-                    # F1Tenth format - create synthetic timestamps
+                    # Roboracer format - create synthetic timestamps
                     timestamp = i * 0.1  # Assume 10Hz sampling
 
                 timestamps.append(timestamp)
