@@ -158,7 +158,7 @@ class RaceMonitor(Node):
         # Smart controller detection parameters
         self.declare_parameter('enable_smart_controller_detection', True)
 
-        self.declare_parameter('experiment_id', 'exp_001')
+        # Note: experiment_id is now fully auto-generated and not configurable
         self.declare_parameter(
             'test_description', 'Controller performance evaluation and analysis')
 
@@ -205,10 +205,17 @@ class RaceMonitor(Node):
         self.declare_parameter('save_intermediate_results', True)
 
         # ========================================
+        # DIRECTORY CONFIGURATION
+        # ========================================
+        # Base directory for all results (with backward compatibility)
+        self.declare_parameter('results_dir', '')
+        # Deprecated: kept for backward compatibility
+        self.declare_parameter('trajectory_output_directory', '')
+
+        # ========================================
         # TRAJECTORY ANALYSIS SETTINGS
         # ========================================
         self.declare_parameter('save_trajectories', True)
-        self.declare_parameter('trajectory_output_directory', '')
 
         # Metrics to calculate
         self.declare_parameter('evaluate_smoothness', True)
@@ -234,7 +241,6 @@ class RaceMonitor(Node):
         # GRAPH GENERATION SETTINGS
         # ========================================
         self.declare_parameter('auto_generate_graphs', True)
-        self.declare_parameter('graph_output_directory', 'graphs')
         self.declare_parameter('graph_formats', ['png', 'pdf'])
 
         # Plot appearance settings
@@ -320,7 +326,7 @@ class RaceMonitor(Node):
             # Research & analysis
             'controller_name': self.get_parameter('controller_name').value,
             'enable_smart_controller_detection': self.get_parameter('enable_smart_controller_detection').value,
-            'experiment_id': self.get_parameter('experiment_id').value,
+            # experiment_id will be auto-generated dynamically, not from config
             'test_description': self.get_parameter('test_description').value,
             'auto_shutdown_on_race_complete': self.get_parameter('auto_shutdown_on_race_complete').value,
             'shutdown_delay_seconds': self.get_parameter('shutdown_delay_seconds').value,
@@ -354,7 +360,8 @@ class RaceMonitor(Node):
 
             # Trajectory analysis
             'save_trajectories': self.get_parameter('save_trajectories').value,
-            'trajectory_output_directory': self.get_parameter('trajectory_output_directory').value,
+            'results_dir': self.get_parameter('results_dir').value or self.get_parameter('trajectory_output_directory').value,
+            'trajectory_output_directory': self.get_parameter('results_dir').value or self.get_parameter('trajectory_output_directory').value,
             'evaluate_smoothness': self.get_parameter('evaluate_smoothness').value,
             'evaluate_consistency': self.get_parameter('evaluate_consistency').value,
             'evaluate_efficiency': self.get_parameter('evaluate_efficiency').value,
@@ -372,7 +379,6 @@ class RaceMonitor(Node):
 
             # Graph generation
             'auto_generate_graphs': self.get_parameter('auto_generate_graphs').value,
-            'graph_output_directory': self.get_parameter('graph_output_directory').value,
             'graph_formats': self.get_parameter('graph_formats').value,
             'plot_figsize': self.get_parameter('plot_figsize').value,
             'plot_dpi': self.get_parameter('plot_dpi').value,
@@ -497,23 +503,20 @@ class RaceMonitor(Node):
         # Configure data manager and create run directory
         self.data_manager.configure(self.config)
 
-        # Store the original base directory before it gets modified
-        self.original_base_output_dir = self.config.get(
-            'trajectory_output_directory', 'evaluation_results')
+        self.original_base_output_dir = self.data_manager.trajectory_output_directory
+        self.get_logger().info(f"📂 Results directory: {self.original_base_output_dir}")
 
         # Create dedicated run directory for this session
         controller_name = self.config.get(
             'controller_name', 'unknown_controller')
-        experiment_id = self.config.get('experiment_id', 'exp_001')
 
         # Only auto-generate experiment ID if we have a valid controller name
         # If controller name is empty, smart detection will handle this in _on_race_start
         if controller_name and controller_name.strip() and controller_name != 'unknown_controller':
-            # Auto-generate next experiment ID if using default or if experiment already exists
-            if experiment_id == 'exp_001' or self._experiment_directory_exists(controller_name, experiment_id):
-                experiment_id = self._get_next_experiment_id(controller_name)
-                # Update config with new experiment ID
-                self.config['experiment_id'] = experiment_id
+            experiment_id = self._get_next_experiment_id(controller_name)
+            self.config['experiment_id'] = experiment_id
+            self.experiment_id_generated = True
+            self.get_logger().info(f"Auto-generated experiment ID: {experiment_id}")
 
             run_directory = self.data_manager.create_run_directory(
                 controller_name, experiment_id)
@@ -533,7 +536,7 @@ class RaceMonitor(Node):
             self._initialize_analysis_components()
         else:
             # No controller name yet, delay analysis components initialization until race start
-            pass
+            self.experiment_id_generated = False  # Will be generated during race start
 
         # Load reference trajectory if specified
         if self.config['reference_trajectory_file']:
@@ -811,7 +814,6 @@ class RaceMonitor(Node):
 
         # Create run directory if not created yet (in case controller was detected after initialization)
         controller_name = self.config.get('controller_name', '')
-        experiment_id = self.config.get('experiment_id', 'exp_001')
 
         # If no controller name, it might be detected now by smart detection
         if not controller_name and hasattr(self, 'detected_controller_names') and self.detected_controller_names:
@@ -820,16 +822,14 @@ class RaceMonitor(Node):
             self.get_logger().info(
                 f"Using detected controller: {controller_name}")
 
-        # Auto-generate next experiment ID if using default or if experiment already exists
-        if controller_name and (
-            experiment_id == 'exp_001' or self._experiment_directory_exists(
-                controller_name,
-                experiment_id)):
+        if controller_name and not getattr(self, 'experiment_id_generated', False):
             experiment_id = self._get_next_experiment_id(controller_name)
-            # Update config with new experiment ID
             self.config['experiment_id'] = experiment_id
+            self.experiment_id_generated = True
             self.get_logger().info(
                 f"Auto-generated experiment ID for race start: {experiment_id}")
+        else:
+            experiment_id = self.config.get('experiment_id', 'exp_001')
 
         # Create experiment directory if we have a controller name and haven't created one yet
         if controller_name and not hasattr(self.data_manager, 'run_directory_created'):
@@ -1466,9 +1466,9 @@ class RaceMonitor(Node):
     def _experiment_directory_exists(self, controller_name: str, experiment_id: str) -> bool:
         """Check if an experiment directory already exists for this controller and experiment ID."""
         try:
-            # Use the original base directory, not the current trajectory_output_directory
+            # Use the resolved results directory
             base_output_dir = getattr(
-                self, 'original_base_output_dir', 'evaluation_results')
+                self, 'original_base_output_dir', 'data')
             controller_dir = os.path.join(base_output_dir, controller_name)
 
             if not os.path.exists(controller_dir):
@@ -1498,9 +1498,8 @@ class RaceMonitor(Node):
             import re
             import glob
 
-            # Use the original base directory, not the current trajectory_output_directory
             base_output_dir = getattr(
-                self, 'original_base_output_dir', 'evaluation_results')
+                self, 'original_base_output_dir', 'data')
             controller_dir = os.path.join(base_output_dir, controller_name)
 
             max_exp_num = 0
@@ -1512,9 +1511,11 @@ class RaceMonitor(Node):
                 # Extract experiment numbers from existing directories
                 for path in exp_dirs:
                     # Look for pattern: exp_XXX_timestamp or exp_XXX
-                    match = re.search(r'exp_(\d+)', os.path.basename(path))
+                    basename = os.path.basename(path)
+                    match = re.search(r'exp_(\d+)', basename)
                     if match:
                         exp_num = int(match.group(1))
+                        self.get_logger().info(f"  - Found: {basename} (exp #{exp_num})")
                         max_exp_num = max(max_exp_num, exp_num)
 
             next_exp_num = max_exp_num + 1
