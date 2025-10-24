@@ -197,10 +197,11 @@ jobs:
           # Update rosdep
           rosdep update || echo "rosdep update completed"
           
-          # Source ROS2 and verify tf_transformations
-          source /opt/ros/humble/setup.bash
-          python3 -c "import tf_transformations; print('✓ tf_transformations available')" || {
+          # Source ROS2 and verify tf_transformations in the same shell
+          bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import tf_transformations; print(\"✓ tf_transformations available\")'" || {
             echo "✗ tf_transformations not found"
+            echo "Checking if package exists..."
+            find /opt/ros/humble -name "tf_transformations*" -type f 2>/dev/null || echo "No tf_transformations files found"
             exit 1
           }
 
