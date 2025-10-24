@@ -15,7 +15,7 @@ on:
 env:
   ROS_DISTRO: humble
   REGISTRY: ghcr.io
-  IMAGE_NAME: giu-f1tenth/race_monitor
+  IMAGE_NAME: giu-f1tenth/race-monitor-ci
 
 jobs:
   # Check if Docker files changed
@@ -424,6 +424,8 @@ jobs:
 
           echo "Testing launch file..."
           timeout 30s bash -c '
+            source /opt/ros/humble/setup.bash
+            source install/setup.bash
             ros2 launch race_monitor race_monitor.launch.py &
             LAUNCH_PID=$!
             sleep 20
@@ -447,6 +449,8 @@ jobs:
 
           echo "Testing node executable..."
           timeout 18s bash -c '
+            source /opt/ros/humble/setup.bash
+            source install/setup.bash
             ros2 run race_monitor race_monitor &
             NODE_PID=$!
             sleep 12
