@@ -463,15 +463,15 @@ class LapDetector:
             # Start next lap
             self.current_lap += 1
             self.last_lap_time = timestamp
-            self.logger.info(f"Starting lap {self.current_lap}", LogLevel.NORMAL)
+            self.logger.info(f"-> Starting lap {self.current_lap}", LogLevel.NORMAL)
         else:
             # For crash and manual modes, continue laps indefinitely
             self.current_lap += 1
             self.last_lap_time = timestamp
             if self.log_level == "minimal":
-                self.logger.info(f"Starting lap {self.current_lap}", LogLevel.NORMAL)
+                self.logger.info(f"-> Starting lap {self.current_lap}", LogLevel.NORMAL)
             else:
-                self.logger.info(f"Starting lap {self.current_lap} (mode: {self.race_ending_mode})", LogLevel.NORMAL)
+                self.logger.info(f"-> Starting lap {self.current_lap} (mode: {self.race_ending_mode})", LogLevel.NORMAL)
 
     def _complete_race(self, timestamp):
         """

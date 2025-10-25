@@ -166,7 +166,7 @@ class ReferenceTrajectoryManager:
             if success:
                 self.reference_loaded = True
                 self.logger.success(
-                    f"Successfully loaded reference trajectory from {self.reference_trajectory_file}", LogLevel.NORMAL)
+                    f"Successfully loaded reference trajectory from {self.reference_trajectory_file}", LogLevel.DEBUG)
                 return True
             else:
                 return False

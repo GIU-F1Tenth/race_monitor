@@ -836,7 +836,14 @@ class RaceMonitor(Node):
     # Race Event Handlers
     def _on_race_start(self, timestamp):
         """Handle race start event."""
-        # Create run directory if not created yet (in case controller was detected after initialization)
+        # Try to detect controller immediately if not already known
+        controller_name = self.config.get('controller_name', '')
+        
+        if not controller_name:
+            # Force immediate controller detection at race start
+            self._detect_active_controller()
+        
+        # Get updated controller name after detection
         controller_name = self.config.get('controller_name', '')
 
         # If no controller name, it might be detected now by smart detection
@@ -950,8 +957,8 @@ class RaceMonitor(Node):
         # Auto-shutdown after race completion if enabled
         if self.config['auto_shutdown_on_race_complete']:
             delay = self.config['shutdown_delay_seconds']
-            self.logger.info(
-                f"Race complete! Shutting down in {delay} seconds...", LogLevel.NORMAL)
+            self.logger.event(
+                f"Race complete! Shutting down in {delay} seconds...")
 
             # Create a timer for delayed shutdown
             self.shutdown_timer = self.create_timer(delay, self._shutdown_node)
@@ -1150,7 +1157,7 @@ class RaceMonitor(Node):
                         research_summary, evo_metrics)
                     if race_evaluation:
                         self.data_manager.save_race_evaluation(race_evaluation)
-                        self.logger.success("Custom race evaluation completed successfully", LogLevel.NORMAL)
+                        self.logger.success("Race evaluation completed successfully", LogLevel.NORMAL)
                 except Exception as e:
                     self.logger.error(
                         f"Custom race evaluation failed: {e}", LogLevel.NORMAL)
@@ -1221,6 +1228,13 @@ class RaceMonitor(Node):
                                 self.evo_plotter.add_lap_trajectory(
                                     lap_num, poses)
 
+                    # Load reference trajectory into evo_plotter if available
+                    if self.reference_manager.is_reference_available():
+                        reference_trajectory = self.reference_manager.get_reference_trajectory()
+                        if reference_trajectory:
+                            self.evo_plotter.load_reference_trajectory_from_data(reference_trajectory)
+                            self.logger.debug("Loaded reference trajectory into visualization engine")
+
                     # Generate all plots
                     plot_success = self.evo_plotter.generate_all_plots()
                     if plot_success:
@@ -1234,7 +1248,7 @@ class RaceMonitor(Node):
             try:
                 self.data_manager.save_consolidated_race_results(
                     race_summary, race_evaluation)
-                self.logger.success("Saved consolidated race_results.json file", LogLevel.NORMAL)
+                self.logger.success("Saved consolidated race_results.json file", LogLevel.DEBUG)
             except Exception as e:
                 self.logger.error(
                     f"Error saving consolidated results: {e}", LogLevel.NORMAL)

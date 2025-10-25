@@ -58,6 +58,7 @@ class EVOPlotter:
         self.reference_trajectory = None
         self.lap_trajectories = {}
         self.lap_metrics = {}
+        self._best_lap_cache = None  # Cache for best lap to avoid recalculation
         
         # Initialize logger
         if logger is not None:
@@ -166,7 +167,7 @@ class EVOPlotter:
             return
 
         try:
-            self.logger.info(f"Creating reference trajectory from {len(self.lap_trajectories)} laps...", LogLevel.NORMAL)
+            self.logger.info(f"Creating trajectory from {len(self.lap_trajectories)} laps...", LogLevel.DEBUG)
 
             # Get all trajectory positions
             all_positions = []
@@ -215,13 +216,17 @@ class EVOPlotter:
                 timestamps=timestamps
             )
 
-            self.logger.success(f"Created reference trajectory with {len(avg_positions)} points", LogLevel.NORMAL)
+            self.logger.success(f"Created reference trajectory with {len(avg_positions)} points", LogLevel.DEBUG)
 
         except Exception as e:
             self.logger.error(f"Failed to create reference trajectory from laps", exception=e)
 
     def _find_best_lap(self):
         """Find the best lap based on lowest average error to reference trajectory"""
+        # Return cached result if available
+        if self._best_lap_cache is not None:
+            return self._best_lap_cache
+        
         if not self.lap_trajectories or not self.reference_trajectory:
             return None
 
@@ -252,7 +257,9 @@ class EVOPlotter:
                     continue
 
             if best_lap is not None:
-                self.logger.info(f"Best lap identified: Lap {best_lap} (avg error: {lowest_error:.4f}m)", LogLevel.NORMAL)
+                self.logger.info(f"-> Best lap identified: Lap {best_lap} (avg error: {lowest_error:.4f}m)", LogLevel.NORMAL)
+                # Cache the result
+                self._best_lap_cache = best_lap
 
             return best_lap
 
@@ -373,6 +380,9 @@ class EVOPlotter:
 
     def generate_all_plots(self):
         """Generate all configured plots using EVO"""
+        # Reset best lap cache for fresh calculation
+        self._best_lap_cache = None
+        
         self.logger.debug("=== EVO PLOT GENERATION ===")
         self.logger.debug(f"EVO available: {EVO_AVAILABLE}")
         self.logger.debug(f"Auto-generate graphs: {self.config.get('auto_generate_graphs', False)}")
@@ -391,8 +401,6 @@ class EVOPlotter:
         
         # Warn if no reference trajectory
         if not self.reference_trajectory:
-            import warnings
-            warnings.warn("No reference trajectory provided. Comparison plots will be skipped.", UserWarning)
             self.logger.warn("No reference trajectory - comparison plots will be skipped", LogLevel.NORMAL)
 
         try:
@@ -402,7 +410,7 @@ class EVOPlotter:
 
             # Auto-generate reference trajectory if not available
             if not self.reference_trajectory and self.lap_trajectories:
-                self.logger.info("Auto-generating reference trajectory from lap data...", LogLevel.NORMAL)
+                self.logger.info("Auto-generating reference trajectory from lap data...", LogLevel.DEBUG)
                 self._create_reference_from_laps()
 
             # Generate different types of plots
@@ -754,8 +762,7 @@ class EVOPlotter:
                 self.logger.warn("Could not determine best lap", LogLevel.DEBUG)
                 return
 
-            # Create the plot
-            fig, ax = plt.subplots(figsize=(14, 10))
+            fig, ax = plt.subplots(figsize=(14, 10), constrained_layout=True)
 
             # Plot reference trajectory with better visibility
             ref_xyz = self.reference_trajectory.positions_xyz
@@ -799,8 +806,7 @@ class EVOPlotter:
             ax.grid(True, alpha=0.3)
             ax.set_aspect('equal')
 
-            # Improve layout
-            plt.tight_layout()
+            # Don't call tight_layout() when using constrained_layout=True
             self.plot_collection.add_figure("best_lap_error_mapped_trajectory", fig)
 
             self.logger.success(f"Generated error-mapped trajectory for best lap {best_lap}", LogLevel.DEBUG)
@@ -848,7 +854,7 @@ class EVOPlotter:
             df = pd.DataFrame(data_for_plot)
 
             # Create the plot
-            fig, ax = plt.subplots(figsize=(12, 8))
+            fig, ax = plt.subplots(figsize=(12, 8), constrained_layout=False)
 
             # Generate violin plot
             sns.violinplot(data=df, x='Lap', y='Error (m)', ax=ax, hue='Lap', palette='Set2', legend=False)
@@ -901,7 +907,7 @@ class EVOPlotter:
                 return
 
             # Create the plot
-            fig, ax = plt.subplots(figsize=(12, 8))
+            fig, ax = plt.subplots(figsize=(12, 8), constrained_layout=False)
 
             # Create box plot
             box_data = list(lap_errors.values())
@@ -935,7 +941,7 @@ class EVOPlotter:
                 self.logger.warn("Could not determine best lap for 3D plot", LogLevel.DEBUG)
                 return
 
-            fig = plt.figure(figsize=(12, 10))
+            fig = plt.figure(figsize=(12, 10), constrained_layout=False)
             ax = fig.add_subplot(111, projection='3d')
 
             # Plot reference trajectory if available
@@ -1037,7 +1043,7 @@ class EVOPlotter:
             return
 
         # Create box plot
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10, 6),  constrained_layout=False)
 
         data_values = list(ape_data_by_lap.values())
         labels = list(ape_data_by_lap.keys())
@@ -1104,7 +1110,7 @@ class EVOPlotter:
         # Note: EVO native export disabled to avoid duplicate plots
         # All plots are saved individually using matplotlib
 
-        self.logger.success(f"All plots saved to {graph_dir}", LogLevel.NORMAL)
+        self.logger.info(f"📂 Graphs directory: {graph_dir}", LogLevel.NORMAL)
         return True
 
     def update_reference_trajectory_from_horizon_mapper(self, trajectory_data):
