@@ -39,15 +39,25 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 import rclpy
 from rclpy.node import Node
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
 
 def time_to_nanoseconds(time_obj):
-    """Convert a time object to nanoseconds."""
+    """
+    Convert time object to nanoseconds.
+    
+    Args:
+        time_obj: ROS2 Time or builtin_interfaces Time object
+        
+    Returns:
+        int: Time in nanoseconds
+        
+    Raises:
+        ValueError: If time_obj is not a recognized time type
+    """
     if hasattr(time_obj, 'nanoseconds'):
-        # rclpy.time.Time object
         return time_obj.nanoseconds
     elif hasattr(time_obj, 'sec') and hasattr(time_obj, 'nanosec'):
-        # builtin_interfaces.msg.Time object
         return time_obj.sec * 1e9 + time_obj.nanosec
     else:
         raise ValueError(f"Unknown time object type: {type(time_obj)}")
@@ -173,10 +183,10 @@ class PerformanceMonitor:
 
                 # Check for performance issues
                 if cpu_percent > self.max_acceptable_cpu_usage:
-                    self.logger.warn(f"High CPU usage detected: {cpu_percent:.1f}%")
+                    self.logger.warn(f"High CPU usage detected: {cpu_percent:.1f}%", LogLevel.NORMAL)
 
                 if memory_mb > self.max_acceptable_memory_mb:
-                    self.logger.warn(f"High memory usage detected: {memory_mb:.1f} MB")
+                    self.logger.warn(f"High memory usage detected: {memory_mb:.1f} MB", LogLevel.NORMAL)
 
                 # Periodically log performance stats
                 if (self.last_performance_log is None or
@@ -185,7 +195,7 @@ class PerformanceMonitor:
                     self.last_performance_log = current_time
 
             except Exception as e:
-                self.logger.error(f"Error in performance monitoring: {e}")
+                self.logger.error(f"Error in performance monitoring", exception=e)
 
             time.sleep(self.cpu_monitoring_interval)
 
@@ -247,7 +257,7 @@ class PerformanceMonitor:
             self.control_latency_history.append((time.time(), latency_ms))
 
             if latency_ms > self.max_acceptable_latency_ms:
-                self.logger.warn(f"High control loop latency: {latency_ms:.1f}ms")
+                self.logger.warn(f"High control loop latency: {latency_ms:.1f}ms", LogLevel.DEBUG)
 
     def _log_performance_stats(self):
         """Log current performance statistics."""
@@ -328,7 +338,7 @@ class PerformanceMonitor:
             filename_prefix: Prefix for the filename
         """
         if not self.performance_data:
-            self.logger.warn("No performance data to save")
+            self.logger.warn("No performance data to save", LogLevel.DEBUG)
             return
 
         try:
@@ -349,13 +359,13 @@ class PerformanceMonitor:
                 for data in self.performance_data:
                     writer.writerow(data)
 
-            self.logger.info(f"Performance data saved to: {filepath}")
+            self.logger.success(f"Performance data saved to: {filepath}", LogLevel.NORMAL)
 
             # Generate performance summary
             self._generate_performance_summary(filepath)
 
         except Exception as e:
-            self.logger.error(f"Error saving performance data: {e}")
+            self.logger.error(f"Error saving performance data", exception=e)
 
     def _generate_performance_summary(self, csv_filepath: str):
         """Generate a JSON summary of computational performance data."""
@@ -465,10 +475,10 @@ class PerformanceMonitor:
             with open(summary_path, 'w') as f:
                 json.dump(performance_summary, f, indent=2)
 
-            self.logger.info(f"Performance summary generated: {summary_path}")
+            self.logger.debug(f"Performance summary generated: {summary_path}")
 
         except Exception as e:
-            self.logger.error(f"Error generating performance summary: {e}")
+            self.logger.error(f"Error generating performance summary", exception=e)
 
     def reset_performance_data(self):
         """Clear all performance monitoring data."""

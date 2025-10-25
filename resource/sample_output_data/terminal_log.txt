@@ -1,0 +1,46 @@
+[race_monitor-1] [INFO] [1761412820.682317532] [race_monitor]: [RaceMonitor] STARTUP: 🏁 Starting Race Monitor
+[race_monitor-1] [INFO] [1761412820.734793587] [race_monitor]: [RaceMonitor] ⚙️  CONFIG: Reference Trajectory File = /home/user/ws/src/race_stack/horizon_mapper/horizon_mapper/ref_trajectory.csv
+[race_monitor-1] [INFO] [1761412820.735193160] [race_monitor]: [RaceMonitor] ⚙️  CONFIG: Format = csv
+[race_monitor-1] [INFO] [1761412820.779530755] [race_monitor]: [RaceMonitor] 📂 Results directory: /home/user/ws/src/race_stack/race_monitor/data
+[race_monitor-1] [INFO] [1761412820.781911421] [race_monitor]: [RaceMonitor] ✓ Race Monitor initialized successfully!
+[race_monitor-1] [INFO] [1761412822.782368633] [race_monitor]: [RaceMonitor] Detected controller: lqr_controller_node publishing to /drive
+[race_monitor-1] [INFO] [1761412839.220658199] [race_monitor]: [RaceMonitor] Experiment setup: Experiment: exp_011 | Controller: lqr_controller_node | Date: 2025-10-25 | OS: Linux
+[race_monitor-1] [INFO] [1761412839.221046874] [race_monitor]: [RaceMonitor] 📍 EVENT: 🏁 Race started | Race has begun
+[race_monitor-1] [INFO] [1761412839.221290692] [race_monitor]: [RaceMonitor] 📍 EVENT: Race started | Beginning lap 1
+[race_monitor-1] [INFO] [1761412858.890056854] [race_monitor]: [RaceMonitor] 📍 EVENT: Lap complete | Lap 1 in 19.670s
+[race_monitor-1] [INFO] [1761412858.934207940] [race_monitor]: [RaceMonitor] -> Starting lap 2
+[race_monitor-1] [INFO] [1761412878.619683404] [race_monitor]: [RaceMonitor] 📍 EVENT: Lap complete | Lap 2 in 19.729s
+[race_monitor-1] [INFO] [1761412878.661495248] [race_monitor]: [RaceMonitor] -> Starting lap 3
+[race_monitor-1] [INFO] [1761412898.559159316] [race_monitor]: [RaceMonitor] 📍 EVENT: Lap complete | Lap 3 in 19.940s
+[race_monitor-1] [INFO] [1761412898.601898949] [race_monitor]: [RaceMonitor] -> Starting lap 4
+[race_monitor-1] [INFO] [1761412918.399481056] [race_monitor]: [RaceMonitor] 📍 EVENT: Lap complete | Lap 4 in 19.840s
+[race_monitor-1] [INFO] [1761412918.446268081] [race_monitor]: [RaceMonitor] -> Starting lap 5
+[race_monitor-1] [INFO] [1761412937.929661785] [race_monitor]: [RaceMonitor] 📍 EVENT: Lap complete | Lap 5 in 19.530s
+[race_monitor-1] [INFO] [1761412937.974152401] [race_monitor]: [RaceMonitor] -> Starting lap 6
+[race_monitor-1] [INFO] [1761412957.509843740] [race_monitor]: [RaceMonitor] 📍 EVENT: Lap complete | Lap 6 in 19.580s
+[race_monitor-1] [INFO] [1761412957.552811103] [race_monitor]: [RaceMonitor] -> Starting lap 7
+[race_monitor-1] [INFO] [1761412977.449621107] [race_monitor]: [RaceMonitor] 📍 EVENT: Lap complete | Lap 7 in 19.940s
+[race_monitor-1] [INFO] [1761412977.495561113] [race_monitor]: [RaceMonitor] ✓ Race completed!
+[race_monitor-1] [INFO] [1761412977.495858085] [race_monitor]: [RaceMonitor] -> Total time: 138.230 s
+[race_monitor-1] [INFO] [1761412977.496105325] [race_monitor]: [RaceMonitor] -> Total laps: 7
+[race_monitor-1] [INFO] [1761412977.496351158] [race_monitor]: [RaceMonitor] -> Average lap: 19.747 s
+[race_monitor-1] [INFO] [1761412977.496578973] [race_monitor]: [RaceMonitor] -> Best lap: 19.530 s
+[race_monitor-1] [INFO] [1761412977.496801895] [race_monitor]: [RaceMonitor] -> Worst lap: 19.940 s
+[race_monitor-1] [INFO] [1761412977.497081991] [race_monitor]: [RaceMonitor] 📍 EVENT: Race complete | Finished in 138.230s - Laps completed
+[race_monitor-1] [INFO] [1761412977.497605503] [race_monitor]: [RaceMonitor] ==================================================
+[race_monitor-1] [INFO] [1761412977.497844473] [race_monitor]: [RaceMonitor]   Performing comprehensive race analysis
+[race_monitor-1] [INFO] [1761412977.498098631] [race_monitor]: [RaceMonitor] ==================================================
+[race_monitor-1] [INFO] [1761412977.509993529] [race_monitor]: [RaceMonitor] Running research trajectory evaluation...
+[race_monitor-1] [INFO] [1761412979.480452783] [race_monitor]: [RaceMonitor] ✓ Research evaluation completed successfully
+[race_monitor-1] [INFO] [1761412979.480754906] [race_monitor]: [RaceMonitor] Running custom race evaluation...
+[race_monitor-1] [INFO] [1761412979.497656077] [race_monitor]: [RaceMonitor] -> APE/RPE: APE=4044.4172, RPE=4.4240
+[race_monitor-1] [INFO] [1761412979.498829038] [race_monitor]: [RaceMonitor] ✓ Race evaluation completed successfully
+[race_monitor-1] [INFO] [1761412979.499099027] [race_monitor]: [RaceMonitor] Generating analysis plots...
+[race_monitor-1] [INFO] [1761412980.177829375] [race_monitor]: [RaceMonitor] Starting plot generation...
+[race_monitor-1] [INFO] [1761412980.901693576] [race_monitor]: [RaceMonitor] -> Best lap identified: Lap 5 (avg error: 13.4433m)
+[race_monitor-1] [INFO] [1761412989.088563872] [race_monitor]: [RaceMonitor] 📂 Graphs directory: /home/user/ws/src/race_stack/race_monitor/data/lqr_controller_node/exp_011/graphs
+[race_monitor-1] [INFO] [1761412989.089000178] [race_monitor]: [RaceMonitor] ✓ Generated all EVO plots successfully!
+[race_monitor-1] [INFO] [1761412989.089317687] [race_monitor]: [RaceMonitor] ✓ Visualization plots generated successfully
+[race_monitor-1] [INFO] [1761412989.090163275] [race_monitor]: [RaceMonitor] ✓ Comprehensive analysis completed!
+[race_monitor-1] [INFO] [1761412989.092874064] [race_monitor]: [RaceMonitor] 📍 EVENT: Race complete! Shutting down in 5.0 seconds...
+[race_monitor-1] [INFO] [1761412994.093702906] [race_monitor]: [RaceMonitor] 🛑 SHUTDOWN: Race Monitor

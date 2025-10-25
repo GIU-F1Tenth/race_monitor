@@ -37,6 +37,7 @@ import re
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 import logging
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
 try:
     import numpy as np
@@ -349,7 +350,7 @@ class RaceEvaluator:
                     data = json.load(f)
                     previous_experiments.append(data)
             except Exception as e:
-                self.logger.warning(f"Could not load previous experiment {file_path}: {e}")
+                self.logger.warn(f"Could not load previous experiment {file_path}: {e}", LogLevel.DEBUG)
 
         return previous_experiments
 
@@ -487,7 +488,7 @@ class RaceEvaluator:
         # First priority: lap times directly from monitor
         if hasattr(self, 'lap_times_from_monitor') and self.lap_times_from_monitor:
             lap_times = self.lap_times_from_monitor.copy()
-            self.logger.info(f"Using lap times from monitor: {len(lap_times)} laps")
+            self.logger.info(f"Using lap times from monitor: {len(lap_times)} laps", LogLevel.DEBUG)
         else:
             # Second priority: extract from research data lap analysis
             for lap_num, lap_data in lap_analysis.items():
@@ -534,7 +535,7 @@ class RaceEvaluator:
                 100 if np.mean(lap_times) > 0 else 0,
                 'total_laps': len(lap_times)}
             self.logger.info(
-                f"Lap times calculated: best={lap_times_data['best']:.3f}s, avg={lap_times_data['average']:.3f}s, worst={lap_times_data['worst']:.3f}s")
+                f"Lap times calculated: best={lap_times_data['best']:.3f}s, avg={lap_times_data['average']:.3f}s, worst={lap_times_data['worst']:.3f}s", LogLevel.NORMAL)
         else:
             # Last resort: check if we have duration statistics to use
             if 'duration' in aggregate_stats:
@@ -560,7 +561,7 @@ class RaceEvaluator:
                         'mean',
                         0) > 0 else 0,
                     'total_laps': len(lap_analysis)}
-                self.logger.warning(f"Using duration statistics as fallback: avg={lap_times_data['average']:.3f}s")
+                self.logger.warn(f"Using duration statistics as fallback: avg={lap_times_data['average']:.3f}s", LogLevel.NORMAL)
             else:
                 # Absolute fallback - this should never happen in a real race
                 lap_times_data = {
@@ -570,7 +571,7 @@ class RaceEvaluator:
                     'consistency_cv': 0,
                     'total_laps': len(lap_analysis)
                 }
-                self.logger.error("No lap time data available - using zeros (this should not happen)")
+                self.logger.error("No lap time data available - using zeros (this should not happen)", LogLevel.NORMAL)
 
         # Speed analysis - improved to handle missing data and provide reasonable defaults
         avg_speed = aggregate_stats.get('avg_speed', {}).get('mean', 0)
@@ -584,7 +585,7 @@ class RaceEvaluator:
             avg_speed = estimated_track_length / lap_times_data['average']
             max_speed = avg_speed * 1.15  # Assume max speed is 15% higher than average
             velocity_consistency = 0.05  # Assume good consistency
-            self.logger.info(f"Estimated speed from lap times: avg={avg_speed:.2f} m/s")
+            self.logger.info(f"Estimated speed from lap times: avg={avg_speed:.2f} m/s", LogLevel.DEBUG)
 
         speed_analysis = {
             'average': avg_speed,
@@ -646,7 +647,7 @@ class RaceEvaluator:
                     'deviation_score': estimated_ape
                 }
             }
-            self.logger.info(f"Estimated trajectory metrics - APE: {estimated_ape:.3f}, RPE: {estimated_rpe:.3f}")
+            self.logger.info(f"Estimated trajectory metrics - APE: {estimated_ape:.3f}, RPE: {estimated_rpe:.3f}", LogLevel.DEBUG)
 
         # Control quality assessment - improved error handling and reasonable defaults
         curvature_var_mean = aggregate_stats.get(

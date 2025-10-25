@@ -45,7 +45,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped, Twist, PoseWithCovarianceStamped
 from visualization_msgs.msg import Marker
 from ackermann_msgs.msg import AckermannDriveStamped
-# F1Tenth interface imports moved to conditional sections where used
+# Roboracer interface imports moved to conditional sections where used
 
 import numpy as np
 import tf_transformations
@@ -63,19 +63,27 @@ from collections import deque
 
 
 def time_to_nanoseconds(time_obj):
-    """Convert a time object to nanoseconds."""
+    """
+    Convert time object to nanoseconds.
+    
+    Args:
+        time_obj: ROS2 Time or builtin_interfaces Time object
+        
+    Returns:
+        int: Time in nanoseconds
+        
+    Raises:
+        ValueError: If time_obj is not a recognized time type
+    """
     if hasattr(time_obj, 'nanoseconds'):
-        # rclpy.time.Time object
         return time_obj.nanoseconds
     elif hasattr(time_obj, 'sec') and hasattr(time_obj, 'nanosec'):
-        # builtin_interfaces.msg.Time object
         return time_obj.sec * 1e9 + time_obj.nanosec
     else:
         raise ValueError(f"Unknown time object type: {type(time_obj)}")
 
 
-# Please ensure the 'evo' library is installed and available in your PYTHONPATH.
-# Add EVO library to Python path
+# EVO library setup for trajectory analysis
 evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
 if os.path.exists(evo_path) and evo_path not in sys.path:
     sys.path.insert(0, evo_path)
@@ -429,7 +437,7 @@ class RaceMonitor(Node):
                     'plot_style': self.plot_style,
                     'plot_color_scheme': self.plot_color_scheme
                 }
-                self.evo_plotter = EVOPlotter(plotter_config)
+                self.evo_plotter = EVOPlotter(plotter_config, node=self)
             else:
                 self.evo_plotter = None
 
@@ -809,7 +817,7 @@ class RaceMonitor(Node):
         self.declare_parameter('generate_metrics_plots', True)
 
         # ========================================
-        # F1TENTH INTERFACE SETTINGS
+        # Roboracer INTERFACE SETTINGS
         # ========================================
         self.declare_parameter('enable_f1tenth_interface', True)
         self.declare_parameter('f1tenth_vehicle_state_topic', '/vehicle_state')
@@ -1190,7 +1198,7 @@ class RaceMonitor(Node):
                     # Start next lap
                     self.lap_count += 1
                     self.lap_start_time = current_time
-                    self.get_logger().info(f"Starting lap {self.lap_count}")
+                    self.get_logger().info(f"-> Starting lap {self.lap_count}")
 
                     # EVO: Start new lap trajectory
                     if self.enable_trajectory_evaluation and EVO_AVAILABLE:

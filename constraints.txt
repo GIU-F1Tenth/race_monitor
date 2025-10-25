@@ -4,11 +4,8 @@
 # NumPy compatibility constraint
 numpy>=1.21.0,<2.0.0
 
-# transforms3d (pip package) - ensure pip installs a compatible version
+# transforms3d (pip package) 
 transforms3d>=0.4.1,<1.0.0
-
-# EVO trajectory evaluation constraints
-evo>=1.26.0,<2.0.0
 
 # Core scientific computing stack
 scipy>=1.9.0,<2.0.0
@@ -28,7 +25,8 @@ black>=22.0.0,<25.0.0
 pip-audit>=2.0.0,<3.0.0
 
 # Packaging
-setuptools>=65.0.0
+# Note: setuptools<80 required for compatibility with colcon-core in ROS2 Humble
+setuptools>=65.0.0,<80.0.0
 wheel>=0.37.0
 build>=0.8.0
 

@@ -1,0 +1,41 @@
+=== RACE SUMMARY ===
+Generated,2025-10-25T17:22:57.509588
+
+=== RACE METADATA ===
+Timestamp,2025-10-25T17:22:57.498112
+Controller Name,lqr_controller_node
+Experiment Id,exp_011
+Test Description,Controller performance evaluation and analysis
+Total Race Time,138.229655552
+Laps Completed,7
+Race Ending Reason,Laps completed
+Crashed,False
+
+=== LAP STATISTICS ===
+Best Lap Time,19.5305
+Worst Lap Time,19.9400
+Average Lap Time,19.7471
+Median Lap Time,19.7294
+Lap Time Std,0.1532
+Consistency Score,0.9922
+
+=== INDIVIDUAL LAP TIMES ===
+Lap Number,Lap Time (s)
+1,19.6698
+2,19.7294
+3,19.9400
+4,19.8403
+5,19.5305
+6,19.5798
+7,19.9399
+
+=== TRAJECTORY STATISTICS ===
+Total Distance,470.2516
+Average Lap Distance,67.1788
+Total Trajectory Points,13816
+Average Points Per Lap,1973.7143
+
+=== PERFORMANCE METRICS ===
+Average Speed,3.4020
+Best Lap Speed,3.4397
+Distance Per Second,3.4020

@@ -1,6 +1,8 @@
 """
 Live Monitor Module
-Handles real-time monitoring of race data and ROS2 integration
+
+Provides real-time monitoring of race data through ROS2 integration.
+Supports live data streaming, system health monitoring, and WebSocket communication.
 """
 
 import asyncio
@@ -22,7 +24,7 @@ class LiveMonitor:
         self._check_ros2_availability()
 
     def _check_ros2_availability(self):
-        """Check if ROS2 is available and sourced"""
+        """Check if ROS2 is installed and environment is sourced."""
         try:
             # Check if ros2 command is available
             result = subprocess.run(['which', 'ros2'], capture_output=True, text=True)
@@ -37,7 +39,12 @@ class LiveMonitor:
             self.ros_available = False
 
     async def get_live_data(self) -> Dict[str, Any]:
-        """Get current live monitoring data"""
+        """
+        Get current live monitoring data.
+        
+        Returns:
+            Dictionary with race status, system health, and recent activity
+        """
         live_data = {
             "timestamp": datetime.now().isoformat(),
             "monitoring_active": self.is_monitoring,
@@ -53,7 +60,12 @@ class LiveMonitor:
         return live_data
 
     async def _get_race_status(self) -> Dict[str, Any]:
-        """Get current race status"""
+        """
+        Get current race status from ROS2.
+        
+        Returns:
+            Dictionary with race activity and lap information
+        """
         status = {
             "race_active": False,
             "current_lap": 0,
@@ -81,7 +93,12 @@ class LiveMonitor:
         return status
 
     async def _get_system_health(self) -> Dict[str, Any]:
-        """Get system health information"""
+        """
+        Get system health information.
+        
+        Returns:
+            Dictionary with CPU, memory, disk usage, and ROS2 nodes/topics
+        """
         health = {
             "cpu_usage": 0,
             "memory_usage": 0,
@@ -131,7 +148,12 @@ class LiveMonitor:
         return health
 
     async def _get_recent_activity(self) -> Dict[str, Any]:
-        """Get recent file system activity"""
+        """
+        Get recent file system activity.
+        
+        Returns:
+            Dictionary with recent files and modification timestamps
+        """
         activity = {
             "recent_files": [],
             "file_changes": 0,
@@ -166,7 +188,12 @@ class LiveMonitor:
         return activity
 
     async def _get_ros_data(self) -> Dict[str, Any]:
-        """Get live ROS2 data"""
+        """
+        Get live ROS2 topic data.
+        
+        Returns:
+            Dictionary with latest messages from key ROS2 topics
+        """
         ros_data = {
             "odometry": None,
             "vehicle_state": None,
@@ -210,7 +237,12 @@ class LiveMonitor:
         return ros_data
 
     async def start(self) -> Dict[str, Any]:
-        """Start live monitoring"""
+        """
+        Start live monitoring.
+        
+        Returns:
+            Dictionary with monitoring status and warnings
+        """
         if self.is_monitoring:
             return {"status": "already_running"}
         
@@ -251,7 +283,12 @@ class LiveMonitor:
                 await asyncio.sleep(5.0)  # Wait longer on error
 
     def get_status(self) -> Dict[str, Any]:
-        """Get current monitoring status"""
+        """
+        Get current monitoring status.
+        
+        Returns:
+            Dictionary with monitoring state and capabilities
+        """
         return {
             "monitoring_active": self.is_monitoring,
             "ros_available": self.ros_available,
@@ -265,7 +302,15 @@ class LiveMonitor:
         }
 
     async def get_topic_info(self, topic_name: str) -> Dict[str, Any]:
-        """Get detailed information about a specific ROS2 topic"""
+        """
+        Get detailed information about a specific ROS2 topic.
+        
+        Args:
+            topic_name: Name of the ROS2 topic
+            
+        Returns:
+            Dictionary with topic info, type, and recent message
+        """
         if not self.ros_available:
             return {"error": "ROS2 not available"}
         
@@ -294,7 +339,12 @@ class LiveMonitor:
             return {"error": f"Failed to get topic info: {str(e)}"}
 
     async def trigger_emergency_stop(self) -> Dict[str, Any]:
-        """Trigger emergency stop if race monitor supports it"""
+        """
+        Trigger emergency stop via ROS2 topic.
+        
+        Returns:
+            Dictionary with emergency stop status
+        """
         if not self.ros_available:
             return {"error": "ROS2 not available"}
         

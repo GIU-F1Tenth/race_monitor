@@ -1,0 +1,64 @@
+{
+  "metadata": {
+    "timestamp": "2025-10-25T17:22:57.498112",
+    "controller_name": "lqr_controller_node",
+    "experiment_id": "exp_011"
+  },
+  "lap_statistics": {
+    "lap_times": [
+      19.669789696,
+      19.729353984,
+      19.940040192,
+      19.840286208,
+      19.530493696,
+      19.57977344,
+      19.939918336
+    ],
+    "best_lap_time": 19.530493696,
+    "worst_lap_time": 19.940040192,
+    "average_lap_time": 19.747093650285713,
+    "median_lap_time": 19.729353984,
+    "lap_time_std": 0.15320237328841144,
+    "consistency_score": 0.9922417761316388
+  },
+  "performance_metrics": {
+    "total_distance": 470.25161990371424,
+    "average_speed": 3.401958993718337,
+    "best_lap_speed": 3.439687899806982,
+    "distance_per_second": 3.401958993718337
+  },
+  "trajectory_statistics": {
+    "total_distance": 470.25161990371424,
+    "average_lap_distance": 67.17880284338774,
+    "total_trajectory_points": 13816,
+    "average_points_per_lap": 1973.7142857142858
+  },
+  "trajectory_quality": {
+    "path_length_mean": 0,
+    "path_length_std": 0,
+    "ape_rmse_mean": 0,
+    "rpe_rmse_mean": 0,
+    "overall_ape_mean": 0,
+    "overall_rpe_mean": 0
+  },
+  "vehicle_dynamics": {
+    "velocity_mean": 0,
+    "velocity_std": 0,
+    "velocity_max_mean": 0,
+    "acceleration_mean": 0,
+    "acceleration_std": 0,
+    "acceleration_max_mean": 0,
+    "jerk_mean": 0,
+    "angular_velocity_mean": 0
+  },
+  "path_metrics": {
+    "mean_curvature": 0,
+    "max_curvature_mean": 0,
+    "path_efficiency_mean": 0
+  },
+  "summary_stats": {
+    "total_trajectory_points": 13816,
+    "sampling_rate_mean": 10.0,
+    "overall_consistency_cv": 0
+  }
+}

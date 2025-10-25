@@ -1,0 +1,48 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+.github
+
+# Build artifacts
+build/
+install/
+log/
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+*.so
+*.o
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation
+*.md
+!requirements.txt
+!constraints.txt
+
+# Data and logs
+data/
+web_ui/
+resource
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.log

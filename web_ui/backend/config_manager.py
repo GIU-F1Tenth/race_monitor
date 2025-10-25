@@ -1,6 +1,8 @@
 """
 Configuration Management Module
-Handles loading, saving, and managing YAML configuration files
+
+Manages loading, saving, and validating YAML configuration files for the race monitor.
+Supports configuration templates, automatic backups, and structured configuration editing.
 """
 
 import yaml
@@ -25,7 +27,12 @@ class ConfigManager:
         }
 
     def list_configs(self) -> Dict[str, Any]:
-        """List all available configuration files"""
+        """
+        List all available configuration files.
+        
+        Returns:
+            Dictionary with configuration file metadata and templates
+        """
         configs = []
         
         if self.config_dir.exists():
@@ -46,7 +53,18 @@ class ConfigManager:
         }
 
     def get_config(self, filename: str) -> str:
-        """Get configuration file content"""
+        """
+        Get configuration file content.
+        
+        Args:
+            filename: Name of configuration file
+            
+        Returns:
+            Configuration file content as string
+            
+        Raises:
+            FileNotFoundError: If configuration file doesn't exist
+        """
         file_path = self.config_dir / filename
         
         if not file_path.exists():
@@ -56,7 +74,16 @@ class ConfigManager:
             return f.read()
 
     def save_config(self, filename: str, content: str) -> None:
-        """Save configuration file with backup"""
+        """
+        Save configuration file with automatic backup.
+        
+        Args:
+            filename: Name of configuration file
+            content: YAML configuration content
+            
+        Raises:
+            ValueError: If YAML content is invalid
+        """
         file_path = self.config_dir / filename
         
         # Create backup if file exists
@@ -74,7 +101,15 @@ class ConfigManager:
             f.write(content)
 
     def delete_config(self, filename: str) -> None:
-        """Delete configuration file"""
+        """
+        Delete configuration file with backup.
+        
+        Args:
+            filename: Name of configuration file to delete
+            
+        Raises:
+            FileNotFoundError: If configuration file doesn't exist
+        """
         file_path = self.config_dir / filename
         
         if not file_path.exists():
@@ -85,7 +120,12 @@ class ConfigManager:
         file_path.unlink()
 
     def _create_backup(self, filename: str) -> None:
-        """Create backup of configuration file"""
+        """
+        Create timestamped backup of configuration file.
+        
+        Args:
+            filename: Name of configuration file to backup
+        """
         file_path = self.config_dir / filename
         if file_path.exists():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -94,7 +134,15 @@ class ConfigManager:
             shutil.copy2(file_path, backup_path)
 
     def get_config_structure(self, filename: str) -> Dict[str, Any]:
-        """Get structured configuration data for form editing"""
+        """
+        Get structured configuration data for form editing.
+        
+        Args:
+            filename: Name of configuration file
+            
+        Returns:
+            Dictionary with structured configuration parameters
+        """
         content = self.get_config(filename)
         config_data = yaml.safe_load(content)
         
@@ -108,7 +156,6 @@ class ConfigManager:
                     "start_line_p2": params.get("start_line_p2", [0.0, 1.0]),
                     "required_laps": params.get("required_laps", 5),
                     "debounce_time": params.get("debounce_time", 2.0),
-                    "output_file": params.get("output_file", "race_results.csv"),
                     "frame_id": params.get("frame_id", "map")
                 },
                 "race_ending": {
@@ -153,7 +200,16 @@ class ConfigManager:
         return {"raw_content": content}
 
     def save_structured_config(self, filename: str, structured_data: Dict[str, Any]) -> None:
-        """Save configuration from structured form data"""
+        """
+        Save configuration from structured form data.
+        
+        Args:
+            filename: Name of configuration file
+            structured_data: Structured configuration dictionary
+            
+        Raises:
+            NotImplementedError: Structured data conversion not yet implemented
+        """
         # This would convert the structured data back to YAML format
         # For now, we'll use the raw content if provided
         if "raw_content" in structured_data:
@@ -163,7 +219,15 @@ class ConfigManager:
             raise NotImplementedError("Structured data conversion not yet implemented")
 
     def create_template(self, template_name: str) -> str:
-        """Create a new config from template"""
+        """
+        Create a new configuration from template.
+        
+        Args:
+            template_name: Name of template to use
+            
+        Returns:
+            Template configuration content as string
+        """
         templates = {
             "basic_race": self._get_basic_race_template(),
             "research_mode": self._get_research_template(),

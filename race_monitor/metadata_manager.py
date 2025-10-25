@@ -15,6 +15,7 @@ import platform
 import sys
 from datetime import datetime
 from typing import Dict, Any, Optional
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
 
 class MetadataManager:
@@ -65,18 +66,18 @@ class MetadataManager:
         """Load race monitor maintainer and version information from data file."""
         race_monitor_data = {
             'maintainer': {
-                'name': 'Unknown',
-                'email': 'unknown@unknown.com'
+                'name': 'Mohammed Abdelazim',
+                'email': 'mohammed@azab.io'
             },
             'version': {
-                'race_monitor_version': '2.0.0',
+                'race_monitor_version': '1.0.0',
                 'build_date': 'unknown',
                 'license': 'MIT'
             },
             'system': {
                 'package_name': 'race_monitor',
                 'description': 'Race Monitoring System',
-                'repository': 'unknown'
+                'repository': 'https://github.com/GIU-F1Tenth/race_monitor/'
             }
         }
 
@@ -112,11 +113,11 @@ class MetadataManager:
                     self.logger.debug(f"Loaded race monitor data from: {data_file_path}")
             else:
                 if self.logger:
-                    self.logger.warning(f"Race monitor data file not found: {data_file_path}")
+                    self.logger.warn(f"Race monitor data file not found: {data_file_path}", LogLevel.DEBUG)
 
         except Exception as e:
             if self.logger:
-                self.logger.warning(f"Error loading race monitor data: {e}")
+                self.logger.warn(f"Error loading race monitor data: {e}", LogLevel.DEBUG)
 
         return race_monitor_data
 
@@ -171,7 +172,7 @@ class MetadataManager:
         """
         if not self.metadata:
             if self.logger:
-                self.logger.warning("No metadata to save")
+                self.logger.warn("No metadata to save", LogLevel.DEBUG)
             return ""
 
         os.makedirs(self.output_directory, exist_ok=True)
@@ -248,13 +249,13 @@ class MetadataManager:
                 f.write("=" * 60 + "\n")
 
             if self.logger:
-                self.logger.info(f"Saved experiment metadata to: {filepath}")
+                self.logger.success(f"Saved experiment metadata to: {filepath}", LogLevel.DEBUG)
 
             return filepath
 
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error saving metadata file: {e}")
+                self.logger.error(f"Error saving metadata file", exception=e)
             return ""
 
     def update_metadata(self, key: str, value: Any):

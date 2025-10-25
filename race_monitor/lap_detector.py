@@ -22,15 +22,25 @@ from datetime import datetime
 from typing import Tuple, Optional, Callable
 import rclpy
 from rclpy.node import Node
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
 
 def time_to_nanoseconds(time_obj):
-    """Convert a time object to nanoseconds."""
+    """
+    Convert time object to nanoseconds.
+    
+    Args:
+        time_obj: ROS2 Time or builtin_interfaces Time object
+        
+    Returns:
+        int: Time in nanoseconds
+        
+    Raises:
+        ValueError: If time_obj is not a recognized time type
+    """
     if hasattr(time_obj, 'nanoseconds'):
-        # rclpy.time.Time object
         return time_obj.nanoseconds
     elif hasattr(time_obj, 'sec') and hasattr(time_obj, 'nanosec'):
-        # builtin_interfaces.msg.Time object
         return time_obj.sec * 1e9 + time_obj.nanosec
     else:
         raise ValueError(f"Unknown time object type: {type(time_obj)}")
@@ -235,7 +245,7 @@ class LapDetector:
 
         # Check if start line is degenerate
         if np.allclose(self.start_line_p1, self.start_line_p2, atol=1e-6):
-            self.logger.warning(f"Start line is degenerate: P1={self.start_line_p1}, P2={self.start_line_p2}")
+            self.logger.warn(f"Start line is degenerate: P1={self.start_line_p1}, P2={self.start_line_p2}", LogLevel.NORMAL)
             return False
 
         # Check debounce time
@@ -256,7 +266,7 @@ class LapDetector:
                 return True
             else:
                 if self.log_level in ["normal", "debug"]:
-                    self.logger.info("Invalid crossing direction - ignoring")
+                    self.logger.info("Invalid crossing direction - ignoring", LogLevel.DEBUG)
 
         return False
 
@@ -285,7 +295,7 @@ class LapDetector:
         result = (ccw(A, C, D) != ccw(B, C, D)) and (ccw(A, B, C) != ccw(A, B, D))
 
         if self.log_level == "debug":
-            self.logger.debug(f"Line intersection: path {p1}->{p2} vs line {q1}->{q2} = {result}")
+            self.logger.verbose(f"Line intersection: path {p1}->{p2} vs line {q1}->{q2} = {result}")
 
         return result
 
@@ -305,7 +315,7 @@ class LapDetector:
         # Need heading data for direction validation
         if self.current_heading is None:
             if self.log_level in ["normal", "debug"]:
-                self.logger.warning("No heading data available for direction validation")
+                self.logger.warn("No heading data available for direction validation", LogLevel.DEBUG)
             return self.expected_direction == "any"
 
         # Calculate line vector (from p1 to p2)
@@ -317,7 +327,7 @@ class LapDetector:
         # Check for degenerate line
         if np.linalg.norm(line_vector) == 0.0:
             if self.log_level in ["normal", "debug"]:
-                self.logger.warning("Degenerate start line detected")
+                self.logger.warn("Degenerate start line detected", LogLevel.DEBUG)
             return False
 
         # Calculate line normal (perpendicular to line)
@@ -337,7 +347,7 @@ class LapDetector:
         crossing_positive = cross_product > 0
 
         if self.log_level == "debug":
-            self.logger.debug(f"Direction analysis: heading={self.current_heading:.3f}rad, "
+            self.logger.verbose(f"Direction analysis: heading={self.current_heading:.3f}rad, "
                               f"cross_product={cross_product:.3f}, positive={crossing_positive}")
 
         if self.expected_direction == "positive":
@@ -389,6 +399,11 @@ class LapDetector:
         """
         self.last_crossing_time = timestamp
 
+        if self.race_completed:
+            if self.log_level in ["normal", "debug"]:
+                self.logger.info("Ignoring line crossing - race already completed", LogLevel.DEBUG)
+            return
+
         if not self.race_started:
             # First crossing - start the race
             self._start_race(timestamp)
@@ -410,13 +425,15 @@ class LapDetector:
         self.lap_times = []
         self.last_lap_time = timestamp
 
-        if self.log_level == "minimal":
-            self.logger.info(f"Race started - Lap {self.current_lap}")
-        else:
-            self.logger.info(f"Race started! Beginning lap {self.current_lap}")
-
+        # Trigger race start callback first (for experiment setup)
         if self.on_race_start:
             self.on_race_start(timestamp)
+
+        # Log race start event after callback completes
+        if self.log_level == "minimal":
+            self.logger.event("Race started", f"Lap {self.current_lap}", LogLevel.MINIMAL)
+        else:
+            self.logger.event("Race started", f"Beginning lap {self.current_lap}", LogLevel.NORMAL)
 
     def _complete_lap(self, timestamp):
         """
@@ -429,34 +446,32 @@ class LapDetector:
         lap_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.last_lap_time)) / 1e9
         self.lap_times.append(lap_time)
 
-        if self.log_level == "minimal":
-            self.logger.info(f"Lap {self.current_lap} completed: {lap_time:.3f}s")
-        else:
-            self.logger.info(f"Lap {self.current_lap} completed in {lap_time:.3f}s")
+        is_final_lap = (self.race_ending_mode == "lap_complete" and 
+                       len(self.lap_times) >= self.required_laps)
+        
+        if is_final_lap:
+            self.race_completed = True
 
         # Trigger lap completion callback
         if self.on_lap_complete:
             self.on_lap_complete(self.current_lap, lap_time)
 
-        # Check if race is complete based on ending mode
-        if self.race_ending_mode == "lap_complete" and len(self.lap_times) >= self.required_laps:
+        # Complete race if it was the final lap
+        if is_final_lap:
             self._complete_race(timestamp)
         elif self.race_ending_mode == "lap_complete":
             # Start next lap
             self.current_lap += 1
             self.last_lap_time = timestamp
-            if self.log_level == "minimal":
-                self.logger.info(f"Starting lap {self.current_lap}")
-            else:
-                self.logger.info(f"Starting lap {self.current_lap}")
+            self.logger.info(f"-> Starting lap {self.current_lap}", LogLevel.NORMAL)
         else:
             # For crash and manual modes, continue laps indefinitely
             self.current_lap += 1
             self.last_lap_time = timestamp
             if self.log_level == "minimal":
-                self.logger.info(f"Starting lap {self.current_lap}")
+                self.logger.info(f"-> Starting lap {self.current_lap}", LogLevel.NORMAL)
             else:
-                self.logger.info(f"Starting lap {self.current_lap} (mode: {self.race_ending_mode})")
+                self.logger.info(f"-> Starting lap {self.current_lap} (mode: {self.race_ending_mode})", LogLevel.NORMAL)
 
     def _complete_race(self, timestamp):
         """
@@ -474,15 +489,15 @@ class LapDetector:
         worst_lap_time = max(self.lap_times)
 
         if self.log_level == "minimal":
-            self.logger.info(
-                f"Race completed - Time: {self.total_race_time:.3f}s, Laps: {len(self.lap_times)}, Best: {best_lap_time:.3f}s")
+            self.logger.event("Race complete", 
+                f"Time: {self.total_race_time:.3f}s, Laps: {len(self.lap_times)}, Best: {best_lap_time:.3f}s", LogLevel.MINIMAL)
         else:
-            self.logger.info(f"Race completed!")
-            self.logger.info(f"  Total time: {self.total_race_time:.3f}s")
-            self.logger.info(f"  Total laps: {len(self.lap_times)}")
-            self.logger.info(f"  Average lap: {avg_lap_time:.3f}s")
-            self.logger.info(f"  Best lap: {best_lap_time:.3f}s")
-            self.logger.info(f"  Worst lap: {worst_lap_time:.3f}s")
+            self.logger.success(f"Race completed!", LogLevel.NORMAL)
+            self.logger.metric("Total time", f"{self.total_race_time:.3f}", "s", LogLevel.NORMAL)
+            self.logger.metric("Total laps", f"{len(self.lap_times)}", "", LogLevel.NORMAL)
+            self.logger.metric("Average lap", f"{avg_lap_time:.3f}", "s", LogLevel.NORMAL)
+            self.logger.metric("Best lap", f"{best_lap_time:.3f}", "s", LogLevel.NORMAL)
+            self.logger.metric("Worst lap", f"{worst_lap_time:.3f}", "s", LogLevel.NORMAL)
 
         # Trigger race completion callback
         if self.on_race_complete:
@@ -510,7 +525,7 @@ class LapDetector:
         self.velocity_history = []
         self.last_position_update = None
 
-        self.logger.info("Race state reset")
+        self.logger.info("Race state reset", LogLevel.NORMAL)
 
     def get_race_stats(self) -> dict:
         """
@@ -653,13 +668,13 @@ class LapDetector:
         self.total_race_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.race_start_time)) / 1e9
 
         if self.log_level == "minimal":
-            self.logger.warning(f"Race ended - crash detected: {crash_reason} (Duration: {self.total_race_time:.3f}s)")
+            self.logger.warn(f"Race ended - crash detected: {crash_reason} (Duration: {self.total_race_time:.3f}s)", LogLevel.MINIMAL)
         else:
-            self.logger.warning(f"Race ended due to crash: {crash_reason}")
-            self.logger.info(f"  Race duration: {self.total_race_time:.3f}s")
-            self.logger.info(f"  Laps completed: {len(self.lap_times)}")
+            self.logger.warn(f"Race ended due to crash: {crash_reason}", LogLevel.MINIMAL)
+            self.logger.info(f"  Race duration: {self.total_race_time:.3f}s", LogLevel.NORMAL)
+            self.logger.info(f"  Laps completed: {len(self.lap_times)}", LogLevel.NORMAL)
             if self.lap_times:
-                self.logger.info(f"  Last lap time: {self.lap_times[-1]:.3f}s")
+                self.logger.info(f"  Last lap time: {self.lap_times[-1]:.3f}s", LogLevel.NORMAL)
 
         # Trigger crash callback
         if self.on_race_crash:
@@ -677,11 +692,11 @@ class LapDetector:
         self.total_race_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.race_start_time)) / 1e9
 
         if self.log_level == "minimal":
-            self.logger.info(f"Race ended - timeout limit ({self.max_race_duration}s) reached")
+            self.logger.info(f"Race ended - timeout limit ({self.max_race_duration}s) reached", LogLevel.NORMAL)
         else:
-            self.logger.info(f"Race ended due to maximum duration limit ({self.max_race_duration}s)")
-            self.logger.info(f"  Total race time: {self.total_race_time:.3f}s")
-            self.logger.info(f"  Laps completed: {len(self.lap_times)}")
+            self.logger.info(f"Race ended due to maximum duration limit ({self.max_race_duration}s)", LogLevel.NORMAL)
+            self.logger.info(f"  Total race time: {self.total_race_time:.3f}s", LogLevel.NORMAL)
+            self.logger.info(f"  Laps completed: {len(self.lap_times)}", LogLevel.NORMAL)
 
         # Trigger race completion callback
         if self.on_race_complete:
