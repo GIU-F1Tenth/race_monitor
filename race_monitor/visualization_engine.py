@@ -20,6 +20,8 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for saving plots
 
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
+
 # EVO library setup for plotting
 evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
 if os.path.exists(evo_path) and evo_path not in sys.path:
@@ -28,32 +30,53 @@ if os.path.exists(evo_path) and evo_path not in sys.path:
 # Import EVO modules
 try:
     import evo
-    print(f"EVO version: {evo.__version__}")
     from evo.tools import plot
     from evo.core import trajectory, metrics, sync
     from evo.tools import file_interface
     from evo.core.units import Unit
     EVO_AVAILABLE = True
-    print("EVO modules imported successfully")
 except ImportError as e:
     EVO_AVAILABLE = False
-    print(f"Warning: EVO not available. Plotting features will be disabled. Error: {e}")
-    print(f"Python path: {sys.path}")
-    print("This is likely due to matplotlib version incompatibility between system and user packages.")
-    print("Try: pip uninstall matplotlib && sudo apt install python3-matplotlib")
+    _EVO_IMPORT_ERROR = e
 
 
 class EVOPlotter:
     """Enhanced EVO plotting integration for race monitor"""
 
-    def __init__(self, config):
-        """Initialize the EVO plotter with configuration"""
+    def __init__(self, config, logger=None, node=None):
+        """
+        Initialize the EVO plotter with configuration.
+        
+        Args:
+            config: Configuration dictionary
+            logger: Optional RaceMonitorLogger instance (if not provided, one will be created)
+            node: Optional ROS2 node instance (required if logger not provided)
+        """
         self.config = config
         self.EVO_AVAILABLE = EVO_AVAILABLE  # Make EVO_AVAILABLE accessible as instance attribute
         self.plot_collection = None
         self.reference_trajectory = None
         self.lap_trajectories = {}
         self.lap_metrics = {}
+        
+        # Initialize logger
+        if logger is not None:
+            self.logger = logger
+        elif node is not None:
+            log_level = config.get('log_level', 'normal')
+            self.logger = RaceMonitorLogger(node, "VisualizationEngine", log_level)
+        else:
+            # Fallback: create a minimal logger wrapper
+            self.logger = self._create_fallback_logger()
+        
+        # Log EVO availability status
+        if not EVO_AVAILABLE:
+            self.logger.warn(f"EVO not available. Plotting features will be disabled. Error: {_EVO_IMPORT_ERROR}", LogLevel.MINIMAL)
+            self.logger.debug(f"Python path: {sys.path}")
+            self.logger.info("This is likely due to matplotlib version incompatibility between system and user packages.", LogLevel.NORMAL)
+            self.logger.info("Try: pip uninstall matplotlib && sudo apt install python3-matplotlib", LogLevel.NORMAL)
+        else:
+            self.logger.debug("EVO modules imported successfully")
 
         # Create graph output directory
         if self.config.get('auto_generate_graphs', False):
@@ -65,6 +88,24 @@ class EVOPlotter:
             else:
                 graph_dir = graph_dir_config
             os.makedirs(graph_dir, exist_ok=True)
+            self.logger.debug(f"Graph output directory: {graph_dir}")
+    
+    def _create_fallback_logger(self):
+        """Create a minimal fallback logger that uses print statements."""
+        class FallbackLogger:
+            def info(self, msg, level=None):
+                print(f"[VisualizationEngine] INFO: {msg}")
+            def debug(self, msg):
+                print(f"[VisualizationEngine] DEBUG: {msg}")
+            def warn(self, msg, level=None):
+                print(f"[VisualizationEngine] WARNING: {msg}")
+            def error(self, msg, exception=None):
+                print(f"[VisualizationEngine] ERROR: {msg}")
+                if exception:
+                    print(f"  Exception: {exception}")
+            def success(self, msg, level=None):
+                print(f"[VisualizationEngine] SUCCESS: {msg}")
+        return FallbackLogger()
 
     def load_reference_trajectory(self, filepath, format_type='csv'):
         """Load reference trajectory from file"""
@@ -103,7 +144,7 @@ class EVOPlotter:
             elif format_type == 'kitti':
                 self.reference_trajectory = file_interface.read_kitti_poses_file(filepath)
             else:
-                print(f"Unsupported reference trajectory format: {format_type}")
+                self.logger.warn(f"Unsupported reference trajectory format: {format_type}", LogLevel.NORMAL)
                 return False
 
             # Check the actual attribute name for EVO trajectory
@@ -113,11 +154,11 @@ class EVOPlotter:
                 num_poses = len(self.reference_trajectory.positions_xyz)
             else:
                 num_poses = 'unknown'
-            print(f"Loaded reference trajectory with {num_poses} poses")
+            self.logger.info(f"Loaded reference trajectory with {num_poses} poses", LogLevel.NORMAL)
             return True
 
         except Exception as e:
-            print(f"❌ Failed to load reference trajectory from data: {e}")
+            self.logger.error(f"Failed to load reference trajectory from data", exception=e)
 
     def _create_reference_from_laps(self):
         """Create a reference trajectory from the average of all lap trajectories"""
@@ -125,7 +166,7 @@ class EVOPlotter:
             return
 
         try:
-            print(f"🎯 Creating reference trajectory from {len(self.lap_trajectories)} laps...")
+            self.logger.info(f"Creating reference trajectory from {len(self.lap_trajectories)} laps...", LogLevel.NORMAL)
 
             # Get all trajectory positions
             all_positions = []
@@ -135,7 +176,7 @@ class EVOPlotter:
 
             # Find minimum length to avoid index issues
             min_length = min(len(pos) for pos in all_positions)
-            print(f"📏 Using first {min_length} points for reference")
+            self.logger.debug(f"Using first {min_length} points for reference")
 
             # Truncate all trajectories to same length
             truncated_positions = [pos[:min_length] for pos in all_positions]
@@ -154,9 +195,9 @@ class EVOPlotter:
                     avg_positions[:, 0] = signal.savgol_filter(avg_positions[:, 0], window_length, 3)
                     avg_positions[:, 1] = signal.savgol_filter(avg_positions[:, 1], window_length, 3)
                     avg_positions[:, 2] = signal.savgol_filter(avg_positions[:, 2], window_length, 3)
-                    print(f"✅ Applied smoothing to reference trajectory")
+                    self.logger.debug("Applied smoothing to reference trajectory")
             except ImportError:
-                print(f"⚠️ Scipy not available, using unsmoothed reference")
+                self.logger.debug("Scipy not available, using unsmoothed reference")
 
             # Create timestamps
             timestamps = np.arange(len(avg_positions)) * 0.1  # Assume 10Hz
@@ -174,10 +215,10 @@ class EVOPlotter:
                 timestamps=timestamps
             )
 
-            print(f"✅ Created reference trajectory with {len(avg_positions)} points")
+            self.logger.success(f"Created reference trajectory with {len(avg_positions)} points", LogLevel.NORMAL)
 
         except Exception as e:
-            print(f"❌ Failed to create reference trajectory from laps: {e}")
+            self.logger.error(f"Failed to create reference trajectory from laps", exception=e)
 
     def _find_best_lap(self):
         """Find the best lap based on lowest average error to reference trajectory"""
@@ -200,23 +241,23 @@ class EVOPlotter:
                     ape_metric.process_data((traj_ref, traj_est))
                     avg_error = np.mean(ape_metric.error)
 
-                    print(f"🏁 Lap {lap_num}: Average error = {avg_error:.4f}m")
+                    self.logger.debug(f"Lap {lap_num}: Average error = {avg_error:.4f}m")
 
                     if avg_error < lowest_error:
                         lowest_error = avg_error
                         best_lap = lap_num
 
                 except Exception as e:
-                    print(f"Warning: Could not evaluate lap {lap_num}: {e}")
+                    self.logger.warn(f"Could not evaluate lap {lap_num}: {e}", LogLevel.DEBUG)
                     continue
 
             if best_lap is not None:
-                print(f"🏆 Best lap identified: Lap {best_lap} (avg error: {lowest_error:.4f}m)")
+                self.logger.info(f"Best lap identified: Lap {best_lap} (avg error: {lowest_error:.4f}m)", LogLevel.NORMAL)
 
             return best_lap
 
         except Exception as e:
-            print(f"❌ Failed to find best lap: {e}")
+            self.logger.error(f"Failed to find best lap", exception=e)
             return None
 
     def generate_plots(self):
@@ -224,21 +265,19 @@ class EVOPlotter:
 
     def add_lap_trajectory(self, lap_number, trajectory_data):
         """Add a completed lap trajectory for plotting"""
-        print(f"=== ADDING LAP TRAJECTORY DEBUG ===")
-        print(f"lap_number: {lap_number}")
-        print(f"trajectory_data type: {type(trajectory_data)}")
-        print(f"trajectory_data length: {len(trajectory_data) if hasattr(trajectory_data, '__len__') else 'no length'}")
-        print(f"EVO_AVAILABLE: {EVO_AVAILABLE}")
+        self.logger.debug(f"Adding lap {lap_number} trajectory")
+        self.logger.debug(f"Trajectory data type: {type(trajectory_data)}")
+        self.logger.debug(f"Trajectory data length: {len(trajectory_data) if hasattr(trajectory_data, '__len__') else 'no length'}")
 
         if not EVO_AVAILABLE:
-            print("❌ EVO not available, returning early")
+            self.logger.debug("EVO not available, skipping trajectory addition")
             return
 
         try:
             # Convert trajectory data to EVO format
             poses = trajectory_data
             if len(poses) < 2:
-                print(f"❌ Not enough poses: {len(poses)}")
+                self.logger.warn(f"Not enough poses ({len(poses)}) for lap {lap_number}", LogLevel.DEBUG)
                 return
 
             # Handle both ROS2 messages and F1Tenth data
@@ -297,14 +336,12 @@ class EVOPlotter:
             )
 
             self.lap_trajectories[lap_number] = traj
-            print(f"✅ Added lap {lap_number} trajectory for plotting with {len(poses)} poses")
-            print(
-                f"Trajectory data: positions shape {traj.positions_xyz.shape}, orientations shape {traj.orientations_quat_wxyz.shape}")
-            print(f"Total trajectories stored: {len(self.lap_trajectories)}")
-            print(f"Trajectory keys: {list(self.lap_trajectories.keys())}")
+            self.logger.success(f"Added lap {lap_number} trajectory with {len(poses)} poses", LogLevel.DEBUG)
+            self.logger.debug(f"Trajectory positions shape: {traj.positions_xyz.shape}, orientations shape: {traj.orientations_quat_wxyz.shape}")
+            self.logger.debug(f"Total trajectories stored: {len(self.lap_trajectories)}")
 
         except Exception as e:
-            print(f"Error adding lap {lap_number} trajectory: {e}")
+            self.logger.error(f"Error adding lap {lap_number} trajectory", exception=e)
 
     def add_lap_trajectory_evo(self, lap_number: int, evo_trajectory):
         """Add EVO trajectory object directly for plotting"""
@@ -313,11 +350,10 @@ class EVOPlotter:
 
         try:
             self.lap_trajectories[lap_number] = evo_trajectory
-            print(f"✅ Added EVO lap {lap_number} trajectory for plotting with {len(evo_trajectory.timestamps)} poses")
-            print(f"Total trajectories stored: {len(self.lap_trajectories)}")
-            print(f"Trajectory keys: {list(self.lap_trajectories.keys())}")
+            self.logger.success(f"Added EVO lap {lap_number} trajectory with {len(evo_trajectory.timestamps)} poses", LogLevel.DEBUG)
+            self.logger.debug(f"Total trajectories stored: {len(self.lap_trajectories)}")
         except Exception as e:
-            print(f"Error adding EVO lap {lap_number} trajectory: {e}")
+            self.logger.error(f"Error adding EVO lap {lap_number} trajectory", exception=e)
 
     def load_reference_trajectory_from_data(self, traj_data):
         """Load reference trajectory from EVO trajectory object directly"""
@@ -328,7 +364,7 @@ class EVOPlotter:
             self.reference_trajectory = traj_data
             return True
         except Exception as e:
-            print(f"Could not load reference trajectory from data: {e}")
+            self.logger.error("Could not load reference trajectory from data", exception=e)
             return False
 
     def add_lap_metrics(self, lap_number, metrics_data):
@@ -337,90 +373,89 @@ class EVOPlotter:
 
     def generate_all_plots(self):
         """Generate all configured plots using EVO"""
-        print(f"=== EVO PLOT GENERATION DEBUG ===")
-        print(f"EVO_AVAILABLE: {EVO_AVAILABLE}")
-        print(f"auto_generate_graphs: {self.config.get('auto_generate_graphs', False)}")
-        print(f"lap_trajectories count: {len(self.lap_trajectories)}")
-        print(f"lap_trajectories keys: {list(self.lap_trajectories.keys())}")
-        print(f"lap_metrics count: {len(self.lap_metrics)}")
-        print(f"lap_metrics keys: {list(self.lap_metrics.keys())}")
+        self.logger.debug("=== EVO PLOT GENERATION ===")
+        self.logger.debug(f"EVO available: {EVO_AVAILABLE}")
+        self.logger.debug(f"Auto-generate graphs: {self.config.get('auto_generate_graphs', False)}")
+        self.logger.debug(f"Lap trajectories count: {len(self.lap_trajectories)}")
+        self.logger.debug(f"Lap metrics count: {len(self.lap_metrics)}")
 
         if not EVO_AVAILABLE or not self.config.get('auto_generate_graphs', False):
-            print(f"❌ EVO not available or auto_generate_graphs disabled")
+            self.logger.warn("EVO not available or auto_generate_graphs disabled", LogLevel.DEBUG)
             return False
 
         if not self.lap_trajectories:
-            print(f"❌ No lap trajectories available for plotting")
+            self.logger.warn("No lap trajectories available for plotting", LogLevel.NORMAL)
             return False
 
-        print(f"✅ Starting plot generation...")
+        self.logger.info("Starting plot generation...", LogLevel.NORMAL)
+        
         # Warn if no reference trajectory
         if not self.reference_trajectory:
             import warnings
             warnings.warn("No reference trajectory provided. Comparison plots will be skipped.", UserWarning)
-            print("⚠️  No reference trajectory - comparison plots will be skipped")
+            self.logger.warn("No reference trajectory - comparison plots will be skipped", LogLevel.NORMAL)
 
         try:
             # Initialize plot collection
-            print(f"Creating plot collection...")
+            self.logger.debug("Creating plot collection...")
             self.plot_collection = plot.PlotCollection("Race Monitor - EVO Analysis")
 
             # Auto-generate reference trajectory if not available
             if not self.reference_trajectory and self.lap_trajectories:
-                print(f"🎯 Auto-generating reference trajectory from lap data...")
+                self.logger.info("Auto-generating reference trajectory from lap data...", LogLevel.NORMAL)
                 self._create_reference_from_laps()
 
             # Generate different types of plots
-            print(f"Generating trajectory plots...")
+            self.logger.debug("Generating trajectory plots...")
             if self.config.get('generate_trajectory_plots', True):
                 self._generate_trajectory_plots()
 
-            print(f"Generating XYZ plots...")
+            self.logger.debug("Generating XYZ plots...")
             if self.config.get('generate_xyz_plots', True):
                 self._generate_xyz_plots()
 
-            print(f"Generating RPY plots...")
+            self.logger.debug("Generating RPY plots...")
             if self.config.get('generate_rpy_plots', True):
                 self._generate_rpy_plots()
 
-            print(f"Generating speed plots...")
+            self.logger.debug("Generating speed plots...")
             if self.config.get('generate_speed_plots', True):
                 self._generate_speed_plots()
 
-            print(f"Generating error plots...")
+            self.logger.debug("Generating error plots...")
             if self.config.get('generate_error_plots', True) and self.reference_trajectory:
                 self._generate_error_plots()
 
-            print(f"Generating metrics plots...")
+            self.logger.debug("Generating metrics plots...")
             if self.config.get('generate_metrics_plots', True):
                 self._generate_metrics_plots()
 
             # Generate new advanced plot types
-            print(f"Generating error-mapped trajectory plots...")
+            self.logger.debug("Generating error-mapped trajectory plots...")
             if self.config.get('generate_error_mapped_plots', True) and self.reference_trajectory:
                 self._generate_error_mapped_trajectory()
 
-            print(f"Generating violin/box plots...")
+            self.logger.debug("Generating violin/box plots...")
             if self.config.get('generate_violin_plots', True) and self.reference_trajectory:
                 self._generate_violin_plots()
 
-            print(f"Generating 3D trajectory plots with vectors...")
+            self.logger.debug("Generating 3D trajectory plots with vectors...")
             if self.config.get('generate_3d_vector_plots', True):
                 self._generate_3d_trajectory_with_vectors()
 
             # Save all plots
-            print(f"Saving all plots...")
+            self.logger.debug("Saving all plots...")
             success = self._save_all_plots()
 
             if success:
-                print("✅ Generated all EVO plots successfully!")
+                self.logger.success("Generated all EVO plots successfully!", LogLevel.NORMAL)
                 return True
             else:
-                print("⚠️ Some plots may have failed to save")
+                self.logger.warn("Some plots may have failed to save", LogLevel.NORMAL)
                 return False
 
         except Exception as e:
-            print(f"❌ Error generating plots: {e}")
+            self.logger.error("Error generating plots", exception=e)
             return False
 
     def _generate_trajectory_plots(self):
@@ -573,7 +608,7 @@ class EVOPlotter:
                 ax_speed.plot(timestamps, speeds,
                               '-', color=color, label=f'Lap {lap_num}', alpha=0.8, linewidth=2)
             except Exception as e:
-                print(f"Could not plot speeds for lap {lap_num}: {e}")
+                self.logger.warn(f"Could not plot speeds for lap {lap_num}: {e}", LogLevel.DEBUG)
 
         ax_speed.set_title('Speed Analysis')
         ax_speed.set_xlabel('Time (s)')
@@ -599,8 +634,6 @@ class EVOPlotter:
                 speeds.append(0.0)
 
         return np.array(speeds)
-
-    def _generate_error_plots(self):
         """Generate APE/RPE error analysis plots"""
         if not self.reference_trajectory or not self.lap_trajectories:
             return
@@ -627,7 +660,7 @@ class EVOPlotter:
                 rpe_scores[lap_num] = rpe_metric.get_statistic(metrics.StatisticsType.rmse)
 
             except Exception as e:
-                print(f"Could not calculate errors for lap {lap_num}: {e}")
+                self.logger.warn(f"Could not calculate errors for lap {lap_num}: {e}", LogLevel.DEBUG)
 
         if not ape_scores:
             return
@@ -711,12 +744,12 @@ class EVOPlotter:
             return
 
         try:
-            print("🎨 Generating error-mapped trajectory plot for best lap...")
+            self.logger.info("Generating error-mapped trajectory plot for best lap...", LogLevel.DEBUG)
 
             # Find the best lap
             best_lap = self._find_best_lap()
             if best_lap is None:
-                print("❌ Could not determine best lap")
+                self.logger.warn("Could not determine best lap", LogLevel.DEBUG)
                 return
 
             # Create the plot
@@ -748,7 +781,7 @@ class EVOPlotter:
                                      s=30, alpha=0.8, edgecolors='none', zorder=3)
 
             except Exception as e:
-                print(f"Warning: Could not process best lap {best_lap}: {e}")
+                self.logger.warn(f"Could not process best lap {best_lap}: {e}", LogLevel.DEBUG)
                 return
 
             # Add colorbar at the bottom to avoid overlap with legend
@@ -768,10 +801,10 @@ class EVOPlotter:
             plt.tight_layout()
             self.plot_collection.add_figure("best_lap_error_mapped_trajectory", fig)
 
-            print(f"✅ Generated error-mapped trajectory for best lap {best_lap}")
+            self.logger.success(f"Generated error-mapped trajectory for best lap {best_lap}", LogLevel.DEBUG)
 
         except Exception as e:
-            print(f"❌ Could not generate error-mapped trajectory: {e}")
+            self.logger.error("Could not generate error-mapped trajectory", exception=e)
 
     def _generate_violin_plots(self):
         """Generate combined violin/box plots for error comparison across all laps"""
@@ -781,7 +814,7 @@ class EVOPlotter:
         try:
             import seaborn as sns
 
-            print("📊 Generating combined statistical comparison plot...")
+            self.logger.info("Generating combined statistical comparison plot...", LogLevel.DEBUG)
 
             # Collect APE data for all laps
             data_for_plot = []
@@ -802,11 +835,11 @@ class EVOPlotter:
                         data_for_plot.append({'Lap': f'Lap {lap_num}', 'Error (m)': error})
 
                 except Exception as e:
-                    print(f"Warning: Error processing lap {lap_num} for violin plot: {e}")
+                    self.logger.warn(f"Error processing lap {lap_num} for violin plot: {e}", LogLevel.DEBUG)
                     continue
 
             if not data_for_plot:
-                print("❌ No data available for statistical comparison")
+                self.logger.warn("No data available for statistical comparison", LogLevel.DEBUG)
                 return
 
             # Create DataFrame for plotting
@@ -831,13 +864,13 @@ class EVOPlotter:
             plt.tight_layout()
             self.plot_collection.add_figure("Trajectory_Error_Distribution", fig)
 
-            print(f"✅ Generated statistical comparison for {len(df)} data points")
+            self.logger.success(f"Generated statistical comparison for {len(df)} data points", LogLevel.DEBUG)
 
         except ImportError:
-            print("⚠️ Seaborn not available, generating simple box plot instead...")
+            self.logger.warn("Seaborn not available, generating simple box plot instead...", LogLevel.DEBUG)
             self._generate_simple_box_plot()
         except Exception as e:
-            print(f"❌ Could not generate statistical comparison plot: {e}")
+            self.logger.error("Could not generate statistical comparison plot", exception=e)
 
     def _generate_simple_box_plot(self):
         """Generate simple box plot as fallback when seaborn is not available"""
@@ -859,7 +892,7 @@ class EVOPlotter:
                     lap_errors[f'Lap {lap_num}'] = ape_metric.error
 
                 except Exception as e:
-                    print(f"Warning: Error processing lap {lap_num} for box plot: {e}")
+                    self.logger.warn(f"Error processing lap {lap_num} for box plot: {e}", LogLevel.DEBUG)
                     continue
 
             if not lap_errors:
@@ -884,7 +917,7 @@ class EVOPlotter:
             self.plot_collection.add_figure("simple_statistical_comparison", fig)
 
         except Exception as e:
-            print(f"❌ Could not generate simple box plot: {e}")
+            self.logger.error("Could not generate simple box plot", exception=e)
 
     def _generate_3d_trajectory_with_vectors(self):
         """Generate 3D trajectory visualization with direction vectors for the best lap only"""
@@ -892,12 +925,12 @@ class EVOPlotter:
             return
 
         try:
-            print("🔵 Generating 3D trajectory plot for best lap...")
+            self.logger.info("Generating 3D trajectory plot for best lap...", LogLevel.DEBUG)
 
             # Find the best lap
             best_lap = self._find_best_lap()
             if best_lap is None:
-                print("❌ Could not determine best lap for 3D plot")
+                self.logger.warn("Could not determine best lap for 3D plot", LogLevel.DEBUG)
                 return
 
             fig = plt.figure(figsize=(12, 10))
@@ -935,7 +968,7 @@ class EVOPlotter:
                                   color='red', alpha=0.8, arrow_length_ratio=0.1)
 
             except Exception as e:
-                print(f"Warning: Could not process best lap {best_lap} for 3D plot: {e}")
+                self.logger.warn(f"Could not process best lap {best_lap} for 3D plot: {e}", LogLevel.DEBUG)
                 return
 
             # Formatting
@@ -970,10 +1003,10 @@ class EVOPlotter:
             plt.tight_layout()
             self.plot_collection.add_figure("best_lap_3d_trajectory_vectors", fig)
 
-            print(f"✅ Generated 3D trajectory plot for best lap {best_lap}")
+            self.logger.success(f"Generated 3D trajectory plot for best lap {best_lap}", LogLevel.DEBUG)
 
         except Exception as e:
-            print(f"❌ Could not generate 3D trajectory plot: {e}")
+            self.logger.error("Could not generate 3D trajectory plot", exception=e)
 
     def _generate_box_plots(self):
         """Fallback box plots if seaborn is not available"""
@@ -996,7 +1029,7 @@ class EVOPlotter:
                 ape_data_by_lap[f'LAP_{lap_num:02d}'] = ape_metric.error
 
             except Exception as e:
-                print(f"Error processing lap {lap_num} for box plot: {e}")
+                self.logger.warn(f"Error processing lap {lap_num} for box plot: {e}", LogLevel.DEBUG)
 
         if not ape_data_by_lap:
             return
@@ -1026,10 +1059,10 @@ class EVOPlotter:
     def _save_all_plots(self):
         """Save all generated plots"""
         if not self.plot_collection:
-            print("No plot collection to save")
-            return
+            self.logger.warn("No plot collection to save", LogLevel.DEBUG)
+            return False
 
-        print(f"Plot collection has {len(self.plot_collection.figures)} figures")
+        self.logger.debug(f"Plot collection has {len(self.plot_collection.figures)} figures")
 
         graph_dir_config = self.config.get('graph_output_directory', 'evaluation_results/graphs')
         if not os.path.isabs(graph_dir_config):
@@ -1041,7 +1074,7 @@ class EVOPlotter:
 
         graph_formats = self.config.get('graph_formats', ['png'])
 
-        print(f"Saving plots to {graph_dir} in formats: {graph_formats}")
+        self.logger.info(f"Saving plots to {graph_dir} in formats: {graph_formats}", LogLevel.DEBUG)
 
         # Ensure directory exists
         os.makedirs(graph_dir, exist_ok=True)
@@ -1058,18 +1091,18 @@ class EVOPlotter:
                         os.makedirs(format_dir, exist_ok=True)
 
                         output_path = os.path.join(format_dir, f"{plot_name}.{fmt.lower()}")
-                        print(f"Saving {plot_name} as {fmt.upper()} to {output_path}")
+                        self.logger.debug(f"Saving {plot_name} as {fmt.upper()} to {output_path}")
                         figure.savefig(output_path, format=fmt.lower(), dpi=dpi, bbox_inches='tight')
 
-                print(f"✅ Successfully saved {plot_name} plots")
+                self.logger.success(f"Successfully saved {plot_name} plots", LogLevel.DEBUG)
 
             except Exception as e:
-                print(f"❌ Error saving {plot_name} plot: {e}")
+                self.logger.error(f"Error saving {plot_name} plot", exception=e)
 
         # Note: EVO native export disabled to avoid duplicate plots
         # All plots are saved individually using matplotlib
 
-        print(f"✅ All plots saved to {graph_dir}")
+        self.logger.success(f"All plots saved to {graph_dir}", LogLevel.NORMAL)
         return True
 
     def update_reference_trajectory_from_horizon_mapper(self, trajectory_data):
@@ -1105,9 +1138,9 @@ class EVOPlotter:
                 timestamps=timestamps
             )
 
-            print(f"Updated reference trajectory from horizon mapper with {len(x)} points")
+            self.logger.info(f"Updated reference trajectory from horizon mapper with {len(x)} points", LogLevel.DEBUG)
             return True
 
         except Exception as e:
-            print(f"Error updating reference trajectory from horizon mapper: {e}")
+            self.logger.error("Error updating reference trajectory from horizon mapper", exception=e)
             return False

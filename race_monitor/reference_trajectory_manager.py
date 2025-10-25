@@ -171,7 +171,7 @@ class ReferenceTrajectoryManager:
                 return False
 
         except Exception as e:
-            self.logger.error(f"Error loading reference trajectory: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error loading reference trajectory", exception=e)
             return False
 
     def _load_csv_reference(self) -> bool:
@@ -268,7 +268,7 @@ class ReferenceTrajectoryManager:
                 return True
 
         except Exception as e:
-            self.logger.error(f"Error loading CSV reference: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error loading CSV reference", exception=e)
             return False
 
     def _load_tum_reference(self) -> bool:
@@ -286,7 +286,7 @@ class ReferenceTrajectoryManager:
                 f"Loaded TUM reference trajectory with {len(self.reference_trajectory.poses_se3)} poses", LogLevel.DEBUG)
             return True
         except Exception as e:
-            self.logger.error(f"Error loading TUM reference: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error loading TUM reference", exception=e)
             return False
 
     def _load_kitti_reference(self) -> bool:
@@ -304,7 +304,7 @@ class ReferenceTrajectoryManager:
                 f"Loaded KITTI reference trajectory with {len(self.reference_trajectory.poses_se3)} poses", LogLevel.DEBUG)
             return True
         except Exception as e:
-            self.logger.error(f"Error loading KITTI reference: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error loading KITTI reference", exception=e)
             return False
 
     def update_reference_trajectory(self, msg):
@@ -335,7 +335,7 @@ class ReferenceTrajectoryManager:
                 f"Updated reference trajectory with {len(self.horizon_reference_data)} points", LogLevel.VERBOSE)
 
         except Exception as e:
-            self.logger.error(f"Error updating reference trajectory: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error updating reference trajectory", exception=e)
 
     def update_reference_path(self, msg: Path):
         """
@@ -365,7 +365,7 @@ class ReferenceTrajectoryManager:
                 f"Updated reference path with {len(self.reference_path_data)} points", LogLevel.VERBOSE)
 
         except Exception as e:
-            self.logger.error(f"Error updating reference path: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error updating reference path", exception=e)
 
     def get_reference_trajectory(self):
         """

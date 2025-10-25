@@ -328,7 +328,7 @@ class DataManager:
             self.results_dir = None
 
         except Exception as e:
-            self.logger.error(f"Error setting up directories: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error setting up directories", exception=e)
 
     def start_new_lap_trajectory(self, lap_number: int):
         """Start recording a new lap trajectory."""
@@ -432,7 +432,7 @@ class DataManager:
             return success
 
         except Exception as e:
-            self.logger.error(f"Error saving trajectory for lap {lap_number}: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error saving trajectory for lap {lap_number}", exception=e)
             return False
 
     def _save_trajectory_csv(self, lap_number: int, points: List[Dict]) -> bool:
@@ -451,7 +451,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving CSV trajectory: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving CSV trajectory", exception=e)
             return False
 
     def _save_trajectory_tum(self, lap_number: int, points: List[Dict]) -> bool:
@@ -477,7 +477,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving TUM trajectory: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving TUM trajectory", exception=e)
             return False
 
     def _save_trajectory_json(self, lap_number: int, trajectory_data: Dict) -> bool:
@@ -492,7 +492,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving JSON trajectory: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving JSON trajectory", exception=e)
             return False
 
     def _save_trajectory_pickle(self, lap_number: int, trajectory_data: Dict) -> bool:
@@ -507,7 +507,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving Pickle trajectory: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving Pickle trajectory", exception=e)
             return False
 
     def _save_trajectory_mat(self, lap_number: int, trajectory_data: Dict) -> bool:
@@ -562,7 +562,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving MAT trajectory: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving MAT trajectory", exception=e)
             return False
 
     def save_race_results_to_csv(self, race_data: Dict, filename_override: str = None) -> bool:
@@ -624,11 +624,11 @@ class DataManager:
                 self.save_consolidated_race_results(race_data)
                 return True
             except Exception as e:
-                self.logger.error(f"Failed to save consolidated results as fallback: {e}", LogLevel.NORMAL)
+                self.logger.error(f"Failed to save consolidated results as fallback", exception=e)
                 return False
 
         except Exception as e:
-            self.logger.error(f"Error saving race results: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error saving race results", exception=e)
             return False
 
     def save_evaluation_summary(self, evaluation_data: Dict) -> bool:
@@ -646,7 +646,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving evaluation summary: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error saving evaluation summary", exception=e)
             return False
 
     def get_trajectory_data(self, lap_number: int = None) -> Optional[Dict]:
@@ -706,7 +706,7 @@ class DataManager:
                 return trajectory.PosePath3D(positions, timestamps)
 
         except Exception as e:
-            self.logger.error(f"Error creating EVO trajectory: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error creating EVO trajectory", exception=e)
             return None
 
     def get_data_statistics(self) -> Dict[str, Any]:
@@ -988,7 +988,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race summary: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error saving race summary", exception=e)
             return False
 
     def save_consolidated_race_results(self, race_summary: Dict, race_evaluation: Dict = None) -> bool:
@@ -1034,7 +1034,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving consolidated race results: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error saving consolidated race results", exception=e)
             return False
 
     def save_race_evaluation(self, evaluation_data: Dict) -> bool:
@@ -1100,7 +1100,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race evaluation: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error saving race evaluation", exception=e)
             return False
 
     def save_race_evaluation_csv(self, evaluation_data: Dict) -> bool:
@@ -1192,7 +1192,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race evaluation CSV: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving race evaluation CSV", exception=e)
             return False
 
     def save_race_results_csv(self, race_results: Dict) -> bool:
@@ -1240,7 +1240,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race results CSV: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving race results CSV", exception=e)
             return False
 
     def create_run_directory(self, controller_name: str, experiment_id: str) -> str:
@@ -1299,7 +1299,7 @@ class DataManager:
             return experiment_dir
 
         except Exception as e:
-            self.logger.error(f"Error creating run directory: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error creating run directory", exception=e)
             return self.base_output_dir
 
     def save_ape_rpe_metrics_files(self, advanced_metrics: Dict) -> bool:
@@ -1338,7 +1338,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving APE/RPE metrics files: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error saving APE/RPE metrics files", exception=e)
             return False
 
     def generate_ape_rpe_plots(self, advanced_metrics: Dict) -> bool:
@@ -1543,5 +1543,5 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error generating APE/RPE plots: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error generating APE/RPE plots", exception=e)
             return False

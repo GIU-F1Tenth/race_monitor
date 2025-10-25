@@ -34,7 +34,6 @@ from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PointStamped, Twist, PoseWithCovarianceStamped
 from visualization_msgs.msg import Marker
 from ackermann_msgs.msg import AckermannDriveStamped
-# F1Tenth interface imports moved to conditional sections where used
 
 import numpy as np
 import tf_transformations
@@ -591,17 +590,17 @@ class RaceMonitor(Node):
                         self.research_evaluator.reference_trajectory = reference_trajectory
 
             except Exception as e:
-                self.logger.error(f"Failed to initialize research evaluator: {e}", LogLevel.MINIMAL)
+                self.logger.error(f"Failed to initialize research evaluator", exception=e)
 
         if RACE_EVALUATOR_AVAILABLE and self.config.get('enable_race_evaluation', True):
             try:
                 self.race_evaluator = create_race_evaluator(self.config)
             except Exception as e:
-                self.logger.error(f"Failed to initialize race evaluator: {e}", LogLevel.MINIMAL)
+                self.logger.error(f"Failed to initialize race evaluator", exception=e)
 
         if EVO_PLOTTER_AVAILABLE and self.config['auto_generate_graphs']:
             try:
-                self.evo_plotter = EVOPlotter(self.config)
+                self.evo_plotter = EVOPlotter(self.config, logger=self.logger, node=self)
             except Exception as e:
                 self.logger.warn(f"EVO plotter initialization failed: {e}", LogLevel.NORMAL)
                 self.evo_plotter = None
@@ -691,7 +690,7 @@ class RaceMonitor(Node):
             self._publish_race_status()
 
         except Exception as e:
-            self.logger.error(f"Error in odometry callback: {e}", LogLevel.MINIMAL)
+            self.logger.error(f"Error in odometry callback", exception=e)
 
     def _control_command_callback(self, msg: AckermannDriveStamped):
         """Handle control command messages for performance monitoring."""
@@ -792,7 +791,7 @@ class RaceMonitor(Node):
                     self.logger.info("Controller detection stopped after 30 seconds", LogLevel.NORMAL)
 
         except Exception as e:
-            self.logger.error(f"Error in controller detection: {e}", LogLevel.MINIMAL)
+            self.logger.error(f"Error in controller detection", exception=e)
 
     def _clicked_point_callback(self, msg: PointStamped):
         """Handle clicked point messages for manual start line setup."""
@@ -958,7 +957,7 @@ class RaceMonitor(Node):
 
     def _shutdown_node(self):
         """Shutdown the race monitor node."""
-        self.logger.shutdown("Race Monitor", LogLevel.MINIMAL)
+        self.logger.shutdown("Race Monitor")
 
         # Cancel the shutdown timer
         if hasattr(self, 'shutdown_timer'):
@@ -1028,7 +1027,7 @@ class RaceMonitor(Node):
                     pass
 
         except Exception as e:
-            self.logger.error(f"Error evaluating lap {lap_number}: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error evaluating lap {lap_number}", exception=e)
 
     def _perform_comprehensive_analysis(self, race_data: dict):
         """Perform comprehensive race analysis after completion."""
@@ -1109,7 +1108,7 @@ class RaceMonitor(Node):
                             evaluation_results)
                         self.logger.success("Research evaluation completed successfully", LogLevel.NORMAL)
                 except Exception as e:
-                    self.logger.error(f"Research evaluation failed: {e}", LogLevel.NORMAL)
+                    self.logger.error(f"Research evaluation failed", exception=e)
 
             if self.race_evaluator and all_trajectories:
                 # Perform custom race evaluation
@@ -1228,7 +1227,7 @@ class RaceMonitor(Node):
                     else:
                         self.logger.warn("Some visualization plots failed to generate", LogLevel.NORMAL)
                 except Exception as e:
-                    self.logger.error(f"Plot generation failed: {e}", LogLevel.NORMAL)
+                    self.logger.error(f"Plot generation failed", exception=e)
 
             # Save consolidated race_results.json file with all important information
             try:
@@ -1242,7 +1241,7 @@ class RaceMonitor(Node):
             self.logger.success("Comprehensive analysis completed!", LogLevel.NORMAL)
 
         except Exception as e:
-            self.logger.error(f"Error in comprehensive analysis: {e}", LogLevel.MINIMAL)
+            self.logger.error(f"Error in comprehensive analysis", exception=e)
 
     def _generate_race_summary(self, race_data: dict, trajectory_data: dict) -> dict:
         """Generate comprehensive race summary with detailed statistics."""
@@ -1320,14 +1319,13 @@ class RaceMonitor(Node):
                     # No advanced metrics available - this is normal for basic monitoring
                     summary['advanced_metrics'] = {}
             except Exception as e:
-                self.logger.error(
-                    f"Error calculating averaged metrics: {e}", LogLevel.NORMAL)
+                self.logger.error(f"Error calculating averaged metrics", exception=e)
                 summary['advanced_metrics'] = {}
 
             return summary
 
         except Exception as e:
-            self.logger.error(f"Error generating race summary: {e}", LogLevel.MINIMAL)
+            self.logger.error(f"Error generating race summary", exception=e)
             return {}
 
     def _calculate_averaged_metrics(self) -> dict:
@@ -1427,7 +1425,7 @@ class RaceMonitor(Node):
             return averaged_metrics
 
         except Exception as e:
-            self.logger.error(f"Error calculating averaged metrics: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error calculating averaged metrics", exception=e)
             return {}
 
     def _load_metrics_from_files(self) -> dict:
@@ -1485,7 +1483,7 @@ class RaceMonitor(Node):
             return detailed_metrics
 
         except Exception as e:
-            self.logger.error(f"Error loading metrics from files: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error loading metrics from files", exception=e)
             return {}
 
     def _experiment_directory_exists(self, controller_name: str, experiment_id: str) -> bool:
@@ -1634,7 +1632,7 @@ class RaceMonitor(Node):
 
     def destroy_node(self):
         """Clean up resources before node destruction."""
-        self.logger.shutdown("Race Monitor", LogLevel.MINIMAL)
+        self.logger.shutdown("Race Monitor")
 
         # Stop monitoring systems
         if self.config['enable_computational_monitoring']:
@@ -1685,7 +1683,7 @@ class RaceMonitor(Node):
                         
                         self.logger.success("✓ Comprehensive analysis completed successfully", LogLevel.NORMAL)
                     except Exception as e:
-                        self.logger.error(f"Failed to complete comprehensive analysis: {e}", LogLevel.MINIMAL)
+                        self.logger.error(f"Failed to complete comprehensive analysis", exception=e)
 
         super().destroy_node()
 

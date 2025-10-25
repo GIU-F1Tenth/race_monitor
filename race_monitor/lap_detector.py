@@ -399,6 +399,11 @@ class LapDetector:
         """
         self.last_crossing_time = timestamp
 
+        if self.race_completed:
+            if self.log_level in ["normal", "debug"]:
+                self.logger.info("Ignoring line crossing - race already completed", LogLevel.DEBUG)
+            return
+
         if not self.race_started:
             # First crossing - start the race
             self._start_race(timestamp)

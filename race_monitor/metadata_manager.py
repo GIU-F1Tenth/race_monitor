@@ -255,7 +255,7 @@ class MetadataManager:
 
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error saving metadata file: {e}", LogLevel.NORMAL)
+                self.logger.error(f"Error saving metadata file", exception=e)
             return ""
 
     def update_metadata(self, key: str, value: Any):

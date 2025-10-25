@@ -437,7 +437,7 @@ class RaceMonitor(Node):
                     'plot_style': self.plot_style,
                     'plot_color_scheme': self.plot_color_scheme
                 }
-                self.evo_plotter = EVOPlotter(plotter_config)
+                self.evo_plotter = EVOPlotter(plotter_config, node=self)
             else:
                 self.evo_plotter = None
 
