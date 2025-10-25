@@ -324,10 +324,6 @@ class ResearchTrajectoryEvaluator:
             return results
 
         try:
-            # For trajectory alignment, use a more flexible approach
-            # since reference trajectory uses synthetic timestamps (row indices)
-            # and race trajectory uses real ROS timestamps
-
             # First try with a larger time difference tolerance
             try:
                 traj_ref, traj_est = sync.associate_trajectories(
@@ -572,14 +568,13 @@ class ResearchTrajectoryEvaluator:
         except Exception as e:
             self.logger.error(f"Failed to save metrics for lap {lap_number}: {e}", LogLevel.NORMAL)
 
-        # Save filtered trajectory if available
         if lap_number in self.filtered_trajectories:
             filtered_dir = os.path.join(self.experiment_dir, 'filtered')
             tum_dir = os.path.join(filtered_dir, 'tum')
             os.makedirs(tum_dir, exist_ok=True)
             filtered_file = os.path.join(tum_dir, f'lap_{lap_number:03d}_filtered.tum')
             try:
-                file_interface.write_tum_trajectory_file(filtered_path, filtered_traj)
+                file_interface.write_tum_trajectory_file(filtered_file, self.filtered_trajectories[lap_number])
             except Exception as e:
                 self.logger.error(f"Failed to save filtered trajectory for lap {lap_number}: {e}", LogLevel.DEBUG)
 
