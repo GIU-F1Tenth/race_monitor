@@ -77,7 +77,7 @@ race_monitor:
       max_race_duration: 0
 
     # ========================================
-    # RESEARCH & ANALYSIS PARAMETERS
+    # ANALYSIS PARAMETERS
     # ========================================
 
     # Controller identification for research comparison
@@ -102,9 +102,15 @@ race_monitor:
     detailed_lap_analysis: true # Detailed per-lap breakdown
     comparative_analysis: true # Enable comparison
     statistical_significance: true # Calculate statistical significance tests
+    
+    # Race evaluation settings
+    enable_race_evaluation: true # Enable A-F grading system for race performance
+    grading_strictness: "normal" # Grading strictness: "lenient", "normal", "strict"
+    enable_comparison: false # Enable comparison with previous experiments
+    enable_recommendations: false # Generate performance recommendations
 
     # ========================================
-    # EVO INTEGRATION PARAMETERS
+    # EVO PARAMETERS
     # ========================================
 
     # Enable/disable trajectory evaluation
@@ -212,3 +218,17 @@ race_monitor:
 
     # Enable/disable CPU performance monitoring
     enable_computational_monitoring: false
+    
+    # Performance monitoring parameters
+    enable_performance_logging: true # Log performance metrics periodically
+    cpu_monitoring_interval: 1.0 # Interval for CPU monitoring (seconds)
+    performance_log_interval: 10.0 # How often to log performance summary (seconds)
+    
+    # Target performance thresholds
+    target_control_frequency_hz: 20.0 # Expected control loop frequency
+    max_acceptable_cpu_usage: 80.0 # Maximum acceptable CPU usage (%)
+    max_acceptable_memory_mb: 500.0 # Maximum acceptable memory usage (MB)
+    max_acceptable_latency_ms: 100.0 # Maximum acceptable processing latency (ms)
+    
+    # Monitoring window for averaging
+    monitoring_window_size: 100 # Number of samples to keep for statistics
