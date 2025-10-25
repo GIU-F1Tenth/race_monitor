@@ -212,8 +212,8 @@ Detailed results analysis and interpretation are available in [docs/RESULTS.md](
 │  │  Lap Timing   │  │   Trajectory   │  │  Performance   │  │
 │  │   Monitor     │  │    Analyzer    │  │    Monitor     │  │
 │  └───────┬───────┘  └────────┬───────┘  └────────┬───────┘  │
-│          │                   │                    │         │
-│  ┌───────▼──────────────────▼────────────────────▼───────┐  │
+│          │                   │                   │          │
+│  ┌───────▼───────────────────▼───────────────────▼───────┐  │
 │  │            Race Evaluator (Core Engine)               │  │
 │  └───────────────────────────┬───────────────────────────┘  │
 │  ┌──────────────┬────────────▼─────────────┬─────────────┐  │
@@ -346,7 +346,6 @@ Please see our contribution guidelines before submitting pull requests.
 
 - **Email**: @Mohammed-Azab - mohamed@azab.io
 - **GitHub**: [github.com/GIU-F1Tenth/race_monitor](https://github.com/GIU-F1Tenth/race_monitor)
-- **Institution**: German International University (GIU)
 - **Package**: ROS2 race_monitor
 - **Issues**: [GitHub Issue Tracker](https://github.com/GIU-F1Tenth/race_monitor/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/GIU-F1Tenth/race_monitor/discussions)

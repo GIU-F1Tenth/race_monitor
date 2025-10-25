@@ -180,23 +180,6 @@ jobs:
         run: |
           source /opt/ros/humble/setup.bash
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt','**/constraints.txt') }}
-
-      - name: Cache colcon build (install & build)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ws/build
-            ws/install
-            ws/log
-          key: ${{ runner.os }}-colcon-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-colcon-
-
       - name: Set up workspace structure
         shell: bash
         run: |
@@ -427,15 +410,6 @@ jobs:
               exit 1
             fi
           '
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-ros2-build-${{ github.run_id }}
-          path: |
-            ws/install/
-            ws/build/
-          retention-days: 3
 
   cleanup-on-failure:
     name: Cleanup Docker Image on Failure
