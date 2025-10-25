@@ -1,17 +1,94 @@
 name: Race Monitor CI
 
 on:
-  #push:
-    #branches: [main, dev]
   pull_request:
     branches: [main, dev]
-  schedule:
-    - cron: "0 0 * * *" # daily at midnight UTC
+  push:
+    branches: [main, dev]
+    paths:
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'constraints.txt'
+      - '.github/workflows/ci.yaml'
+  workflow_dispatch:
 
 env:
   ROS_DISTRO: humble
+  REGISTRY: ghcr.io
+  IMAGE_NAME: giu-f1tenth/race-monitor-ci
 
 jobs:
+  # Check if Docker files changed
+  check-docker-changes:
+    name: Check if Docker rebuild needed
+    runs-on: ubuntu-22.04
+    outputs:
+      docker-changed: ${{ steps.filter.outputs.docker }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Check for Docker-related changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'Dockerfile'
+              - 'requirements.txt'
+              - 'constraints.txt'
+
+  docker-build:
+    name: Build ubuntu-Ros2-Docker Image
+    runs-on: ubuntu-22.04
+    needs: check-docker-changes
+    # Only build if Docker files changed OR workflow was manually triggered
+    if: needs.check-docker-changes.outputs.docker-changed == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate safe Docker tag
+        id: image-tag
+        run: |
+          # Generate a safe tag without slashes
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, use pr-NUMBER format
+            TAG="pr-${{ github.event.pull_request.number }}"
+          else
+            # For branches, sanitize the ref name
+            TAG="${{ github.ref_name }}"
+            TAG="${TAG//\//-}"  # Replace / with -
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Generated Docker tag: ${TAG}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          no-cache: true
+
   python-lint:
     name: Python Code Quality
     runs-on: ubuntu-22.04
@@ -64,9 +141,17 @@ jobs:
           pip-audit -r requirements.txt || echo "Security audit completed"
 
   linux-ros2-build:
-    name: Linux ROS2 Build, Test & Integration
+    name: Test Race Monitor Pkg
     runs-on: ubuntu-22.04
-    needs: python-lint
+    needs: [python-lint, check-docker-changes, docker-build]
+    if: always() && needs.python-lint.result == 'success'
+    container:
+      # Use the newly built image if available, otherwise fallback to main
+      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/giu-f1tenth/race-monitor-ci:{0}', needs.docker-build.outputs.image-tag) || 'ghcr.io/giu-f1tenth/race-monitor-ci:main' }}
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout code
@@ -74,21 +159,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up ROS 2 Humble
+      - name: Source Ros2
+        shell: bash
         run: |
-          sudo apt update
-          sudo apt install -y software-properties-common
-          sudo add-apt-repository universe
-          sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
-          sudo apt update
-          sudo apt install -y ros-humble-desktop python3-rosdep
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt','**/constraints.txt') }}
+          source /opt/ros/humble/setup.bash
 
       - name: Cache colcon build (install & build)
         uses: actions/cache@v4
@@ -101,24 +175,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-colcon-
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            python3-colcon-common-extensions \
-            build-essential \
-            python3-rosdep \
-            ros-humble-rclpy \
-            ros-humble-std-msgs \
-            ros-humble-nav-msgs \
-            ros-humble-geometry-msgs \
-            ros-humble-visualization-msgs \
-            ros-humble-ackermann-msgs \
-            ros-humble-tf2-ros \
-            ros-humble-tf-transformations \
-            python3-transforms3d
-
       - name: Set up workspace structure
+        shell: bash
         run: |
           mkdir -p ws/src/race_monitor
           # Copy all files directly to race_monitor package directory
@@ -130,26 +188,94 @@ jobs:
           done
           cd ws
 
-      - name: Configure rosdep & install package deps
+      - name: Verify ROS2 environment
+        shell: bash
         run: |
-          cd ws
-          sudo rosdep init || true
-          rosdep update || true
-          rosdep install --from-paths src --ignore-src -r -y || true
-
-      - name: Install Python dependencies
-        run: |
-          cd ws/src/race_monitor
-          python3 -m pip install --upgrade pip
-          pip3 install -c constraints.txt -r requirements.txt
+          echo "=== Starting ROS2 Environment Verification ==="
+          
+          # Verify rosdep is initialized
+          if [ ! -d "/etc/ros/rosdep" ]; then
+            echo "⚠️  rosdep not initialized, initializing now..."
+            rosdep init || echo "rosdep already initialized"
+          else
+            echo "✓ rosdep already initialized"
+          fi
+          
+          # Update rosdep
+          echo "=== Updating rosdep ==="
+          rosdep update || echo "rosdep update completed"
+          
+          # Check what's installed
+          echo ""
+          echo "=== Checking installed ROS2 packages ==="
+          dpkg -l | grep -i "ros-humble" | grep -E "(tf|transform)" || echo "No ROS2 tf packages found via dpkg"
+          
+          echo ""
+          echo "=== Checking pip packages ==="
+          pip3 list | grep -iE "(transform|tf)" || echo "No transform packages found via pip"
+          
+          echo ""
+          echo "=== Searching for tf_transformations files ==="
+          find /opt/ros/humble /usr/local/lib /usr/lib -name "*tf_transformation*" 2>/dev/null | head -20 || echo "No tf_transformations files found"
+          
+          echo ""
+          echo "=== Python site-packages directories ==="
+          python3 -c "import site; print('\n'.join(site.getsitepackages()))"
+          
+          echo ""
+          echo "=== Testing Python import WITHOUT ROS2 sourcing ==="
+          python3 -c "import sys; print('sys.path:', sys.path)" || true
+          python3 -c "import tf_transformations; print('✓ tf_transformations available WITHOUT sourcing')" 2>&1 || echo "✗ tf_transformations NOT available without sourcing (expected)"
+          
+          echo ""
+          echo "=== Checking Python paths AFTER sourcing ROS2 ==="
+          bash -c "source /opt/ros/humble/setup.bash && echo 'PYTHONPATH:' && echo \$PYTHONPATH | tr ':' '\n'"
+          
+          echo ""
+          echo "=== Testing Python import WITH ROS2 sourcing ==="
+          bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import sys; print(\"Number of paths:\", len(sys.path)); import tf_transformations; print(\"✓ tf_transformations available WITH sourcing\")'" || {
+            echo "✗ tf_transformations import failed even with sourcing"
+            echo ""
+            echo "=== Attempting to install ros-humble-tf-transformations ==="
+            apt-get update && apt-get install -y ros-humble-tf-transformations || echo "Package already installed or not available"
+            echo ""
+            echo "=== Checking for tf_transformations Python module location ==="
+            find /opt/ros/humble -name "*tf_transformations*" -type f 2>/dev/null || echo "No tf_transformations files found"
+            echo ""
+            echo "=== Re-testing import after package check ==="
+            bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import tf_transformations; print(\"✓ tf_transformations available after re-check\")'" || {
+              echo "✗ Still failed. Installing transforms3d as alternative..."
+              pip3 install transforms3d
+              echo "✓ transforms3d installed (alternative to tf_transformations)"
+            }
+          }
+          
+          echo ""
+          echo "=== ROS2 Environment Verification Complete ==="
 
       - name: Build package
+        shell: bash
         run: |
           cd ws
+          echo "=== Starting colcon build ==="
+          echo "Working directory: $(pwd)"
+          echo "ROS_DISTRO: $ROS_DISTRO"
+          
           source /opt/ros/humble/setup.bash
-          colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release
+          
+          echo "AMENT_PREFIX_PATH: $AMENT_PREFIX_PATH"
+          echo "CMAKE_PREFIX_PATH: $CMAKE_PREFIX_PATH"
+          echo ""
+          
+          echo "=== Building race_monitor package ==="
+          colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+
+          
+          echo ""
+          echo "=== Build completed ==="
+          ls -la install/ || echo "Install directory not found"
 
       - name: Run package tests (colcon)
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
@@ -160,36 +286,75 @@ jobs:
           colcon test-result --verbose || true
 
       - name: Minimal import & diagnostics
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
           source install/setup.bash || true
-          python3 - <<'PY'
+          
+          echo "=== Import Diagnostics ==="
+          echo "Working directory: $(pwd)"
+          echo "PYTHONPATH: $PYTHONPATH"
+          echo "ROS_DISTRO: $ROS_DISTRO"
+          echo ""
+
+          python3 - <<'EOF'
           import sys
           import importlib
           import numpy as np
+          
+          print('=== Python Environment ===')
           print('Python:', sys.version.splitlines()[0])
+          print('Executable:', sys.executable)
+          print('')
+          
+          print('=== Package Versions ===')
           print('NumPy:', np.__version__)
+          
+          print('')
+          print('=== Testing transforms3d import ===')
           try:
               import transforms3d
-              print('transforms3d:', transforms3d.__version__)
+              print('✓ transforms3d:', transforms3d.__version__)
+              print('  Location:', transforms3d.__file__)
           except Exception as e:
-              print('transforms3d import failed:', e)
+              print('✗ transforms3d import failed:', e)
+              import traceback
+              traceback.print_exc()
+          
+          print('')
+          print('=== Testing tf_transformations import ===')
           try:
               import tf_transformations
-              print('tf_transformations available')
+              print('✓ tf_transformations available')
+              print('  Location:', tf_transformations.__file__)
           except Exception as e:
-              print('tf_transformations import FAILED:', e)
-          # Try importing package
+              print('✗ tf_transformations import FAILED:', e)
+              print('  Python sys.path:')
+              for i, p in enumerate(sys.path):
+                  print(f'    [{i}] {p}')
+              import traceback
+              traceback.print_exc()
+              raise
+          
+          print('')
+          print('=== Testing race_monitor import ===')
           try:
               import race_monitor
-              print('race_monitor import: OK')
+              print('✓ race_monitor import: OK')
+              print('  Location:', race_monitor.__file__)
           except Exception as e:
-              print('race_monitor import: FAILED', e)
+              print('✗ race_monitor import: FAILED', e)
+              import traceback
+              traceback.print_exc()
               raise
-          PY
+          
+          print('')
+          print('=== All imports successful ===')
+          EOF
 
       - name: ROS2 Integration Tests
+        shell: bash
         run: |
           cd ws
           source /opt/ros/humble/setup.bash
@@ -251,19 +416,21 @@ jobs:
           PY
 
       - name: Test Launch File
+        shell: bash
         run: |
           cd ws
-          source /opt/ros/humble/setup.bash
-          source install/setup.bash
-
+          
           echo "Testing launch file..."
           timeout 30s bash -c '
+            export PATH="/opt/ros/humble/bin:${PATH}"
+            source /opt/ros/humble/setup.bash
+            source install/setup.bash
+            
             ros2 launch race_monitor race_monitor.launch.py &
             LAUNCH_PID=$!
             sleep 20
             if kill -0 $LAUNCH_PID 2>/dev/null; then
               echo "✓ Launch file started successfully (PID $LAUNCH_PID)"
-              ros2 node list || true
               kill $LAUNCH_PID || true
               exit 0
             else
@@ -273,19 +440,21 @@ jobs:
           '
 
       - name: Test Node Executable
+        shell: bash
         run: |
           cd ws
-          source /opt/ros/humble/setup.bash
-          source install/setup.bash
 
           echo "Testing node executable..."
           timeout 18s bash -c '
+            export PATH="/opt/ros/humble/bin:${PATH}"
+            source /opt/ros/humble/setup.bash
+            source install/setup.bash
+            
             ros2 run race_monitor race_monitor &
             NODE_PID=$!
             sleep 12
             if kill -0 $NODE_PID 2>/dev/null; then
               echo "✓ Node executable started successfully (PID $NODE_PID)"
-              ros2 node list || true
               kill $NODE_PID || true
               exit 0
             else
