@@ -20,28 +20,38 @@ A comprehensive web interface for the F1Tenth Race Monitor system, providing rea
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Docker and Docker Compose
-- Ports 3000 (frontend) and 8000 (backend) available
-
-### Starting the Web UI
+### Option 1: Quick Development Start (Recommended)
 ```bash
-# Navigate to the web UI directory
 cd web_ui
+./quick-start.sh
+```
+- Fastest way to get started
+- No Docker required
+- Uses ports 3001 (frontend) and 8001 (backend)
+- Access at http://localhost:3001
 
-# Start all services
+### Option 2: Docker Production Mode
+```bash
+cd web_ui
 ./start.sh
 ```
+- Production-ready with Docker
+- Ports 3000 (frontend) and 8080 (backend)
+- Access at http://localhost:3000
 
-This will:
-1. Build and start both frontend and backend services
-2. Set up volume mounts for your configuration and data files
-3. Configure automatic reloading for development
+### Option 3: Dynamic Port Allocation
+```bash
+cd web_ui
+./dev-dynamic.sh
+```
+- Automatically finds free ports
+- Useful when default ports are occupied
+- Shows allocated ports on startup
 
 ### Access Points
-- **Web Interface**: http://localhost:3000
-- **API Documentation**: http://localhost:8000/docs
-- **Backend Health**: http://localhost:8000/api/health
+- **Web Interface**: http://localhost:3001 (quick-start) or http://localhost:3000 (docker)
+- **API Documentation**: http://localhost:8001/docs (quick-start) or http://localhost:8080/docs (docker)
+- **Backend Health**: http://localhost:8001/api/health (quick-start) or http://localhost:8080/api/health (docker)
 
 ## 🏗️ Architecture
 
@@ -145,20 +155,37 @@ Complex configuration sections are organized into:
 
 ## 🛠️ Development
 
-### Local Development Setup
+### Initial Setup
 ```bash
-# Backend development
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+# One-time setup
+./setup-dev.sh
+```
 
-# Frontend development (separate terminal)
-cd frontend
-npm install
+This installs all dependencies for both frontend and backend.
+
+### Development Workflow
+
+**Quick Start (No Docker):**
+```bash
+./quick-start.sh
+# Frontend: http://localhost:3001
+# Backend: http://localhost:8001
+```
+
+**Dynamic Ports (Auto-allocate):**
+```bash
+./dev-dynamic.sh
+# Displays allocated ports on startup
+```
+
+**Manual Development:**
+```bash
 npm run dev
 ```
 
 ### API Endpoints
+- `GET /api/health` - Service health check
+- `GET /api/info/ports` - Port configuration info
 - `GET /api/config/list` - List configuration files
 - `GET /api/config/{filename}` - Get configuration content
 - `POST /api/config/{filename}` - Save configuration
@@ -166,6 +193,13 @@ npm run dev
 - `GET /api/data/summary` - Data summary
 - `POST /api/evo/analyze/{experiment_id}` - Run EVO analysis
 - `WebSocket /ws/live` - Real-time data stream
+
+### Available Scripts
+- `./quick-start.sh` - Quick development start (ports 3001/8001)
+- `./start.sh` - Docker production mode (ports 3000/8080)
+- `./dev-dynamic.sh` - Development with dynamic port allocation
+- `./setup-dev.sh` - One-time development environment setup
+- `./port_manager.py` - Port allocation utility
 
 ### Configuration
 Environment variables:
@@ -198,38 +232,51 @@ ENVIRONMENT=production
 
 ### Common Issues
 
+**Port already in use:**
+```bash
+# Use dynamic port allocation
+./dev-dynamic.sh
+
+# Or manually kill processes
+sudo fuser -k 3001/tcp 8001/tcp
+```
+
 **Backend not starting:**
 ```bash
-# Check logs
-docker-compose logs backend
-
-# Common solutions
-docker-compose down && docker-compose up --build
+# Check backend logs
+cd backend
+source venv/bin/activate
+python main.py  # Run directly to see errors
 ```
 
 **Frontend build errors:**
 ```bash
-# Clear node modules and reinstall
 cd frontend
 rm -rf node_modules package-lock.json
 npm install
 ```
 
 **Configuration not loading:**
-- Ensure config files are in the correct directory
+- Ensure config files are in `../config/` directory
 - Check file permissions
 - Verify YAML syntax
 
 **EVO integration issues:**
-- Verify EVO library installation
+- Verify EVO library installation: `python -c "import evo"`
 - Check trajectory file formats
 - Ensure reference trajectory exists
 
 ### Performance Optimization
-- Use production builds for deployment
-- Configure proper resource limits
+- Use `./start.sh` (Docker) for production deployment
+- Configure proper resource limits in `docker/docker-compose.yml`
 - Monitor memory usage for large datasets
 - Enable caching for static assets
+
+### Port Configuration
+The system supports flexible port configuration:
+- **Default Development**: 3001 (frontend), 8001 (backend)
+- **Docker Production**: 3000 (frontend), 8080 (backend)
+- **Dynamic Mode**: Auto-allocated free ports
 
 ## 📝 Contributing
 
@@ -238,23 +285,6 @@ npm install
 - Backend: Black + isort for Python
 - Commit messages: Conventional commits format
 
-### Testing
-```bash
-# Frontend tests
-cd frontend && npm test
-
-# Backend tests
-cd backend && pytest
-```
-
 ## 📄 License
 
-This project is part of the F1Tenth Race Monitor system. See the main project license for details.
-
-## 🤝 Support
-
-For issues and questions:
-1. Check the troubleshooting section
-2. Review API documentation at `/docs`
-3. Check container logs for errors
-4. Ensure all dependencies are properly installed
+This project is part of the Mechabyte Roboracer Race Monitor system. See the main project license for details.

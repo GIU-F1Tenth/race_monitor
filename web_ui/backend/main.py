@@ -1,6 +1,9 @@
 """
 Race Monitor Web UI Backend
-FastAPI application for race monitoring and analysis
+
+FastAPI application providing REST API and WebSocket endpoints for race monitoring
+and trajectory analysis. Supports configuration management, data analysis, live monitoring,
+and EVO trajectory evaluation integration.
 """
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
@@ -19,7 +22,7 @@ import asyncio
 from datetime import datetime
 import numpy as np
 
-# Import our custom modules - simplified for initial testing
+# Import custom modules
 try:
     from config_manager import ConfigManager
     from data_analyzer import DataAnalyzer
@@ -27,7 +30,7 @@ try:
     from live_monitor import LiveMonitor
 except ImportError as e:
     print(f"Warning: Some modules not available: {e}")
-    # Create placeholder classes for testing
+    # Placeholder classes for testing
     class ConfigManager:
         def list_configs(self): return {"configs": [], "templates": {}, "config_dir": ""}
         def get_config(self, filename): return ""
@@ -55,9 +58,8 @@ except ImportError as e:
         async def start(self): return {"status": "disabled"}
         async def stop(self): pass
 
-# Dynamic port configuration
 def get_frontend_origins():
-    """Get allowed origins for CORS based on dynamic port configuration"""
+    """Get allowed origins for CORS based on dynamic port configuration."""
     origins = [
         "http://localhost:3000", 
         "http://localhost:5173",  # Default Vite port
@@ -89,7 +91,7 @@ def get_frontend_origins():
 
 app = FastAPI(title="Race Monitor Web UI", version="1.0.0")
 
-# Enable CORS for frontend with dynamic origins
+# Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_frontend_origins(),
@@ -130,7 +132,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Pydantic models
+# Request/Response models
 class ConfigUpdate(BaseModel):
     content: str
     filename: str

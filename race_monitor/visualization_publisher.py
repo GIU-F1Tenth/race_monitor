@@ -24,6 +24,7 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
 import rclpy
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
 # EVO imports
 try:
@@ -176,10 +177,10 @@ class VisualizationPublisher:
             # Calculate line length for logging
             import numpy as np
             line_length = np.linalg.norm(np.array(self.start_line_p2) - np.array(self.start_line_p1))
-            self.logger.debug(f"Published enhanced start line (length: {line_length:.2f}m) in frame '{self.frame_id}'")
+            self.logger.verbose(f"Published enhanced start line (length: {line_length:.2f}m) in frame '{self.frame_id}'")
 
         except Exception as e:
-            self.logger.error(f"Error publishing start line marker: {e}")
+            self.logger.error(f"Error publishing start line marker: {e}", LogLevel.DEBUG)
 
     def publish_start_line_markers(self, p1: List[float], p2: List[float], frame_id: str = None):
         """
@@ -206,7 +207,7 @@ class VisualizationPublisher:
             self.publish_start_line_marker()
 
         except Exception as e:
-            self.logger.error(f"Error publishing start line markers with specific points: {e}")
+            self.logger.error(f"Error publishing start line markers with specific points: {e}", LogLevel.DEBUG)
 
     def publish_raceline_markers(self, reference_points: List[Dict[str, float]] = None,
                                  evo_trajectory=None, csv_data: List[List[str]] = None):
@@ -226,10 +227,10 @@ class VisualizationPublisher:
             elif csv_data:
                 self._publish_raceline_from_csv_data(csv_data)
             else:
-                self.logger.debug("No raceline data available for visualization")
+                self.logger.verbose("No raceline data available for visualization")
 
         except Exception as e:
-            self.logger.error(f"Error publishing raceline markers: {e}")
+            self.logger.error(f"Error publishing raceline markers: {e}", LogLevel.DEBUG)
 
     def _publish_raceline_from_points(self, reference_points: List[Dict[str, float]]):
         """Publish raceline from reference points with enhanced visualization."""
@@ -259,7 +260,7 @@ class VisualizationPublisher:
             points.append([point.x, point.y, point.z])
 
         self.publish_marker(marker)
-        self.logger.debug(f"Published raceline with {len(reference_points)} points")
+        self.logger.verbose(f"Published raceline with {len(reference_points)} points")
 
         # Add start and end markers (balls)
         if len(points) >= 2:
@@ -302,8 +303,7 @@ class VisualizationPublisher:
 
         if marker.points:
             self.publish_marker(marker)
-            self.logger.debug(f"Published raceline from CSV with {len(marker.points)} points")
-
+            self.logger.verbose(f"Published raceline from CSV with {len(marker.points)} points")
             # Add start and end markers (balls)
             if len(points) >= 2:
                 self._publish_start_end_markers(points[0], points[-1])
@@ -336,7 +336,7 @@ class VisualizationPublisher:
             marker.points.append(point)
 
         self.publish_marker(marker)
-        self.logger.debug(f"Published EVO raceline with {len(positions)} points")
+        self.logger.verbose(f"Published EVO raceline with {len(positions)} points")
 
     def publish_trajectory_markers(self, trajectory_data: List[Dict[str, float]],
                                    marker_type: str = "current_lap"):
@@ -372,10 +372,10 @@ class VisualizationPublisher:
                 marker.points.append(point)
 
             self.publish_marker(marker)
-            self.logger.debug(f"Published {marker_type} trajectory with {len(trajectory_data)} points")
+            self.logger.verbose(f"Published {marker_type} trajectory with {len(trajectory_data)} points")
 
         except Exception as e:
-            self.logger.error(f"Error publishing trajectory markers: {e}")
+            self.logger.error(f"Error publishing trajectory markers: {e}", LogLevel.DEBUG)
 
     def publish_race_status_marker(self, race_status: str, current_lap: int,
                                    total_laps: int, position: List[float] = None):
@@ -402,10 +402,10 @@ class VisualizationPublisher:
             marker.action = Marker.DELETEALL
 
             self.publish_marker(marker)
-            self.logger.info(f"Cleared all markers in namespace: {marker_namespace}")
+            self.logger.verbose(f"Cleared all markers in namespace: {marker_namespace}")
 
         except Exception as e:
-            self.logger.error(f"Error clearing markers: {e}")
+            self.logger.error(f"Error clearing markers: {e}", LogLevel.DEBUG)
 
     def publish_lap_completion_marker(self, lap_number: int, lap_time: float,
                                       position: List[float] = None):
@@ -471,10 +471,10 @@ class VisualizationPublisher:
 
             self.publish_marker(end_marker)
 
-            self.logger.debug("Published start and end markers for raceline")
+            self.logger.verbose("Published start and end markers for raceline")
 
         except Exception as e:
-            self.logger.error(f"Error publishing start/end markers: {e}")
+            self.logger.error(f"Error publishing start/end markers: {e}", LogLevel.DEBUG)
 
     def _is_numeric(self, value: str) -> bool:
         """Check if a string value is numeric."""

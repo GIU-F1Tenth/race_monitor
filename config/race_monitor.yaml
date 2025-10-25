@@ -1,209 +1,253 @@
 race_monitor:
   ros__parameters:
-    # ========================================
-    # RACE MONITORING PARAMETERS
-    # ========================================
-
-    # Start/finish line configuration
-    start_line_p1: [0.0, -2.0] # Bottom point of start line [x, y]
-    start_line_p2: [0.0, 2.0] # Top point of start line [x, y]
-    required_laps: 7 # Number of laps to complete race
-    debounce_time: 2.0 # Debounce time for lap detection (seconds)
-    output_file: "race_results.json" # CSV file for race results
-    frame_id: "map" # Frame ID for visualization
-
-    # Lap detection direction configuration
+    # ═══════════════════════════════════════════════════════════════════════════
+    # CORE RACE CONFIGURATION
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Essential parameters for race monitoring and lap detection
+    
+    # --- Start/Finish Line Definition ---
+    # Define the start/finish line as two points in the map frame
+    start_line_p1: [0.0, -2.0]  # First endpoint [x, y] in meters
+    start_line_p2: [0.0, 2.0]   # Second endpoint [x, y] in meters
+    
+    # --- Race Requirements ---
+    required_laps: 7              # Number of laps required to complete the race
+    debounce_time: 2.0            # Minimum time (seconds) between lap detections
+    frame_id: "map"               # TF frame for visualization and coordinates
+    
+    # --- Lap Detection Configuration ---
     lap_detection:
-      # Expected crossing direction: "any", "positive", "negative"
-      # - "any": Accept crossings in any direction
-      # - "positive": Only accept crossings in positive normal direction (right for vertical line)
-      # - "negative": Only accept crossings in negative normal direction (left for vertical line)
+      # Direction validation for lap counting
+      # Options: "any" (both directions), "positive" (right/clockwise), "negative" (left/counterclockwise)
       expected_direction: "any"
-      # Enable direction validation based on vehicle heading
+      # Enable validation based on vehicle heading angle
       validate_heading_direction: false
-      # Log level for lap detection: "minimal", "normal", "debug"
-      log_level: "normal"
 
-    # ========================================
-    # DIRECTORY CONFIGURATION
-    # ========================================
+    # ═══════════════════════════════════════════════════════════════════════════
+    # LOGGING & DEBUGGING
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Control verbosity of console output and diagnostic information
+    
+    # Log verbosity level
+    # • "minimal"  → Only critical events and final results
+    # • "normal"   → Standard operational messages (recommended for racing)
+    # • "debug"    → Detailed diagnostic information for troubleshooting
+    # • "verbose"  → Maximum detail including all intermediate calculations
+    log_level: "normal"
 
-    # Base directory for all race results and data storage
-    # Default: "" (uses package's data/ directory)
-    # You can specify:
-    #   - Empty string "" to use default: <package_share>/data/
-    #   - Relative path "custom_dir" resolves to: <package_share>/custom_dir/
-    #   - Absolute path "/absolute/path/to/dir" uses as-is
+    # ═══════════════════════════════════════════════════════════════════════════
+    # DIRECTORY & FILE MANAGEMENT
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Configure where race data, results, and outputs are stored
+    
+    # Base directory for all race data
+    # • Empty string "" → Uses package's data/ directory (default)
+    # • Relative path   → Resolves relative to package share directory
+    # • Absolute path   → Uses specified directory as-is
     results_dir: ""
-
-    # ========================================
+    
+    # ═══════════════════════════════════════════════════════════════════════════
     # RACE ENDING CONDITIONS
-    # ========================================
-
-    # Race ending mode: "lap_complete", "crash", "manual"
-    # - lap_complete: Race ends when required laps are completed
-    # - crash: Race ends when crash is detected
-    # - manual: Race continues until node is manually killed
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Define how and when the race monitoring should terminate
+    
+    # Race ending mode
+    # • "lap_complete" → End when required laps are finished (standard racing)
+    # • "crash"        → End when vehicle crash is detected (safety testing)
+    # • "manual"       → Continue until manually stopped (development/testing)
     race_ending_mode: "lap_complete"
-
-    # Crash detection parameters (only used when race_ending_mode is "crash")
+    
+    # Auto-shutdown behavior after race completion
+    auto_shutdown_on_race_complete: true  # Automatically shutdown node when race ends
+    shutdown_delay_seconds: 5.0           # Delay (seconds) before shutdown for data processing
+    
+    # --- Crash Detection Settings ---
+    # Active only when race_ending_mode is "crash"
     crash_detection:
       enable_crash_detection: true
-      # Maximum allowed stationary time before considering crash (seconds)
-      max_stationary_time: 5.0
-      # Minimum velocity threshold to consider vehicle as moving (m/s)
-      min_velocity_threshold: 0.1
-      # Maximum allowed time without odometry updates (seconds)
-      max_odometry_timeout: 3.0
-      # Enable collision detection based on sudden velocity changes
-      enable_collision_detection: true
-      # Velocity change threshold for collision detection (m/s)
-      collision_velocity_threshold: 2.0
-      # Time window for collision detection (seconds)
-      collision_detection_window: 0.5
-
-    # Manual mode parameters (only used when race_ending_mode is "manual")
+      max_stationary_time: 5.0              # Max time (s) vehicle can be stationary
+      min_velocity_threshold: 0.1           # Min velocity (m/s) to consider moving
+      max_odometry_timeout: 3.0             # Max time (s) without odometry updates
+      enable_collision_detection: true      # Detect sudden velocity changes
+      collision_velocity_threshold: 2.0     # Velocity change (m/s) indicating collision
+      collision_detection_window: 0.5       # Time window (s) for collision detection
+    
+    # --- Manual Mode Settings ---
+    # Active only when race_ending_mode is "manual"
     manual_mode:
-      # Save intermediate results periodically even if race doesn't end
-      save_intermediate_results: true
-      # Interval for saving intermediate results (seconds)
-      save_interval: 30.0
-      # Maximum race duration before automatic safety stop (seconds, 0 = no limit)
-      max_race_duration: 0
+      save_intermediate_results: true       # Periodically save results during race
+      save_interval: 30.0                   # Interval (s) for saving intermediate results
+      max_race_duration: 0                  # Max duration (s) before auto-stop (0 = unlimited)
 
-    # ========================================
-    # RESEARCH & ANALYSIS PARAMETERS
-    # ========================================
-
-    # Controller identification for research comparison
-    controller_name: "" # Name of the controller being tested
-
-    # Smart controller detection settings
-    enable_smart_controller_detection: true # Automatically detect controller from topic publishers (only when controller_name is empty)
+    # ═══════════════════════════════════════════════════════════════════════════
+    # EXPERIMENT IDENTIFICATION
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Metadata for organizing and comparing experiments
+    
+    # Controller identification
+    controller_name: ""                     # Name of controller being tested (empty = auto-detect)
+    enable_smart_controller_detection: true # Auto-detect controller from ROS topics
+    
     test_description: "Controller performance evaluation and analysis"
 
-    # Auto-shutdown settings
-    auto_shutdown_on_race_complete: true # Automatically shutdown node when race is completed
-    shutdown_delay_seconds: 5.0 # Delay before shutdown to allow final data processing
-
-    # Advanced metrics for current controller analysis
-    enable_advanced_metrics: true # Enable comprehensive metric calculations
-    calculate_all_statistics: true # Calculate mean, median, std, min, max (not just RMSE)
-    analyze_rotation_errors: true # Include orientation analysis
-    enable_geometric_analysis: true # Arc length, curvature analysis
-    enable_filtering_analysis: true # Apply and analyze trajectory filtering
-
-    # Analysis evaluation modes
-    detailed_lap_analysis: true # Detailed per-lap breakdown
-    comparative_analysis: true # Enable comparison
-    statistical_significance: true # Calculate statistical significance tests
-
-    # ========================================
-    # EVO INTEGRATION PARAMETERS
-    # ========================================
-
-    # Enable/disable trajectory evaluation
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TRAJECTORY EVALUATION (EVO Odomotry)
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Configure when and how to evaluate trajectory quality using EVO library
+    
     enable_trajectory_evaluation: true
+    
+    # Evaluation timing (choose one, others should be 0)
+    evaluation_interval_seconds: 0.0        # Time-based: evaluate every X seconds (0 = disabled)
+    evaluation_interval_laps: 1             # Lap-based: evaluate every X laps (0 = disabled)
+    evaluation_interval_meters: 0.0         # Distance-based: evaluate every X meters (0 = disabled)
+    
+    # --- Reference Trajectory ---
+    # Optional reference path for comparison and error calculation
+    reference_trajectory_file: ""           # Path to reference trajectory file (empty = no reference)
+    reference_trajectory_format: "csv"      # Format: "csv", "tum", or "kitti"
+    # Supported path formats:
+    # • "trajectory.csv"           → Looks in package's ref_trajectory/ directory
+    # • "custom/path/traj.csv"     → Relative to package share directory
+    # • "/absolute/path/traj.csv"  → Absolute path
 
-    # Evaluation timing options (choose one):
-    # Option 1: Time-based evaluation (evaluate every X seconds)
-    evaluation_interval_seconds: 0.0
+    # ═══════════════════════════════════════════════════════════════════════════
+    # ANALYSIS & METRICS CONFIGURATION
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Control which analyses and metrics are calculated
+    
+    # --- Core Analysis Features ---
+    enable_advanced_metrics: true           # Calculate comprehensive trajectory metrics
+    calculate_all_statistics: true          # Calculate mean/median/std/min/max (not just RMSE)
+    analyze_rotation_errors: true           # Include orientation/heading analysis
+    enable_geometric_analysis: true         # Arc length, curvature, path efficiency
+    enable_filtering_analysis: true         # Apply and analyze trajectory filtering
+    
+    # --- Analysis Depth ---
+    detailed_lap_analysis: true             # Generate per-lap detailed breakdowns
+    comparative_analysis: true              # Enable cross-experiment comparison
+    statistical_significance: true          # Calculate statistical significance tests
+    
+    # --- Race Evaluation (A-F Grading) ---
+    enable_race_evaluation: true            # Enable automated performance grading
+    grading_strictness: "normal"            # Grading strictness: "lenient", "normal", "strict"
+    enable_comparison: false                # Compare with previous experiments
+    enable_recommendations: false           # Generate performance improvement suggestions
 
-    # Option 2: Lap-based evaluation (evaluate every X laps)
-    evaluation_interval_laps: 1 # 0 = disable lap-based evaluation
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TRAJECTORY METRICS
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Specific metrics to calculate for trajectory quality assessment
+    
+    # --- Quality Metrics ---
+    evaluate_smoothness: true               # Trajectory smoothness (jerk, acceleration)
+    evaluate_consistency: true              # Lap-to-lap consistency
+    evaluate_efficiency: true               # Path efficiency vs optimal line
+    evaluate_aggressiveness: true           # Driving style aggressiveness
+    evaluate_stability: true                # Control stability metrics
+    
+    # --- Advanced EVO Metrics ---
+    # Pose relations for error calculation
+    pose_relations: 
+      - "translation_part"                  # Position errors only
+      - "rotation_part"                     # Orientation errors only
+      - "full_transformation"               # Combined pose errors
+    
+    # Statistical measures to calculate
+    statistics_types: 
+      - "rmse"                              # Root mean square error
+      - "mean"                              # Mean error
+      - "median"                            # Median error
+      - "std"                               # Standard deviation
+      - "min"                               # Minimum error
+      - "max"                               # Maximum error
+      - "sse"                               # Sum of squared errors
 
-    # Option 3: Distance-based evaluation (evaluate every X meters)
-    evaluation_interval_meters: 0.0 # 0 = disable distance-based evaluation
-
-    # ========================================
-    # REFERENCE TRAJECTORY CONFIGURATION
-    # ========================================
-
-    # Reference trajectory file path
-    # Default: "" (no reference trajectory)
-    # You can specify:
-    #   - Just filename "ref_trajectory.csv" looks in: <package_share>/ref_trajectory/
-    #   - Relative path "custom_dir/traj.csv" resolves to: <package_share>/custom_dir/traj.csv
-    #   - Absolute path "/absolute/path/to/trajectory.csv" uses as-is
-    #
-    # To use: Place your reference trajectory file in race_monitor/ref_trajectory/
-    # and set this to the filename, e.g., "ref_trajectory.csv"
-    reference_trajectory_file: ""
-
-    # Reference trajectory format: csv, tum, kitti
-    reference_trajectory_format: "csv"
-
-    # ========================================
-    # ADVANCED FILE OUTPUT FOR RESEARCH
-    # ========================================
-
-    # Enhanced data export
-    export_to_pandas: true # Export data to pandas DataFrame
-    save_detailed_statistics: true # Save comprehensive statistics
-    save_filtered_trajectories: true # Save both raw and filtered trajectories
-    export_research_summary: true # Generate research-ready summary
-
-    # Research file formats
-    output_formats: ["csv", "json", "pickle", "mat"] # Multiple formats for analysis tools
-    include_timestamps: false # Include detailed timestamp information
-    save_intermediate_results: true # Save results after each lap
-
-    # ========================================
-    # TRAJECTORY ANALYSIS SETTINGS
-    # ========================================
-
-    # Data storage
-    save_trajectories: true
-
-    # Metrics to calculate
-    evaluate_smoothness: true # Calculate trajectory smoothness
-    evaluate_consistency: true # Calculate trajectory consistency
-    evaluate_efficiency: true # Calculate path efficiency metrics
-    evaluate_aggressiveness: true # Calculate driving aggressiveness
-    evaluate_stability: true # Calculate control stability metrics
-
-    # Advanced EVO metrics
-    pose_relations: ["translation_part", "rotation_part", "full_transformation"]
-    statistics_types: ["rmse", "mean", "median", "std", "min", "max", "sse"]
-
-    # Filtering options for noise reduction
+    # ═══════════════════════════════════════════════════════════════════════════
+    # TRAJECTORY FILTERING
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Noise reduction and data smoothing for trajectory data
+    
     apply_trajectory_filtering: true
-    filter_types: ["motion", "distance", "angle"]
+    
+    # Filter types to apply (can combine multiple)
+    filter_types: 
+      - "motion"                            # Filter based on motion magnitude
+      - "distance"                          # Filter based on distance traveled
+      - "angle"                             # Filter based on angular change
+    
+    # Filter parameters
     filter_parameters:
-      motion_threshold: 0.1 # Minimum motion for filtering
-      distance_threshold: 0.05 # Distance threshold for filtering
-      angle_threshold: 0.1 # Angle threshold for filtering
+      motion_threshold: 0.1                 # Minimum motion (m) for motion filter
+      distance_threshold: 0.05              # Minimum distance (m) between points
+      angle_threshold: 0.1                  # Minimum angle (rad) for angle filter
 
-    # ========================================
-    # GRAPH GENERATION SETTINGS
-    # ========================================
+    # ═══════════════════════════════════════════════════════════════════════════
+    # DATA EXPORT & OUTPUT
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Configure what data is saved and in which formats
+    
+    # --- Export Options ---
+    save_trajectories: true                 # Save raw trajectory data
+    save_filtered_trajectories: true        # Save filtered/smoothed trajectories
+    save_detailed_statistics: true          # Save comprehensive statistical analysis
+    export_research_summary: true           # Generate research-ready summary document
+    export_to_pandas: true                  # Export data to pandas-compatible formats
+    save_intermediate_results: true         # Save results after each lap
+    include_timestamps: false               # Include detailed timestamp information
+    
+    # --- Output File Formats ---
+    # Multiple formats can be selected for cross-platform analysis
+    output_formats: 
+      - "csv"                               # Comma-separated values (Excel, MATLAB)
+      - "json"                              # JSON format (Python, JavaScript)
+      - "pickle"                            # Python pickle (pandas DataFrames)
+      - "mat"                               # MATLAB .mat format
 
-    # Enable/disable automatic graph generation
-    auto_generate_graphs: true
-    graph_formats: ["png", "pdf"] # png, pdf, svg, html
+    # ═══════════════════════════════════════════════════════════════════════════
+    # GRAPH GENERATION
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Automatic visualization and plot generation settings
+    
+    # --- Graph Generation Control ---
+    auto_generate_graphs: true              # Automatically generate plots after race
+    graph_formats: ["png", "pdf"]           # Output formats: "png", "pdf", "svg", "html"
+    
+    # --- Plot Appearance ---
+    plot_figsize: [12.0, 8.0]              # Figure size [width, height] in inches
+    plot_dpi: 300                           # Resolution (dots per inch) for saved images
+    plot_style: "seaborn"                   # Matplotlib style: "seaborn", "ggplot", "classic"
+    plot_color_scheme: "viridis"            # Color scheme: "viridis", "plasma", "coolwarm"
+    
+    # --- Standard Plot Types ---
+    generate_trajectory_plots: true         # 2D/3D trajectory visualization
+    generate_xyz_plots: true                # Position components over time (X, Y, Z)
+    generate_rpy_plots: true                # Orientation over time (Roll, Pitch, Yaw)
+    generate_speed_plots: true              # Velocity and acceleration analysis
+    generate_error_plots: true              # APE/RPE error analysis (requires reference)
+    generate_metrics_plots: true            # Performance metrics over time
+    
+    # --- Advanced Plot Types ---
+    generate_error_mapped_plots: true       # Error heatmap overlaid on trajectory
+    generate_violin_plots: true             # Error distribution violin plots
+    generate_3d_vector_plots: true          # 3D trajectory with directional vectors
 
-    # Plot appearance settings
-    plot_figsize: [12.0, 8.0] # Figure size [width, height]
-    plot_dpi: 300 # DPI for saved images
-    plot_style: "seaborn" # matplotlib style
-    plot_color_scheme: "viridis" # Color scheme for multiple trajectories
-
-    # Types of graphs to generate
-    generate_trajectory_plots: true # 2D/3D trajectory visualization
-    generate_xyz_plots: true # X, Y, Z position over time
-    generate_rpy_plots: true # Roll, Pitch, Yaw over time
-    generate_speed_plots: true # Velocity analysis
-    generate_error_plots: true # APE/RPE error analysis
-    generate_metrics_plots: true # Smoothness/consistency over time
-
-    # Advanced plot types (like your provided images)
-    generate_error_mapped_plots: true # Error mapped onto trajectory with color coding
-    generate_violin_plots: true # Violin plots for error distribution comparison
-    generate_3d_vector_plots: true # 3D trajectory plots with directional vectors
-
-    # ========================================
-    # COMPUTATIONAL MONITORING SETTINGS
-    # ========================================
-
-    # Enable/disable CPU performance monitoring
-    enable_computational_monitoring: false
+    # ═══════════════════════════════════════════════════════════════════════════
+    # PERFORMANCE MONITORING
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Monitor computational performance and resource usage
+    
+    # --- Monitoring Control ---
+    enable_computational_monitoring: false  # Enable CPU/memory monitoring
+    enable_performance_logging: true        # Log performance metrics periodically
+    
+    # --- Monitoring Parameters ---
+    cpu_monitoring_interval: 1.0            # CPU monitoring interval (seconds)
+    performance_log_interval: 10.0          # Performance summary logging interval (seconds)
+    monitoring_window_size: 100             # Number of samples for statistics
+    
+    # --- Performance Targets ---
+    target_control_frequency_hz: 20.0       # Expected control loop frequency (Hz)
+    max_acceptable_cpu_usage: 80.0          # Maximum acceptable CPU usage (%)
+    max_acceptable_memory_mb: 500.0         # Maximum acceptable memory usage (MB)
+    max_acceptable_latency_ms: 100.0        # Maximum acceptable processing latency (ms)

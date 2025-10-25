@@ -2,15 +2,15 @@
 # This file contains maintainer and version information for the Race Monitor system
 
 [MAINTAINER]
-name=Mohammed Abdeazim - GIU F1Tenth Team
+name=Mohammed Abdeazim - GIU Berlin Roboracer Team
 email=mohammed@azab.io
 
 [VERSION]
-race_monitor_version=2.1.0
-build_date=2025-10-19
+race_monitor_version=1.0.0
+build_date=2025-10-23
 license=MIT
 
 [SYSTEM]
 package_name=race_monitor
-description=Advanced F1Tenth Performance Analysis and Race Monitoring System
+description=Advanced Roboracer Performance Analysis and Race Monitoring System
 repository=https://github.com/GIU-F1Tenth/race_monitor

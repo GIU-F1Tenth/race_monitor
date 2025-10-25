@@ -1,6 +1,8 @@
 """
 Data Analysis Module
-Handles analysis of race data, lap times, trajectories, and performance metrics
+
+Analyzes race data including lap times, trajectories, and performance metrics.
+Provides experiment management, statistical analysis, and data visualization support.
 """
 
 import pandas as pd
@@ -14,7 +16,7 @@ import glob
 
 class DataAnalyzer:
     def __init__(self):
-        # Use absolute path to avoid issues when running from different directories
+        # Use absolute path for cross-directory compatibility
         base_path = Path(__file__).parent.parent.parent
         self.data_dir = base_path / "race_monitor" / "evaluation_results"
         self.graphs_dir = self.data_dir / "graphs"
@@ -22,7 +24,15 @@ class DataAnalyzer:
         self.research_dir = self.data_dir / "research_data"
 
     def get_experiments(self, filter_params: Optional[Dict] = None) -> Dict[str, Any]:
-        """Get list of experiments with metadata"""
+        """
+        Get list of experiments with metadata.
+        
+        Args:
+            filter_params: Optional filtering criteria
+            
+        Returns:
+            Dictionary containing experiment list and metadata
+        """
         experiments = []
         
         # Look for trajectory files to identify experiments
@@ -103,7 +113,18 @@ class DataAnalyzer:
         }
 
     def get_experiment_details(self, experiment_id: str) -> Dict[str, Any]:
-        """Get detailed data for specific experiment"""
+        """
+        Get detailed data for specific experiment.
+        
+        Args:
+            experiment_id: Identifier of the experiment
+            
+        Returns:
+            Dictionary containing experiment details, laps, and trajectories
+            
+        Raises:
+            FileNotFoundError: If experiment not found
+        """
         if experiment_id == "current_experiment":
             return self._get_current_experiment_details()
         
@@ -117,7 +138,12 @@ class DataAnalyzer:
         raise FileNotFoundError(f"Experiment {experiment_id} not found")
 
     def _get_current_experiment_details(self) -> Dict[str, Any]:
-        """Get details for current experiment"""
+        """
+        Get details for current experiment.
+        
+        Returns:
+            Dictionary with current experiment details
+        """
         details = {
             "id": "current_experiment",
             "name": "Current Experiment",
@@ -186,7 +212,15 @@ class DataAnalyzer:
         return details
 
     def _get_research_experiment_details(self, exp_dir: Path) -> Dict[str, Any]:
-        """Get details for research experiment"""
+        """
+        Get details for research experiment.
+        
+        Args:
+            exp_dir: Path to experiment directory
+            
+        Returns:
+            Dictionary with research experiment details
+        """
         details = {
             "id": exp_dir.parent.name + "_" + exp_dir.name,
             "name": f"{exp_dir.parent.name} - {exp_dir.name}",
@@ -217,13 +251,26 @@ class DataAnalyzer:
         return details
 
     def _extract_lap_number(self, filename: str) -> int:
-        """Extract lap number from filename"""
+        """
+        Extract lap number from filename.
+        
+        Args:
+            filename: Name of the file
+            
+        Returns:
+            Lap number or 0 if not found
+        """
         import re
         match = re.search(r'lap_(\d+)', filename)
         return int(match.group(1)) if match else 0
 
     def get_summary(self) -> Dict[str, Any]:
-        """Get overall data summary and statistics"""
+        """
+        Get overall data summary and statistics.
+        
+        Returns:
+            Dictionary with experiment counts, trajectories, and health metrics
+        """
         summary = {
             "experiments_count": 0,
             "total_laps": 0,
@@ -261,7 +308,19 @@ class DataAnalyzer:
         return summary
 
     def get_lap_analysis(self, experiment_id: str) -> Dict[str, Any]:
-        """Get detailed lap analysis for experiment"""
+        """
+        Get detailed lap analysis for experiment.
+        
+        Args:
+            experiment_id: Identifier of the experiment
+            
+        Returns:
+            Dictionary with lap-by-lap analysis and performance trends
+            
+        Raises:
+            FileNotFoundError: If evaluation summary not found
+            NotImplementedError: For unsupported experiment IDs
+        """
         if experiment_id == "current_experiment":
             summary_file = self.data_dir / "evaluation_summary.csv"
             if not summary_file.exists():
@@ -309,7 +368,15 @@ class DataAnalyzer:
         raise NotImplementedError(f"Lap analysis for {experiment_id} not yet implemented")
 
     def _calculate_trend(self, values: np.ndarray) -> str:
-        """Calculate trend direction from values"""
+        """
+        Calculate trend direction from values using linear regression.
+        
+        Args:
+            values: Array of values to analyze
+            
+        Returns:
+            Trend classification: 'improving', 'declining', 'stable', or 'insufficient_data'
+        """
         if len(values) < 2:
             return "insufficient_data"
         
@@ -317,7 +384,7 @@ class DataAnalyzer:
         x = np.arange(len(values))
         slope = np.polyfit(x, values, 1)[0]
         
-        if abs(slope) < 0.001:  # Threshold for "stable"
+        if abs(slope) < 0.001:  # Threshold for stability
             return "stable"
         elif slope > 0:
             return "improving"
@@ -325,7 +392,15 @@ class DataAnalyzer:
             return "declining"
 
     def get_trajectory_plot_data(self, experiment_id: str) -> Dict[str, Any]:
-        """Get trajectory visualization data"""
+        """
+        Get trajectory visualization data.
+        
+        Args:
+            experiment_id: Identifier of the experiment
+            
+        Returns:
+            Dictionary with trajectory coordinates for plotting
+        """
         plot_data = {
             "trajectories": [],
             "reference": None,
@@ -336,7 +411,7 @@ class DataAnalyzer:
             # Load trajectory files
             trajectory_files = sorted(list(self.data_dir.glob("lap_*_trajectory.txt")))
             
-            for traj_file in trajectory_files[:10]:  # Limit to first 10 laps for performance
+            for traj_file in trajectory_files[:10]:  # Limit for performance
                 lap_num = self._extract_lap_number(traj_file.name)
                 try:
                     # Assume trajectory files have x,y,z or x,y format
@@ -375,7 +450,15 @@ class DataAnalyzer:
         return plot_data
 
     def get_performance_plot_data(self, experiment_id: str) -> Dict[str, Any]:
-        """Get performance metrics visualization data"""
+        """
+        Get performance metrics visualization data.
+        
+        Args:
+            experiment_id: Identifier of the experiment
+            
+        Returns:
+            Dictionary with performance metrics for plotting
+        """
         if experiment_id == "current_experiment":
             summary_file = self.data_dir / "evaluation_summary.csv"
             if not summary_file.exists():
@@ -401,7 +484,15 @@ class DataAnalyzer:
         return {"error": f"Performance data for {experiment_id} not available"}
 
     def get_comparison_plot_data(self, experiment_ids: List[str]) -> Dict[str, Any]:
-        """Get comparison visualization for multiple experiments"""
+        """
+        Get comparison visualization for multiple experiments.
+        
+        Args:
+            experiment_ids: List of experiment identifiers to compare
+            
+        Returns:
+            Dictionary with comparison data for all experiments
+        """
         comparison_data = {
             "experiments": {},
             "metrics": ["consistency", "path_length", "smoothness"]
@@ -418,7 +509,19 @@ class DataAnalyzer:
         return comparison_data
 
     def export_experiment(self, experiment_id: str, format: str = "csv") -> Path:
-        """Export experiment data in specified format"""
+        """
+        Export experiment data in specified format.
+        
+        Args:
+            experiment_id: Identifier of the experiment
+            format: Export format ('csv', 'json', or 'xlsx')
+            
+        Returns:
+            Path to exported file
+            
+        Raises:
+            FileNotFoundError: If experiment data cannot be exported
+        """
         if experiment_id == "current_experiment":
             summary_file = self.data_dir / "evaluation_summary.csv"
             if format == "csv" and summary_file.exists():

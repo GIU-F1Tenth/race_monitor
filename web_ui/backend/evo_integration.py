@@ -1,6 +1,9 @@
 """
 EVO Integration Module
-Handles integration with EVO trajectory evaluation library
+
+Provides integration with the EVO trajectory evaluation library for analyzing
+autonomous vehicle trajectories, computing trajectory metrics (APE, RPE), and
+comparing experimental results against reference trajectories.
 """
 
 import subprocess
@@ -24,7 +27,12 @@ class EvoIntegration:
         self.evo_available = self._check_evo_availability()
 
     def _check_evo_availability(self) -> bool:
-        """Check if EVO is available and properly installed"""
+        """
+        Check if EVO library is available and properly installed.
+        
+        Returns:
+            True if EVO can be imported, False otherwise
+        """
         try:
             # Check if we can import evo
             result = subprocess.run(['python', '-c', 'import evo'], 
@@ -34,7 +42,15 @@ class EvoIntegration:
             return False
 
     def get_metrics(self, experiment_id: str) -> Dict[str, Any]:
-        """Get EVO trajectory evaluation metrics for experiment"""
+        """
+        Get EVO trajectory evaluation metrics for experiment.
+        
+        Args:
+            experiment_id: Identifier of the experiment to analyze
+            
+        Returns:
+            Dictionary containing metrics and analysis status
+        """
         if not self.evo_available:
             return {"error": "EVO not available", "available": False}
         
@@ -67,7 +83,15 @@ class EvoIntegration:
         return metrics
 
     async def run_analysis(self, experiment_id: str) -> Dict[str, Any]:
-        """Run EVO analysis on experiment data"""
+        """
+        Run EVO trajectory analysis on experiment data.
+        
+        Args:
+            experiment_id: Identifier of the experiment to analyze
+            
+        Returns:
+            Dictionary containing analysis results and metrics
+        """
         if not self.evo_available:
             return {"error": "EVO not available"}
         
@@ -93,7 +117,7 @@ class EvoIntegration:
             }
             
             # Convert trajectories to EVO format and run analysis
-            for i, traj_file in enumerate(trajectory_files[:5]):  # Limit to first 5 for performance
+            for i, traj_file in enumerate(trajectory_files[:5]):  # Limit for performance
                 lap_num = self._extract_lap_number(traj_file.name)
                 
                 # Convert to TUM format for EVO
@@ -122,7 +146,16 @@ class EvoIntegration:
             return {"error": f"Analysis failed: {str(e)}"}
 
     async def _convert_to_tum_format(self, trajectory_file: Path, lap_num: int) -> Optional[Path]:
-        """Convert trajectory file to TUM format for EVO"""
+        """
+        Convert trajectory file to TUM format for EVO.
+        
+        Args:
+            trajectory_file: Path to trajectory data file
+            lap_num: Lap number identifier
+            
+        Returns:
+            Path to converted TUM file or None if conversion fails
+        """
         try:
             # Load trajectory data
             data = np.loadtxt(trajectory_file, delimiter=',')
@@ -151,7 +184,15 @@ class EvoIntegration:
             return None
 
     async def _convert_reference_to_tum_format(self, ref_file: Path) -> Optional[Path]:
-        """Convert reference trajectory to TUM format"""
+        """
+        Convert reference trajectory to TUM format.
+        
+        Args:
+            ref_file: Path to reference trajectory file
+            
+        Returns:
+            Path to converted TUM file or None if conversion fails
+        """
         try:
             tum_ref_file = self.temp_dir / "reference_tum.txt"
             
@@ -180,7 +221,17 @@ class EvoIntegration:
             return None
 
     async def _run_evo_ape(self, ref_file: Path, traj_file: Path, lap_num: int) -> Optional[Dict]:
-        """Run EVO APE (Absolute Pose Error) analysis"""
+        """
+        Run EVO APE (Absolute Pose Error) analysis.
+        
+        Args:
+            ref_file: Reference trajectory file path
+            traj_file: Test trajectory file path
+            lap_num: Lap number identifier
+            
+        Returns:
+            Dictionary with APE metrics or None if analysis fails
+        """
         try:
             output_file = self.temp_dir / f"ape_lap_{lap_num}.json"
             
@@ -217,7 +268,17 @@ class EvoIntegration:
             return None
 
     async def _run_evo_rpe(self, ref_file: Path, traj_file: Path, lap_num: int) -> Optional[Dict]:
-        """Run EVO RPE (Relative Pose Error) analysis"""
+        """
+        Run EVO RPE (Relative Pose Error) analysis.
+        
+        Args:
+            ref_file: Reference trajectory file path
+            traj_file: Test trajectory file path
+            lap_num: Lap number identifier
+            
+        Returns:
+            Dictionary with RPE metrics or None if analysis fails
+        """
         try:
             output_file = self.temp_dir / f"rpe_lap_{lap_num}.json"
             
@@ -253,7 +314,16 @@ class EvoIntegration:
             return None
 
     async def compare_experiments(self, exp1_id: str, exp2_id: str) -> Dict[str, Any]:
-        """Compare two experiments using EVO"""
+        """
+        Compare two experiments using EVO.
+        
+        Args:
+            exp1_id: First experiment identifier
+            exp2_id: Second experiment identifier
+            
+        Returns:
+            Dictionary containing comparison results
+        """
         if not self.evo_available:
             return {"error": "EVO not available"}
         
@@ -282,13 +352,26 @@ class EvoIntegration:
         return comparison
 
     def _extract_lap_number(self, filename: str) -> int:
-        """Extract lap number from filename"""
+        """
+        Extract lap number from filename.
+        
+        Args:
+            filename: Name of the file
+            
+        Returns:
+            Lap number or 0 if not found
+        """
         import re
         match = re.search(r'lap_(\d+)', filename)
         return int(match.group(1)) if match else 0
 
     def get_available_analyses(self) -> Dict[str, Any]:
-        """Get list of available EVO analysis types"""
+        """
+        Get list of available EVO analysis types.
+        
+        Returns:
+            Dictionary describing available analysis methods and requirements
+        """
         return {
             "evo_available": self.evo_available,
             "analyses": {

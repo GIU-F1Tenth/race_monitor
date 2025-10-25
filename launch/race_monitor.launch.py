@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
 """
-Race Monitor - Unified Launch File
+Race Monitor Launch File
 
-A single launch file that supports all three race ending modes:
+Unified launch file supporting three race ending modes:
 1. lap_complete - Race ends after completing required laps (default)
 2. crash - Race ends when crash is detected
 3. manual - Race continues until manually killed
 
+Launch arguments override values from race_monitor.yaml configuration file.
+
 Usage Examples:
-  # Default lap complete mode (uses config file: 20 laps)
+  # Default lap complete mode
   ros2 launch race_monitor race_monitor.launch.py
 
-  # Lap complete mode with custom laps (overrides config file)
+  # Lap complete mode with custom laps
   ros2 launch race_monitor race_monitor.launch.py race_mode:=lap_complete required_laps:=10
 
   # Crash detection mode
@@ -24,10 +26,7 @@ Usage Examples:
   # Custom crash detection parameters
   ros2 launch race_monitor race_monitor.launch.py race_mode:=crash max_stationary_time:=10.0 enable_collision_detection:=false
 
-Note: This launch file now fully respects the configuration file (race_monitor.yaml) as the
-source of truth. Launch arguments ONLY override config values when explicitly provided
-on the command line. You can change any default value in the config file without
-needing to update this launch file.Author: Mohammed Abdelazim (mohammed@azab.io)
+Author: Mohammed Abdelazim (mohammed@azab.io)
 License: MIT License
 """
 
