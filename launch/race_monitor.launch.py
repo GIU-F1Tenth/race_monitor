@@ -64,11 +64,7 @@ def generate_launch_description():
         description='Name of the controller being tested'
     )
 
-    experiment_id_arg = DeclareLaunchArgument(
-        'experiment_id',
-        default_value='exp_001',
-        description='Experiment identifier'
-    )
+    # Note: experiment_id is now fully auto-generated and not configurable
 
     # Lap complete mode arguments
     required_laps_arg = DeclareLaunchArgument(
@@ -210,8 +206,7 @@ def generate_launch_description():
         if was_explicitly_provided('controller_name'):
             override_parameters['controller_name'] = LaunchConfiguration('controller_name').perform(context)
 
-        if was_explicitly_provided('experiment_id'):
-            override_parameters['experiment_id'] = LaunchConfiguration('experiment_id').perform(context)
+        # Note: experiment_id is auto-generated, so we don't accept it from command line
 
         if was_explicitly_provided('required_laps'):
             override_parameters['required_laps'] = int(LaunchConfiguration('required_laps').perform(context))
@@ -273,7 +268,6 @@ def generate_launch_description():
     return LaunchDescription([
         race_mode_arg,
         controller_name_arg,
-        experiment_id_arg,
 
         # Lap complete mode arguments
         required_laps_arg,

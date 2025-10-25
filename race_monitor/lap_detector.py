@@ -434,12 +434,18 @@ class LapDetector:
         else:
             self.logger.info(f"Lap {self.current_lap} completed in {lap_time:.3f}s")
 
+        is_final_lap = (self.race_ending_mode == "lap_complete" and 
+                       len(self.lap_times) >= self.required_laps)
+        
+        if is_final_lap:
+            self.race_completed = True
+
         # Trigger lap completion callback
         if self.on_lap_complete:
             self.on_lap_complete(self.current_lap, lap_time)
 
-        # Check if race is complete based on ending mode
-        if self.race_ending_mode == "lap_complete" and len(self.lap_times) >= self.required_laps:
+        # Complete race if it was the final lap
+        if is_final_lap:
             self._complete_race(timestamp)
         elif self.race_ending_mode == "lap_complete":
             # Start next lap

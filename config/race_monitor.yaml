@@ -28,16 +28,15 @@ race_monitor:
     # DIRECTORY CONFIGURATION
     # ========================================
 
-    # Base directory for data storage
+    # Base directory for all race results and data storage
     # Default: "" (uses package's data/ directory)
     # You can specify:
     #   - Empty string "" to use default: <package_share>/data/
     #   - Relative path "custom_dir" resolves to: <package_share>/custom_dir/
     #   - Absolute path "/absolute/path/to/dir" uses as-is
-    trajectory_output_directory: ""
+    results_dir: ""
 
-    # Graph output directory (relative to trajectory_output_directory)
-    graph_output_directory: "graphs" # ========================================
+    # ========================================
     # RACE ENDING CONDITIONS
     # ========================================
 
@@ -81,8 +80,6 @@ race_monitor:
 
     # Smart controller detection settings
     enable_smart_controller_detection: true # Automatically detect controller from topic publishers (only when controller_name is empty)
-
-    experiment_id: "exp_001" # Experiment identifier for this run
     test_description: "Controller performance evaluation and analysis"
 
     # Auto-shutdown settings
