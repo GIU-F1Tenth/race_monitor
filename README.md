@@ -305,13 +305,15 @@ Key parameters to configure:
 # Source your workspace
 source ~/ros2_ws/install/setup.bash
 
-# Basic launch
+# Basic launch (default lap complete mode)
 ros2 launch race_monitor race_monitor.launch.py
 
 # With custom parameters
 ros2 launch race_monitor race_monitor.launch.py \
     controller_name:=lqr_controller \
-    experiment_id:=exp_001
+    required_laps:=10
+
+# Note: experiment_id is now auto-generated based on timestamp
 ```
 
 #### 3. Set Start/Finish Line (Interactive)
@@ -350,13 +352,13 @@ ros2 topic echo /race_monitor/lap_count
 ```bash
 ros2 launch race_monitor race_monitor.launch.py \
     controller_name:=lqr_controller_node \
-    experiment_id:=exp_002 \
     required_laps:=8 \
     enable_trajectory_evaluation:=true \
     auto_generate_graphs:=true \
-    save_detailed_statistics:=true \
-    enable_computational_monitoring:=true \
-    evaluation_interval_laps:=1
+    enable_computational_monitoring:=true
+
+# Note: Most analysis options are configured in race_monitor.yaml
+# experiment_id is auto-generated with timestamp
 ```
 
 #### Performance Benchmarking
@@ -364,11 +366,12 @@ ros2 launch race_monitor race_monitor.launch.py \
 ```bash
 ros2 launch race_monitor race_monitor.launch.py \
     controller_name:=benchmark_controller \
-    experiment_id:=performance_test_$(date +%Y%m%d_%H%M%S) \
-    enable_computational_monitoring:=true \
-    max_acceptable_latency_ms:=25.0 \
-    target_control_frequency_hz:=50.0 \
-    control_command_topic:=/drive
+    enable_computational_monitoring:=true
+
+# Configure performance thresholds in race_monitor.yaml:
+# - max_acceptable_latency_ms
+# - target_control_frequency_hz
+# - max_acceptable_cpu_usage
 ```
 
 #### Multi-lap Endurance Test
@@ -376,10 +379,11 @@ ros2 launch race_monitor race_monitor.launch.py \
 ```bash
 ros2 launch race_monitor race_monitor.launch.py \
     controller_name:=endurance_test \
-    experiment_id:=long_run_001 \
     required_laps:=50 \
-    evaluation_interval_laps:=5 \
     save_trajectories:=true
+
+# Configure evaluation interval in race_monitor.yaml:
+# - evaluation_interval_laps: 5
 ```
 
 ### Real-time Monitoring
@@ -420,23 +424,32 @@ race_monitor:
     start_line_p2: [0.0, 1.0]   # [x, y] in map frame
     
     # Race parameters
-    required_laps: 5
+    required_laps: 7
     debounce_time: 2.0  # Minimum time between lap detections (seconds)
+    frame_id: "map"     # TF frame for visualization and coordinates
     
     # ========================================
     # CONTROLLER & EXPERIMENT IDENTIFICATION
     # ========================================
     
-    controller_name: "lqr_controller_node"
-    experiment_id: "exp_002"
-    test_description: "LQR controller performance evaluation"
+    controller_name: ""  # Empty = auto-detect from ROS topics
+    enable_smart_controller_detection: true  # Auto-detect controller name
+    test_description: "Controller performance evaluation and analysis"
+    
+    # Note: experiment_id is auto-generated with timestamp
     
     # ========================================
-    # DATA OUTPUT & FORMATS
+    # LOGGING & DEBUGGING
+    # ========================================
+    
+    log_level: "normal"  # Options: "minimal", "normal", "debug", "verbose"
+    
+    # ========================================
+    # DIRECTORY & FILE MANAGEMENT
     # ========================================
     
     # Output directory (empty = package data directory)
-    trajectory_output_directory: ""
+    results_dir: ""
     
     # Export formats
     output_formats: ["csv", "json", "pickle", "mat"]
@@ -446,22 +459,45 @@ race_monitor:
     trajectory_format: "tum"  # Options: tum, kitti, euroc
     
     # ========================================
-    # TRAJECTORY ANALYSIS
+    # RACE ENDING CONDITIONS
+    # ========================================
+    
+    race_ending_mode: "lap_complete"  # Options: "lap_complete", "crash", "manual"
+    auto_shutdown_on_race_complete: true
+    shutdown_delay_seconds: 5.0
+    
+    # Crash detection (for crash mode)
+    crash_detection:
+      enable_crash_detection: true
+      max_stationary_time: 5.0
+      min_velocity_threshold: 0.1
+    
+    # ========================================
+    # TRAJECTORY EVALUATION
     # ========================================
     
     enable_trajectory_evaluation: true
     evaluation_interval_laps: 1  # Evaluate every N laps
     
-    # Trajectory filtering (Savitzky-Golay)
-    enable_trajectory_filtering: true
-    filter_window_length: 15
-    filter_polynomial_order: 3
+    # Trajectory filtering
+    apply_trajectory_filtering: true
+    filter_types: ["motion", "distance", "angle"]
+    filter_parameters:
+      motion_threshold: 0.1
+      distance_threshold: 0.05
+      angle_threshold: 0.1
     
     # Metrics to calculate
     evaluate_smoothness: true
     evaluate_consistency: true
     evaluate_efficiency: true
     evaluate_aggressiveness: true
+    evaluate_stability: true
+    
+    # Advanced analysis
+    enable_advanced_metrics: true
+    calculate_all_statistics: true
+    analyze_rotation_errors: true
     
     # ========================================
     # REFERENCE TRAJECTORY
@@ -475,34 +511,40 @@ race_monitor:
     # COMPUTATIONAL PERFORMANCE MONITORING
     # ========================================
     
-    enable_computational_monitoring: true
-    control_command_topic: "/drive"
-    control_command_type: "ackermann"  # or "twist"
+    enable_computational_monitoring: false
+    enable_performance_logging: true
+    
+    # Monitoring parameters
+    cpu_monitoring_interval: 1.0
+    performance_log_interval: 10.0
     
     # Performance thresholds
-    max_acceptable_latency_ms: 50.0
-    target_control_frequency_hz: 50.0
+    max_acceptable_latency_ms: 100.0
+    target_control_frequency_hz: 20.0
+    max_acceptable_cpu_usage: 80.0
+    max_acceptable_memory_mb: 500.0
     
     # ========================================
-    # VISUALIZATION & REPORTING
+    # GRAPH GENERATION
     # ========================================
     
     auto_generate_graphs: true
     graph_formats: ["png", "pdf"]
-    save_detailed_statistics: true
     
-    # ========================================
-    # RACE ENDING CONDITIONS
-    # ========================================
+    # Plot appearance
+    plot_figsize: [12.0, 8.0]
+    plot_dpi: 300
+    plot_style: "seaborn"
+    plot_color_scheme: "viridis"
     
-    enable_crash_detection: true
-    crash_velocity_threshold: 0.05  # m/s
-    crash_time_threshold: 3.0       # seconds
-    
-    enable_distance_based_ending: false
-    target_distance: 1000.0  # meters
-    
-    enable_manual_ending: true
+    # Plot types
+    generate_trajectory_plots: true
+    generate_xyz_plots: true
+    generate_rpy_plots: true
+    generate_speed_plots: true
+    generate_error_plots: true
+    generate_error_mapped_plots: true
+    generate_3d_vector_plots: true
 ```
 
 ### Path Configuration
@@ -514,7 +556,7 @@ Race Monitor supports flexible path configuration:
 # Simple filename (searches in ref_trajectory/)
 reference_trajectory_file: "track.csv"
 
-# Relative path from package root
+# Relative path from package share directory
 reference_trajectory_file: "custom/tracks/track.csv"
 
 # Absolute path
@@ -526,13 +568,13 @@ Place reference trajectories in `race_monitor/ref_trajectory/` for automatic dis
 #### Output Directory
 ```yaml
 # Default: package data directory
-trajectory_output_directory: ""
+results_dir: ""
 
-# Relative to package root
-trajectory_output_directory: "experiments"
+# Relative to package share directory
+results_dir: "experiments"
 
 # Absolute path
-trajectory_output_directory: "/home/user/race_data"
+results_dir: "/home/user/race_data"
 ```
 
 ### Launch File Parameters
@@ -542,20 +584,20 @@ Override configuration parameters at launch time:
 ```bash
 ros2 launch race_monitor race_monitor.launch.py \
     controller_name:=my_controller \
-    experiment_id:=exp_001 \
     required_laps:=10 \
-    enable_trajectory_evaluation:=true \
-    auto_generate_graphs:=true
+    race_mode:=lap_complete
 ```
 
 Available launch parameters:
-- `controller_name`: Controller identifier
-- `experiment_id`: Experiment identifier  
+- `race_mode`: Race ending mode ("lap_complete", "crash", "manual")
+- `controller_name`: Controller identifier (empty = auto-detect)
 - `required_laps`: Number of laps to complete
 - `enable_trajectory_evaluation`: Enable EVO analysis
 - `enable_computational_monitoring`: Enable performance monitoring
 - `auto_generate_graphs`: Generate visualization graphs
-- `config_file`: Custom configuration file path
+- `enable_smart_controller_detection`: Enable auto-detection
+- `auto_shutdown_on_race_complete`: Auto-shutdown after race
+- `shutdown_delay_seconds`: Delay before shutdown
 
 ---
 
@@ -568,7 +610,7 @@ The following results demonstrate Race Monitor's capabilities using an LQR (Line
 **Experiment Details:**
 - **Controller**: LQR Controller Node
 - **Experiment ID**: exp_002
-- **Date**: October 21, 2025
+- **Date**: October 24, 2024
 - **Laps Completed**: 8
 - **Total Race Time**: 149.11 seconds
 - **System**: Ubuntu 22.04, ROS2 Humble
@@ -920,7 +962,6 @@ plt.savefig("custom_ape_plot.pdf")
 |-------|------|-------------|
 | `car_state/odom` | `nav_msgs/Odometry` | Vehicle odometry (required) |
 | `/clicked_point` | `geometry_msgs/PointStamped` | Interactive line setup |
-| `{control_command_topic}` | `ackermann_msgs/AckermannDriveStamped` or `geometry_msgs/Twist` | Control commands for latency monitoring |
 
 ### Services (Future Release)
 
@@ -935,15 +976,17 @@ plt.savefig("custom_ape_plot.pdf")
 Dynamic reconfiguration of key parameters (future release):
 
 ```bash
-# Set required laps
-ros2 param set /race_monitor required_laps 10
+# Get current race mode
+ros2 param get /race_monitor race_ending_mode
 
-# Enable/disable monitoring
-ros2 param set /race_monitor enable_computational_monitoring true
+# Check controller name (if auto-detected)
+ros2 param get /race_monitor controller_name
 
-# Adjust latency threshold
-ros2 param set /race_monitor max_acceptable_latency_ms 25.0
+# View log level
+ros2 param get /race_monitor log_level
 ```
+
+Note: Most parameters are set via YAML config or launch file and cannot be changed at runtime.
 
 ---
 
@@ -955,7 +998,7 @@ Race Monitor organizes experimental data in a hierarchical structure optimized f
 race_monitor/
 └── data/
     └── {controller_name}/
-        └── {experiment_id}/
+        └── {experiment_id}/  # Auto-generated: exp_YYYYMMDD_HHMMSS
             ├── experiment_metadata.txt
             ├── trajectories/
             │   ├── csv/
@@ -972,7 +1015,7 @@ race_monitor/
             │   └── mat/
             │       └── lap_001_trajectory.mat
             ├── filtered/
-            │   └── (Savitzky-Golay filtered trajectories)
+            │   └── (Filtered trajectories if enabled)
             ├── results/
             │   ├── csv/
             │   │   ├── race_results.csv
@@ -1036,22 +1079,29 @@ Publication-ready visualizations automatically generated:
 ```python
 import json
 import pandas as pd
+from pathlib import Path
+
+# Find most recent experiment
+exp_dir = Path('data/lqr_controller_node')
+latest_exp = sorted(exp_dir.glob('exp_*'))[-1]
 
 # Load race summary
-with open('data/lqr_controller_node/exp_002/results/json/race_summary.json') as f:
+summary_file = latest_exp / 'results/json/race_summary.json'
+with open(summary_file) as f:
     summary = json.load(f)
     
 print(f"Best lap: {summary['lap_statistics']['best_lap_time']:.2f}s")
 
 # Load trajectory as DataFrame
-df = pd.read_csv('data/lqr_controller_node/exp_002/trajectories/csv/lap_001_trajectory.csv')
+traj_file = latest_exp / 'trajectories/csv/lap_001_trajectory.csv'
+df = pd.read_csv(traj_file)
 print(df.describe())
 ```
 
 #### MATLAB
 ```matlab
-% Load trajectory data
-data = load('data/lqr_controller_node/exp_002/trajectories/mat/lap_001_trajectory.mat');
+% Load trajectory data (use actual experiment ID)
+data = load('data/lqr_controller_node/exp_20241024_150100/trajectories/mat/lap_001_trajectory.mat');
 
 % Plot trajectory
 plot(data.x, data.y);
@@ -1124,22 +1174,18 @@ For more information, see [`web_ui/README.md`](web_ui/README.md).
 
 ## Documentation
 
-### Core Documentation
-- **[User Guide](docs/USER_GUIDE.md)** - Comprehensive usage instructions
-- **[Configuration Reference](docs/CONFIGURATION.md)** - Detailed configuration options
+### Available Documentation
+- **[Data Structure](data/README.md)** - Output organization and data formats
+- **[Reference Trajectories](ref_trajectory/README.md)** - Reference trajectory setup guide
+- **[Testing](test/README.md)** - Testing procedures and guidelines
+- **[Configuration Audit](CONFIG_AUDIT.md)** - Configuration parameter reference
+- **[Parameter Audit Report](PARAMETER_AUDIT_REPORT.md)** - Detailed parameter documentation
+- **[Refactor Summary](REFACTOR_SUMMARY.md)** - Recent architectural changes
 
-### Advanced Topics
-- **[Performance Monitoring](docs/COMPUTATIONAL_MONITORING.md)** - Computational performance analysis
-
-### Data Management
-- **[Data Structure](data/README.md)** - Output organization
-- **[Reference Trajectories](ref_trajectory/README.md)** - Reference setup guide
-- **[Export Formats](docs/EXPORT_FORMATS.md)** - Data format specifications
-
-### Development
-- **[Architecture](docs/ARCHITECTURE.md)** - System design overview
-- **[Contributing Guide](CONTRIBUTING.md)** - Development guidelines
-- **[Testing](test/README.md)** - Testing procedures
+### Additional Resources
+- Configuration examples in `config/race_monitor.yaml`
+- Launch file documentation in `launch/race_monitor.launch.py`
+- Web UI documentation in `web_ui/README.md`
 
 ---
 
@@ -1148,10 +1194,10 @@ For more information, see [`web_ui/README.md`](web_ui/README.md).
 If you use Race Monitor in your research, please cite:
 
 ```bibtex
-@software{race_monitor2025,
+@software{race_monitor2024,
   author       = {Azab, Mohammed},
   title        = {Race Monitor: Advanced Performance Analysis Framework for Roboracer Autonomous Racing},
-  year         = {2025},
+  year         = {2024},
   publisher    = {GitHub},
   organization = {GIU Roboracer Team},
   howpublished = {\url{https://github.com/GIU-F1Tenth/race_monitor}},
@@ -1214,15 +1260,19 @@ ros2 param get /race_monitor start_line_p2
 
 # Check vehicle position relative to line
 ros2 topic echo car_state/odom --field pose.pose.position
+
+# Monitor lap detection debug output
+ros2 topic echo /race_monitor/lap_count
 ```
 
-**Problem**: High control latency
+**Problem**: Performance issues
 ```bash
 # Check system resources
 top
-# Verify control topic frequency
-ros2 topic hz /drive
-# Review computational monitoring settings
+# Verify odometry topic frequency
+ros2 topic hz car_state/odom
+# Enable performance logging in config
+# Set log_level: "debug" in race_monitor.yaml
 ```
 
 #### Data Export Issues
@@ -1248,7 +1298,10 @@ ros2 param get /race_monitor save_trajectories
 df -h
 
 # Verify output directory path
-ros2 param get /race_monitor trajectory_output_directory
+ros2 param get /race_monitor results_dir
+
+# Check if data directory exists
+ls -la data/
 ```
 
 ### Debug Mode
@@ -1256,8 +1309,11 @@ ros2 param get /race_monitor trajectory_output_directory
 Enable verbose logging for troubleshooting:
 
 ```bash
+# Edit race_monitor.yaml and set:
+# log_level: "debug"  # or "verbose" for maximum detail
+
+# Then launch normally
 ros2 launch race_monitor race_monitor.launch.py \
-    log_level:=DEBUG \
     controller_name:=debug_test
 ```
 
@@ -1322,7 +1378,7 @@ Race Monitor is released under the MIT License. See [LICENSE](LICENSE) for detai
 ```
 MIT License
 
-Copyright (c) 2025 Mohammed Azab - GIU Roboracer Team
+Copyright (c) 2024 Mohammed Azab - GIU Roboracer Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1388,7 +1444,7 @@ Development supported by:
 
 <div align="center">
 
-**Race Monitor v1.0.0**
+**Race Monitor v1.0.0** • *Updated October 2024*
 
 *Advancing autonomous racing research through comprehensive performance analysis*
 
