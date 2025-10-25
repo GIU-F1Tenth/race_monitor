@@ -260,6 +260,10 @@ def generate_launch_description():
             parameters=[config_file_path, override_parameters],
             output='screen',
             emulate_tty=True,
+            additional_env={
+                'QT_LOGGING_RULES': '*.debug=false;qt.qpa.*=false',
+                'QT_QPA_PLATFORM': 'offscreen'
+            }
         )
 
         return [race_monitor_node]

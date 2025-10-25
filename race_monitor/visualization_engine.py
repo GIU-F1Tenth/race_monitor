@@ -766,8 +766,8 @@ class EVOPlotter:
 
             # Plot reference trajectory with better visibility
             ref_xyz = self.reference_trajectory.positions_xyz
-            ax.plot(ref_xyz[:, 0], ref_xyz[:, 1], '--', color='black',
-                    linewidth=4, alpha=0.9, label='Reference Trajectory', zorder=1)
+            ax.plot(ref_xyz[:, 0], ref_xyz[:, 1], '--', color='gray',
+                    linewidth=3, alpha=0.7, label='reference', zorder=1)
 
             # Process only the best lap
             traj = self.lap_trajectories[best_lap]
@@ -785,24 +785,28 @@ class EVOPlotter:
                 # Get trajectory positions
                 est_xyz = traj_est.positions_xyz
 
-                # Create the main error-mapped visualization
-                scatter = ax.scatter(est_xyz[:, 0], est_xyz[:, 1], c=errors, cmap='viridis',
-                                     s=30, alpha=0.8, edgecolors='none', zorder=3)
+                # Create the main error-mapped visualization with trajectory line
+                ax.plot(est_xyz[:, 0], est_xyz[:, 1], '-', color='blue',
+                        linewidth=2.5, alpha=0.6, label='trajectory', zorder=2)
+                
+                # Overlay scatter plot with error coloring
+                scatter = ax.scatter(est_xyz[:, 0], est_xyz[:, 1], c=errors, cmap='jet',
+                                     s=20, alpha=0.9, edgecolors='none', zorder=3)
 
             except Exception as e:
                 self.logger.warn(f"Could not process best lap {best_lap}: {e}", LogLevel.DEBUG)
                 return
 
-            # Add colorbar at the bottom to avoid overlap with legend
-            cbar = plt.colorbar(scatter, ax=ax, shrink=0.8, location='bottom', pad=0.1)
+            # Add colorbar on the right side
+            cbar = plt.colorbar(scatter, ax=ax, shrink=0.8, location='right', pad=0.02)
             cbar.set_label('Error (m)', fontsize=12)
             cbar.ax.tick_params(labelsize=10)
 
             # Formatting
             ax.set_xlabel('x (m)', fontsize=12)
-            ax.set_ylabel('y (m)', fontsize=12)
-            ax.set_title(f'Error Mapped onto Trajectory (Best Lap {best_lap})', fontsize=14, fontweight='bold')
-            ax.legend(loc='upper left', fontsize=10)  # Moved to upper left to avoid colorbar
+            ax.set_ylabel('z (m)', fontsize=12)
+            ax.set_title(f'Error mapped onto trajectory', fontsize=14, fontweight='bold')
+            ax.legend(loc='upper left', fontsize=10)
             ax.grid(True, alpha=0.3)
             ax.set_aspect('equal')
 
@@ -948,7 +952,7 @@ class EVOPlotter:
             if self.reference_trajectory:
                 ref_xyz = self.reference_trajectory.positions_xyz
                 ax.plot(ref_xyz[:, 0], ref_xyz[:, 1], ref_xyz[:, 2],
-                        '--', color='black', linewidth=3, alpha=0.8, label='Reference')
+                        '--', color='gray', linewidth=2, alpha=0.6, label='reference')
 
             # Plot only the best lap trajectory
             traj = self.lap_trajectories[best_lap]
@@ -956,24 +960,27 @@ class EVOPlotter:
                 est_xyz = traj.positions_xyz
 
                 ax.plot(est_xyz[:, 0], est_xyz[:, 1], est_xyz[:, 2],
-                        color='blue', linewidth=3, alpha=0.9, label=f'Best Lap {best_lap}')
+                        color='blue', linewidth=2.5, alpha=0.9, label='trajectory')
 
-                # Add directional vectors at regular intervals
-                step = max(1, len(est_xyz) // 20)  # Show ~20 vectors
+                # Add directional vectors at regular intervals with better visibility
+                step = max(1, len(est_xyz) // 15)  # Show ~15 vectors
                 for j in range(0, len(est_xyz), step):
-                    if j + 1 < len(est_xyz):
-                        # Calculate direction vector
-                        direction = est_xyz[j + 1] - est_xyz[j]
-                        direction = direction / (np.linalg.norm(direction) + 1e-8)  # Normalize
-
-                        # Scale the vector for visibility
-                        scale = 0.4
-                        direction *= scale
-
-                        # Draw arrow
-                        ax.quiver(est_xyz[j, 0], est_xyz[j, 1], est_xyz[j, 2],
-                                  direction[0], direction[1], direction[2],
-                                  color='red', alpha=0.8, arrow_length_ratio=0.1)
+                    if j + step < len(est_xyz):
+                        # Calculate direction vector using a larger step for clearer direction
+                        direction = est_xyz[j + step] - est_xyz[j]
+                        norm = np.linalg.norm(direction)
+                        
+                        if norm > 1e-8:  # Only draw if there's meaningful movement
+                            direction = direction / norm  # Normalize
+                            
+                            # Scale the vector for better visibility
+                            scale = 0.05  # Smaller scale for cleaner arrows
+                            
+                            # Draw arrow with better proportions
+                            ax.quiver(est_xyz[j, 0], est_xyz[j, 1], est_xyz[j, 2],
+                                      direction[0] * scale, direction[1] * scale, direction[2] * scale,
+                                      color='red', alpha=0.8, arrow_length_ratio=0.3,
+                                      linewidth=1.5, normalize=False)
 
             except Exception as e:
                 self.logger.warn(f"Could not process best lap {best_lap} for 3D plot: {e}", LogLevel.DEBUG)
@@ -983,8 +990,8 @@ class EVOPlotter:
             ax.set_xlabel('x (m)', fontsize=12)
             ax.set_ylabel('y (m)', fontsize=12)
             ax.set_zlabel('z (m)', fontsize=12)
-            ax.legend(fontsize=10)
-            ax.set_title(f'3D Trajectory with Direction Vectors (Best Lap {best_lap})', fontsize=14, fontweight='bold')
+            ax.legend(fontsize=10, loc='upper left')
+            ax.set_title(f'3D Trajectory with Direction Vectors', fontsize=14, fontweight='bold')
 
             # Set equal aspect ratio using best lap and reference trajectory
             trajectories = [traj.positions_xyz]
