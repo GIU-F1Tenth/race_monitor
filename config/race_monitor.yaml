@@ -9,8 +9,15 @@ race_monitor:
     start_line_p2: [0.0, 2.0] # Top point of start line [x, y]
     required_laps: 7 # Number of laps to complete race
     debounce_time: 2.0 # Debounce time for lap detection (seconds)
-    output_file: "race_results.json" # CSV file for race results
     frame_id: "map" # Frame ID for visualization
+
+    # Global logging configuration
+    # Log level: "minimal", "normal", "debug", "verbose"
+    # - minimal: Only critical events and final results
+    # - normal: Standard operational messages (recommended)
+    # - debug: Detailed diagnostic information
+    # - verbose: Maximum detail for troubleshooting
+    log_level: "normal"
 
     # Lap detection direction configuration
     lap_detection:
@@ -21,8 +28,6 @@ race_monitor:
       expected_direction: "any"
       # Enable direction validation based on vehicle heading
       validate_heading_direction: false
-      # Log level for lap detection: "minimal", "normal", "debug"
-      log_level: "normal"
 
     # ========================================
     # DIRECTORY CONFIGURATION

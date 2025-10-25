@@ -25,6 +25,7 @@ import rclpy
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from ament_index_python.packages import get_package_share_directory
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
 # EVO imports
 try:
@@ -114,10 +115,10 @@ class ReferenceTrajectoryManager:
                     self.reference_trajectory_file = os.path.join(
                         ref_base_dir, raw_ref_file)
                 self.logger.info(
-                    f"Resolved relative reference path: {raw_ref_file} -> {self.reference_trajectory_file}")
+                    f"Resolved relative reference path: {raw_ref_file} -> {self.reference_trajectory_file}", LogLevel.DEBUG)
             except Exception as e:
                 self.logger.warn(
-                    f"Could not resolve package path, using as-is: {e}")
+                    f"Could not resolve package path, using as-is: {e}", LogLevel.NORMAL)
                 self.reference_trajectory_file = raw_ref_file
         else:
             self.reference_trajectory_file = raw_ref_file
@@ -125,9 +126,9 @@ class ReferenceTrajectoryManager:
         self.reference_trajectory_format = config.get(
             'reference_trajectory_format', "csv")
 
-        self.logger.info(f"Reference trajectory manager configured:")
-        self.logger.info(f"  File: {self.reference_trajectory_file}")
-        self.logger.info(f"  Format: {self.reference_trajectory_format}")
+        self.logger.info("Reference Trajectory Manager configured", LogLevel.NORMAL)
+        self.logger.config("File", self.reference_trajectory_file, LogLevel.NORMAL)
+        self.logger.config("Format", self.reference_trajectory_format, LogLevel.NORMAL)
 
         # Try to load reference trajectory from file if specified
         if self.reference_trajectory_file:
@@ -141,12 +142,12 @@ class ReferenceTrajectoryManager:
             bool: True if successfully loaded
         """
         if not self.reference_trajectory_file:
-            self.logger.warn("No reference trajectory file specified")
+            self.logger.warn("No reference trajectory file specified", LogLevel.NORMAL)
             return False
 
         if not os.path.exists(self.reference_trajectory_file):
             self.logger.warn(
-                f"Reference trajectory file not found: {self.reference_trajectory_file}")
+                f"Reference trajectory file not found: {self.reference_trajectory_file}", LogLevel.NORMAL)
             return False
 
         try:
@@ -158,19 +159,19 @@ class ReferenceTrajectoryManager:
                 success = self._load_kitti_reference()
             else:
                 self.logger.error(
-                    f"Unsupported reference trajectory format: {self.reference_trajectory_format}")
+                    f"Unsupported reference trajectory format: {self.reference_trajectory_format}", LogLevel.NORMAL)
                 return False
 
             if success:
                 self.reference_loaded = True
-                self.logger.info(
-                    f"Successfully loaded reference trajectory from {self.reference_trajectory_file}")
+                self.logger.success(
+                    f"Successfully loaded reference trajectory from {self.reference_trajectory_file}", LogLevel.NORMAL)
                 return True
             else:
                 return False
 
         except Exception as e:
-            self.logger.error(f"Error loading reference trajectory: {e}")
+            self.logger.error(f"Error loading reference trajectory: {e}", LogLevel.NORMAL)
             return False
 
     def _load_csv_reference(self) -> bool:
@@ -263,18 +264,18 @@ class ReferenceTrajectoryManager:
                         )
 
                 self.logger.info(
-                    f"Loaded {len(positions)} reference points from CSV")
+                    f"Loaded {len(positions)} reference points from CSV", LogLevel.DEBUG)
                 return True
 
         except Exception as e:
-            self.logger.error(f"Error loading CSV reference: {e}")
+            self.logger.error(f"Error loading CSV reference: {e}", LogLevel.NORMAL)
             return False
 
     def _load_tum_reference(self) -> bool:
         """Load reference trajectory from TUM format file."""
         if not EVO_AVAILABLE:
             self.logger.error(
-                "EVO library not available for TUM format loading")
+                "EVO library not available for TUM format loading", LogLevel.NORMAL)
             return False
 
         try:
@@ -282,17 +283,17 @@ class ReferenceTrajectoryManager:
                 self.reference_trajectory_file
             )
             self.logger.info(
-                f"Loaded TUM reference trajectory with {len(self.reference_trajectory.poses_se3)} poses")
+                f"Loaded TUM reference trajectory with {len(self.reference_trajectory.poses_se3)} poses", LogLevel.DEBUG)
             return True
         except Exception as e:
-            self.logger.error(f"Error loading TUM reference: {e}")
+            self.logger.error(f"Error loading TUM reference: {e}", LogLevel.NORMAL)
             return False
 
     def _load_kitti_reference(self) -> bool:
         """Load reference trajectory from KITTI format file."""
         if not EVO_AVAILABLE:
             self.logger.error(
-                "EVO library not available for KITTI format loading")
+                "EVO library not available for KITTI format loading", LogLevel.NORMAL)
             return False
 
         try:
@@ -300,10 +301,10 @@ class ReferenceTrajectoryManager:
                 self.reference_trajectory_file
             )
             self.logger.info(
-                f"Loaded KITTI reference trajectory with {len(self.reference_trajectory.poses_se3)} poses")
+                f"Loaded KITTI reference trajectory with {len(self.reference_trajectory.poses_se3)} poses", LogLevel.DEBUG)
             return True
         except Exception as e:
-            self.logger.error(f"Error loading KITTI reference: {e}")
+            self.logger.error(f"Error loading KITTI reference: {e}", LogLevel.NORMAL)
             return False
 
     def update_reference_trajectory(self, msg):
@@ -331,10 +332,10 @@ class ReferenceTrajectoryManager:
 
             self.reference_updated = True
             self.logger.debug(
-                f"Updated reference trajectory with {len(self.horizon_reference_data)} points")
+                f"Updated reference trajectory with {len(self.horizon_reference_data)} points", LogLevel.VERBOSE)
 
         except Exception as e:
-            self.logger.error(f"Error updating reference trajectory: {e}")
+            self.logger.error(f"Error updating reference trajectory: {e}", LogLevel.NORMAL)
 
     def update_reference_path(self, msg: Path):
         """
@@ -361,10 +362,10 @@ class ReferenceTrajectoryManager:
 
             self.reference_updated = True
             self.logger.debug(
-                f"Updated reference path with {len(self.reference_path_data)} points")
+                f"Updated reference path with {len(self.reference_path_data)} points", LogLevel.VERBOSE)
 
         except Exception as e:
-            self.logger.error(f"Error updating reference path: {e}")
+            self.logger.error(f"Error updating reference path: {e}", LogLevel.NORMAL)
 
     def get_reference_trajectory(self):
         """
@@ -451,11 +452,11 @@ class ReferenceTrajectoryManager:
                             f"{point['qx']:.6f} {point['qy']:.6f} {point['qz']:.6f} {point['qw']:.6f}\n")
 
             self.logger.info(
-                f"Saved horizon reference trajectory to: {filepath}")
+                f"Saved horizon reference trajectory to: {filepath}", LogLevel.DEBUG)
 
         except Exception as e:
             self.logger.error(
-                f"Error saving horizon reference trajectory: {e}")
+                f"Error saving horizon reference trajectory: {e}", LogLevel.NORMAL)
 
     def is_reference_available(self) -> bool:
         """Check if any reference trajectory is available."""

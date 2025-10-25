@@ -156,7 +156,6 @@ class ConfigManager:
                     "start_line_p2": params.get("start_line_p2", [0.0, 1.0]),
                     "required_laps": params.get("required_laps", 5),
                     "debounce_time": params.get("debounce_time", 2.0),
-                    "output_file": params.get("output_file", "race_results.csv"),
                     "frame_id": params.get("frame_id", "map")
                 },
                 "race_ending": {

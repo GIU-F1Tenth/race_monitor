@@ -38,6 +38,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from .metadata_manager import MetadataManager
 from ament_index_python.packages import get_package_share_directory
+from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
 # Optional MATLAB file support
 try:
@@ -217,18 +218,18 @@ class DataManager:
                 if source_data_dir:
                     self.trajectory_output_directory = source_data_dir
                     self.logger.info(
-                        f"Using source workspace data directory: {self.trajectory_output_directory}")
+                        f"Using source workspace data directory: {self.trajectory_output_directory}", LogLevel.DEBUG)
                 else:
                     # Fall back to install directory
                     self.trajectory_output_directory = os.path.join(package_share_dir, 'data')
                     # Ensure directory exists
                     os.makedirs(self.trajectory_output_directory, exist_ok=True)
                     self.logger.info(
-                        f"Using install directory: {self.trajectory_output_directory}")
+                        f"Using install directory: {self.trajectory_output_directory}", LogLevel.DEBUG)
 
             except Exception as e:
                 self.logger.warn(
-                    f"Could not resolve package path, using current directory: {e}")
+                    f"Could not resolve package path, using current directory: {e}", LogLevel.NORMAL)
                 self.trajectory_output_directory = os.path.join(os.getcwd(), 'race_monitor_data')
                 os.makedirs(self.trajectory_output_directory, exist_ok=True)
         elif not os.path.isabs(raw_trajectory_dir):
@@ -238,10 +239,10 @@ class DataManager:
                 self.trajectory_output_directory = os.path.join(
                     package_share_dir, raw_trajectory_dir)
                 self.logger.info(
-                    f"Resolved relative output path: {raw_trajectory_dir} -> {self.trajectory_output_directory}")
+                    f"Resolved relative output path: {raw_trajectory_dir} -> {self.trajectory_output_directory}", LogLevel.DEBUG)
             except Exception as e:
                 self.logger.warn(
-                    f"Could not resolve package path, using as-is: {e}")
+                    f"Could not resolve package path, using as-is: {e}", LogLevel.NORMAL)
                 self.trajectory_output_directory = raw_trajectory_dir
         else:
             # Absolute path provided, use as-is
@@ -311,9 +312,9 @@ class DataManager:
         # Initialize metadata manager
         self.metadata_manager = MetadataManager(self.trajectory_output_directory, self.logger)
 
-        self.logger.info(f"Data manager configured with {len(self.output_formats)} format(s)")
+        self.logger.config(f"Data manager configured with {len(self.output_formats)} format(s)", LogLevel.NORMAL)
         if self.enable_advanced_metrics:
-            self.logger.info("Advanced metrics and plotting enabled")
+            self.logger.config("Advanced metrics and plotting enabled", LogLevel.NORMAL)
 
     def _setup_directories(self):
         """Create base directory structure for data storage."""
@@ -327,7 +328,7 @@ class DataManager:
             self.results_dir = None
 
         except Exception as e:
-            self.logger.error(f"Error setting up directories: {e}")
+            self.logger.error(f"Error setting up directories: {e}", LogLevel.NORMAL)
 
     def start_new_lap_trajectory(self, lap_number: int):
         """Start recording a new lap trajectory."""
@@ -371,7 +372,7 @@ class DataManager:
             bool: True if successfully saved
         """
         if not self.current_lap_trajectory:
-            self.logger.warn(f"No trajectory data for lap {lap_number}")
+            self.logger.warn(f"No trajectory data for lap {lap_number}", LogLevel.NORMAL)
             return False
 
         # Store completed trajectory
@@ -403,7 +404,7 @@ class DataManager:
         """
         # Ensure trajectory directory is set up
         if self.trajectory_dir is None:
-            self.logger.warning("Trajectory directory not set up yet - cannot save trajectory")
+            self.logger.warn("Trajectory directory not set up yet - cannot save trajectory", LogLevel.NORMAL)
             return False
 
         lap_number = trajectory_data['lap_number']
@@ -431,7 +432,7 @@ class DataManager:
             return success
 
         except Exception as e:
-            self.logger.error(f"Error saving trajectory for lap {lap_number}: {e}")
+            self.logger.error(f"Error saving trajectory for lap {lap_number}: {e}", LogLevel.NORMAL)
             return False
 
     def _save_trajectory_csv(self, lap_number: int, points: List[Dict]) -> bool:
@@ -450,7 +451,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving CSV trajectory: {e}")
+            self.logger.error(f"Error saving CSV trajectory: {e}", LogLevel.DEBUG)
             return False
 
     def _save_trajectory_tum(self, lap_number: int, points: List[Dict]) -> bool:
@@ -476,7 +477,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving TUM trajectory: {e}")
+            self.logger.error(f"Error saving TUM trajectory: {e}", LogLevel.DEBUG)
             return False
 
     def _save_trajectory_json(self, lap_number: int, trajectory_data: Dict) -> bool:
@@ -491,7 +492,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving JSON trajectory: {e}")
+            self.logger.error(f"Error saving JSON trajectory: {e}", LogLevel.DEBUG)
             return False
 
     def _save_trajectory_pickle(self, lap_number: int, trajectory_data: Dict) -> bool:
@@ -506,13 +507,13 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving Pickle trajectory: {e}")
+            self.logger.error(f"Error saving Pickle trajectory: {e}", LogLevel.DEBUG)
             return False
 
     def _save_trajectory_mat(self, lap_number: int, trajectory_data: Dict) -> bool:
         """Save trajectory as MATLAB MAT file."""
         if not MAT_AVAILABLE:
-            self.logger.warning("scipy.io not available, cannot save MAT files")
+            self.logger.warn("scipy.io not available, cannot save MAT files", LogLevel.DEBUG)
             return False
 
         try:
@@ -561,7 +562,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving MAT trajectory: {e}")
+            self.logger.error(f"Error saving MAT trajectory: {e}", LogLevel.DEBUG)
             return False
 
     def save_race_results_to_csv(self, race_data: Dict, filename_override: str = None) -> bool:
@@ -616,18 +617,18 @@ class DataManager:
                         writer.writerow(['worst_lap_s', f"{max(lap_times):.4f}"])
                         writer.writerow(['average_lap_s', f"{np.mean(lap_times):.4f}"])
 
-                self.logger.info(f"Saved race results CSV to: {filepath}")
+                self.logger.info(f"Saved race results CSV to: {filepath}", LogLevel.DEBUG)
                 return True
 
             try:
                 self.save_consolidated_race_results(race_data)
                 return True
             except Exception as e:
-                self.logger.error(f"Failed to save consolidated results as fallback: {e}")
+                self.logger.error(f"Failed to save consolidated results as fallback: {e}", LogLevel.NORMAL)
                 return False
 
         except Exception as e:
-            self.logger.error(f"Error saving race results: {e}")
+            self.logger.error(f"Error saving race results: {e}", LogLevel.NORMAL)
             return False
 
     def save_evaluation_summary(self, evaluation_data: Dict) -> bool:
@@ -645,7 +646,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving evaluation summary: {e}")
+            self.logger.error(f"Error saving evaluation summary: {e}", LogLevel.NORMAL)
             return False
 
     def get_trajectory_data(self, lap_number: int = None) -> Optional[Dict]:
@@ -705,7 +706,7 @@ class DataManager:
                 return trajectory.PosePath3D(positions, timestamps)
 
         except Exception as e:
-            self.logger.error(f"Error creating EVO trajectory: {e}")
+            self.logger.error(f"Error creating EVO trajectory: {e}", LogLevel.DEBUG)
             return None
 
     def get_data_statistics(self) -> Dict[str, Any]:
@@ -980,15 +981,14 @@ class DataManager:
                                     writer.writerow(
                                         [formatted_key, f"{value:.4f}" if isinstance(value, float) else value])
 
-                    self.logger.info(f"Saved detailed CSV summary to: {csv_filepath}")
+                    self.logger.debug(f"Saved detailed CSV summary to: {csv_filepath}")
                 except Exception as e:
                     pass
 
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race summary: {e}")
-            return False
+            self.logger.error(f"Error saving race summary: {e}", LogLevel.NORMAL)
             return False
 
     def save_consolidated_race_results(self, race_summary: Dict, race_evaluation: Dict = None) -> bool:
@@ -1034,7 +1034,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving consolidated race results: {e}")
+            self.logger.error(f"Error saving consolidated race results: {e}", LogLevel.NORMAL)
             return False
 
     def save_race_evaluation(self, evaluation_data: Dict) -> bool:
@@ -1100,7 +1100,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race evaluation: {e}")
+            self.logger.error(f"Error saving race evaluation: {e}", LogLevel.NORMAL)
             return False
 
     def save_race_evaluation_csv(self, evaluation_data: Dict) -> bool:
@@ -1192,7 +1192,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race evaluation CSV: {e}")
+            self.logger.error(f"Error saving race evaluation CSV: {e}", LogLevel.DEBUG)
             return False
 
     def save_race_results_csv(self, race_results: Dict) -> bool:
@@ -1240,7 +1240,7 @@ class DataManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving race results CSV: {e}")
+            self.logger.error(f"Error saving race results CSV: {e}", LogLevel.DEBUG)
             return False
 
     def create_run_directory(self, controller_name: str, experiment_id: str) -> str:
@@ -1294,12 +1294,12 @@ class DataManager:
                 self.metadata_manager.save_metadata_file('experiment_metadata.txt')
 
                 # Log experiment summary
-                self.logger.info(f"Experiment setup: {self.metadata_manager.get_experiment_summary()}")
+                self.logger.info(f"Experiment setup: {self.metadata_manager.get_experiment_summary()}", LogLevel.NORMAL)
 
             return experiment_dir
 
         except Exception as e:
-            self.logger.error(f"Error creating run directory: {e}")
+            self.logger.error(f"Error creating run directory: {e}", LogLevel.NORMAL)
             return self.base_output_dir
 
     def save_ape_rpe_metrics_files(self, advanced_metrics: Dict) -> bool:
@@ -1314,7 +1314,7 @@ class DataManager:
         """
         try:
             if not advanced_metrics:
-                self.logger.warn("No advanced metrics provided for APE/RPE file generation")
+                self.logger.warn("No advanced metrics provided for APE/RPE file generation", LogLevel.DEBUG)
                 return False
 
             metrics_dir = self.get_metrics_directory()
@@ -1325,7 +1325,7 @@ class DataManager:
                 ape_filepath = self._get_organized_file_path(metrics_dir, 'ape_metrics_summary.json')
                 with open(ape_filepath, 'w') as f:
                     json.dump(ape_metrics, f, indent=2, default=str)
-                self.logger.info(f"Saved APE metrics summary to: {ape_filepath}")
+                self.logger.debug(f"Saved APE metrics summary to: {ape_filepath}")
 
             # Extract RPE metrics
             rpe_metrics = {k: v for k, v in advanced_metrics.items() if 'rpe_' in k}
@@ -1333,12 +1333,12 @@ class DataManager:
                 rpe_filepath = self._get_organized_file_path(metrics_dir, 'rpe_metrics_summary.json')
                 with open(rpe_filepath, 'w') as f:
                     json.dump(rpe_metrics, f, indent=2, default=str)
-                self.logger.info(f"Saved RPE metrics summary to: {rpe_filepath}")
+                self.logger.debug(f"Saved RPE metrics summary to: {rpe_filepath}")
 
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving APE/RPE metrics files: {e}")
+            self.logger.error(f"Error saving APE/RPE metrics files: {e}", LogLevel.DEBUG)
             return False
 
     def generate_ape_rpe_plots(self, advanced_metrics: Dict) -> bool:
@@ -1357,11 +1357,11 @@ class DataManager:
                 import matplotlib.pyplot as plt
                 import numpy as np
             except ImportError:
-                self.logger.warn("Matplotlib not available - skipping APE/RPE plot generation")
+                self.logger.warn("Matplotlib not available - skipping APE/RPE plot generation", LogLevel.DEBUG)
                 return False
 
             if not advanced_metrics:
-                self.logger.warn("No advanced metrics provided for APE/RPE plot generation")
+                self.logger.warn("No advanced metrics provided for APE/RPE plot generation", LogLevel.DEBUG)
                 return False
 
             plots_dir = self.get_plots_directory()
@@ -1426,7 +1426,7 @@ class DataManager:
                 ape_plot_path = os.path.join(plots_dir, f'ape_metrics_analysis.png')
                 plt.savefig(ape_plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
-                self.logger.info(f"Saved APE metrics plot to: {ape_plot_path}")
+                self.logger.debug(f"Saved APE metrics plot to: {ape_plot_path}")
 
             if rpe_metrics:
                 # Create RPE metrics plot
@@ -1484,7 +1484,7 @@ class DataManager:
                 rpe_plot_path = os.path.join(plots_dir, f'rpe_metrics_analysis.png')
                 plt.savefig(rpe_plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
-                self.logger.info(f"Saved RPE metrics plot to: {rpe_plot_path}")
+                self.logger.debug(f"Saved RPE metrics plot to: {rpe_plot_path}")
 
             # Create a combined APE vs RPE comparison plot
             if ape_metrics and rpe_metrics:
@@ -1538,10 +1538,10 @@ class DataManager:
                     comparison_plot_path = os.path.join(plots_dir, f'ape_vs_rpe_comparison.png')
                     plt.savefig(comparison_plot_path, dpi=300, bbox_inches='tight')
                     plt.close()
-                    self.logger.info(f"Saved APE vs RPE comparison plot to: {comparison_plot_path}")
+                    self.logger.debug(f"Saved APE vs RPE comparison plot to: {comparison_plot_path}")
 
             return True
 
         except Exception as e:
-            self.logger.error(f"Error generating APE/RPE plots: {e}")
+            self.logger.error(f"Error generating APE/RPE plots: {e}", LogLevel.DEBUG)
             return False
