@@ -190,9 +190,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            build
-            install
-            log
+            ws/build
+            ws/install
+            ws/log
           key: ${{ runner.os }}-colcon-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-colcon-
@@ -433,8 +433,8 @@ jobs:
         with:
           name: linux-ros2-build-${{ github.run_id }}
           path: |
-            install/
-            build/
+            ws/install/
+            ws/build/
           retention-days: 3
 
   cleanup-on-failure:
