@@ -10,15 +10,22 @@ comparative analysis across multiple laps.
 License: MIT
 """
 
+import os
+os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false'
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+
 import json
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import os
 import sys
 import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for saving plots
+
+# Suppress Qt warnings that might still appear
+import warnings
+warnings.filterwarnings('ignore', message='.*QStandardPaths.*')
 
 from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 

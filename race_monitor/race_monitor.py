@@ -25,6 +25,10 @@ Core Components:
 License: MIT
 """
 
+import os
+os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false'
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
@@ -38,7 +42,6 @@ from ackermann_msgs.msg import AckermannDriveStamped
 import numpy as np
 import tf_transformations
 import math
-import os
 import sys
 import json
 from datetime import datetime
