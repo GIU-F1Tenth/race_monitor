@@ -68,8 +68,8 @@ RUN rosdep init || echo "rosdep already initialized" \
 
 # Add ROS2 binaries to PATH
 ENV PATH="/opt/ros/humble/bin:${PATH}"
-ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:${PYTHONPATH}"
-ENV LD_LIBRARY_PATH="/opt/ros/humble/lib:${LD_LIBRARY_PATH}"
+ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages"
+ENV LD_LIBRARY_PATH="/opt/ros/humble/lib"
 ENV AMENT_PREFIX_PATH="/opt/ros/humble"
 ENV CMAKE_PREFIX_PATH="/opt/ros/humble"
 
@@ -83,6 +83,17 @@ COPY requirements.txt constraints.txt /tmp/
 RUN python3 -m pip install --upgrade pip && \
     pip3 install -c /tmp/constraints.txt -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt /tmp/constraints.txt
+
+# Copy and install evo from submodule
+COPY evo/ /tmp/evo/
+RUN cd /tmp/evo && \
+    pip3 install . && \
+    cd / && \
+    rm -rf /tmp/evo
+
+# Verify evo installation
+RUN python3 -c "import evo; print(f'✓ evo {evo.__version__} installed successfully')" || \
+    echo "⚠️ evo installation verification failed"
 
 # Verify tf_transformations is available
 RUN echo "Verifying tf_transformations installation..." && \

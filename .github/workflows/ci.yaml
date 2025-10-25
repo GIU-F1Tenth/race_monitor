@@ -10,6 +10,8 @@ on:
       - 'requirements.txt'
       - 'constraints.txt'
       - '.github/workflows/ci.yaml'
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
   workflow_dispatch:
 
 env:
@@ -18,7 +20,6 @@ env:
   IMAGE_NAME: giu-f1tenth/race-monitor-ci
 
 jobs:
-  # Check if Docker files changed
   check-docker-changes:
     name: Check if Docker rebuild needed
     runs-on: ubuntu-22.04
@@ -27,6 +28,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
         
       - name: Check for Docker-related changes
         uses: dorny/paths-filter@v3
@@ -37,12 +40,13 @@ jobs:
               - 'Dockerfile'
               - 'requirements.txt'
               - 'constraints.txt'
+              - '.github/workflows/ci.yaml'
 
   docker-build:
-    name: Build ubuntu-Ros2-Docker Image
+    name: Build Ubuntu-ROS2-Docker Image
     runs-on: ubuntu-22.04
     needs: check-docker-changes
-    # Only build if Docker files changed OR workflow was manually triggered
+    # Build if Docker files changed OR workflow was manually triggered OR push to main/dev
     if: needs.check-docker-changes.outputs.docker-changed == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
       contents: read
@@ -52,6 +56,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
       - name: Generate safe Docker tag
         id: image-tag
@@ -82,16 +88,19 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   python-lint:
     name: Python Code Quality
     runs-on: ubuntu-22.04
+    if: always() && !cancelled()
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +110,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: 'recursive'
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -144,186 +153,45 @@ jobs:
     name: Test Race Monitor Pkg
     runs-on: ubuntu-22.04
     needs: [python-lint, check-docker-changes, docker-build]
-    # Skip if Docker build was needed but failed, or if python-lint failed
-    if: |
-      always() && 
-      needs.python-lint.result == 'success' &&
-      (needs.docker-build.result == 'success' || needs.docker-build.result == 'skipped')
-    
+    if: always() && needs.python-lint.result == 'success'
+    container:
+      # Use the newly built image if available, otherwise fallback to dev/main
+      image: ${{ needs.docker-build.result == 'success' && format('ghcr.io/giu-f1tenth/race-monitor-ci:{0}', needs.docker-build.outputs.image-tag) || (github.event_name == 'pull_request' && 'ghcr.io/giu-f1tenth/race-monitor-ci:dev') || 'ghcr.io/giu-f1tenth/race-monitor-ci:main' }}
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: 'recursive'
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Source ROS2
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+
+      - name: Cache pip
+        uses: actions/cache@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt','**/constraints.txt') }}
 
-      - name: Select and pull Docker image
-        id: select-image
-        run: |
-          # Select Docker image with fallback priority:
-          # 1. Newly built image (if docker-build job ran)
-          # 2. Default branch tag (e.g., main, master)
-          # 3. Latest tag
-          # 4. Dev tag
-          
-          DOCKER_IMAGE="ghcr.io/${{ github.repository_owner }}/race-monitor-ci"
-          
-          # Try newly built tag first (from current run)
-          IMAGE_TAG="${{ needs.docker-build.outputs.image-tag }}"
-          
-          if [ -z "$IMAGE_TAG" ] || ! docker pull "$DOCKER_IMAGE:$IMAGE_TAG" 2>/dev/null; then
-            echo "Newly built image not available, trying default branch..."
-            IMAGE_TAG="${{ github.event.repository.default_branch }}"
-            
-            if ! docker pull "$DOCKER_IMAGE:$IMAGE_TAG" 2>/dev/null; then
-              echo "Default branch image not available, trying latest..."
-              IMAGE_TAG="latest"
-              
-              if ! docker pull "$DOCKER_IMAGE:$IMAGE_TAG" 2>/dev/null; then
-                echo "Latest image not available, trying dev..."
-                IMAGE_TAG="dev"
-                
-                if ! docker pull "$DOCKER_IMAGE:$IMAGE_TAG" 2>/dev/null; then
-                  echo "❌ No Docker image available. Please run workflow_dispatch to build base image."
-                  exit 1
-                fi
-              fi
-            fi
-          fi
-          
-          echo "Using Docker image: $DOCKER_IMAGE:$IMAGE_TAG"
-          echo "image=$DOCKER_IMAGE:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Set up workspace in container
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              mkdir -p ws/src/race_monitor
-              shopt -s dotglob
-              for item in *; do
-                [ "$item" != "ws" ] && cp -r "$item" ws/src/race_monitor/
-              done
-            '
-
-      - name: Verify ROS2 and install dependencies
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              [ ! -d "/etc/ros/rosdep" ] && (rosdep init || true)
-              rosdep update || true
-              python3 -c "import tf_transformations" 2>/dev/null || pip3 install transforms3d
-            '
-
-      - name: Build package
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+
-            '
-
-      - name: Run colcon tests
-        continue-on-error: true
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
-              colcon test --packages-select race_monitor --event-handlers console_direct+ || true
-              colcon test-result --verbose || true
-            '
-
-      - name: Test Python imports
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c 'source /opt/ros/humble/setup.bash && source install/setup.bash && python3 -c "import sys, numpy, transforms3d, tf_transformations, race_monitor; print(\"✓ All imports successful\")"'
-
-      - name: Test ROS2 integration
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c 'source /opt/ros/humble/setup.bash && source install/setup.bash && python3 -c "import rclpy; from std_msgs.msg import String; rclpy.init(); print(\"✓ ROS2 integration test passed\"); rclpy.shutdown()"'
-
-      - name: Test launch file
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
-              timeout 30s bash -c "
-                ros2 launch race_monitor race_monitor.launch.py &
-                LAUNCH_PID=\$!
-                sleep 20
-                if kill -0 \$LAUNCH_PID 2>/dev/null; then
-                  echo \"✓ Launch file started successfully (PID \$LAUNCH_PID)\"
-                  kill \$LAUNCH_PID || true
-                  exit 0
-                else
-                  echo \"✗ Launch file failed to start\"
-                  exit 1
-                fi
-              "
-            '
-
-      - name: Test node executable
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
-              timeout 18s bash -c "
-                ros2 run race_monitor race_monitor &
-                NODE_PID=\$!
-                sleep 12
-                if kill -0 \$NODE_PID 2>/dev/null; then
-                  echo \"✓ Node executable started successfully (PID \$NODE_PID)\"
-                  kill \$NODE_PID || true
-                  exit 0
-                else
-                  echo \"✗ Node executable failed to start\"
-                  exit 1
-                fi
-              "
-            '
+      - name: Cache colcon build (install & build)
+        uses: actions/cache@v4
+        with:
+          path: |
+            build
+            install
+            log
+          key: ${{ runner.os }}-colcon-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-colcon-
 
       - name: Set up workspace structure
+        shell: bash
         run: |
           mkdir -p ws/src/race_monitor
           # Copy all files directly to race_monitor package directory
@@ -335,149 +203,229 @@ jobs:
           done
 
       - name: Verify ROS2 environment
+        shell: bash
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            --user root \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              echo "=== Starting ROS2 Environment Verification ==="
-              
-              # Verify rosdep is initialized
-              if [ ! -d "/etc/ros/rosdep" ]; then
-                echo "rosdep not initialized, initializing now..."
-                rosdep init || echo "rosdep already initialized"
-              fi
-              
-              # Update rosdep
-              rosdep update || true
-              
-              # Test tf_transformations import
-              source /opt/ros/humble/setup.bash
-              python3 -c "import tf_transformations; print(\"✓ tf_transformations available\")" || {
-                echo "Installing transforms3d as alternative..."
-                pip3 install transforms3d
-              }
-              
-              echo "=== ROS2 Environment Verification Complete ==="
-            '
+          echo "=== Starting ROS2 Environment Verification ==="
+          
+          # Verify rosdep is initialized
+          if [ ! -d "/etc/ros/rosdep" ]; then
+            echo "⚠️  rosdep not initialized, initializing now..."
+            rosdep init || echo "rosdep already initialized"
+          else
+            echo "✓ rosdep already initialized"
+          fi
+          
+          # Update rosdep
+          echo "=== Updating rosdep ==="
+          rosdep update || echo "rosdep update completed"
+          
+          echo ""
+          echo "=== Testing Python import WITH ROS2 sourcing ==="
+          bash -c "source /opt/ros/humble/setup.bash && python3 -c 'import tf_transformations; print(\"✓ tf_transformations available\")'" || {
+            echo "✗ tf_transformations import failed, installing alternatives..."
+            pip3 install transforms3d
+            echo "✓ transforms3d installed as alternative"
+          }
+          
+          echo ""
+          echo "=== ROS2 Environment Verification Complete ==="
 
-      - name: Build package in container
+      - name: Build package
+        shell: bash
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              
-              echo "=== Building race_monitor package ==="
-              colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+
-              
-              echo "=== Build completed ==="
-            '
+          cd ws
+          echo "=== Starting colcon build ==="
+          
+          source /opt/ros/humble/setup.bash
+          
+          echo "=== Building race_monitor package ==="
+          colcon build --packages-select race_monitor --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+
+          
+          echo ""
+          echo "=== Build completed ==="
+          ls -la install/ || echo "Install directory not found"
 
-      - name: Run package tests
-        continue-on-error: true
+      - name: Run package tests (colcon)
+        shell: bash
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
-              
-              colcon test --packages-select race_monitor --event-handlers console_direct+ || true
-              colcon test-result --verbose || true
-            '
+          cd ws
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash || true
 
-      - name: Test Python imports
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
-              
-              python3 -c "import numpy, transforms3d, race_monitor; print(\"✓ All imports successful\")"
-            '
+          # Run colcon tests if present
+          colcon test --packages-select race_monitor --event-handlers console_direct+ || true
+          colcon test-result --verbose || true
 
-      - name: Test ROS2 integration
+      - name: Minimal import & diagnostics
+        shell: bash
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
-              
-              python3 -c "import rclpy; from std_msgs.msg import String; rclpy.init(); print(\"✓ ROS2 integration test passed\"); rclpy.shutdown()"
-            '
+          cd ws
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash || true
+          
+          echo "=== Import Diagnostics ==="
+          python3 - <<'EOF'
+          import sys
+          import numpy as np
+          
+          print('=== Python Environment ===')
+          print('Python:', sys.version.splitlines()[0])
+          print('NumPy:', np.__version__)
+          
+          print('')
+          print('=== Testing evo import ===')
+          try:
+              import evo
+              print('✓ evo:', evo.__version__)
+          except Exception as e:
+              print('✗ evo import failed:', e)
+              raise
+          
+          print('')
+          print('=== Testing transforms3d import ===')
+          try:
+              import transforms3d
+              print('✓ transforms3d:', transforms3d.__version__)
+          except Exception as e:
+              print('✗ transforms3d import failed:', e)
+          
+          print('')
+          print('=== Testing tf_transformations import ===')
+          try:
+              import tf_transformations
+              print('✓ tf_transformations available')
+          except Exception as e:
+              print('✗ tf_transformations import FAILED:', e)
+              raise
+          
+          print('')
+          print('=== Testing race_monitor import ===')
+          try:
+              import race_monitor
+              print('✓ race_monitor import: OK')
+          except Exception as e:
+              print('✗ race_monitor import: FAILED', e)
+              raise
+          
+          print('')
+          print('=== All imports successful ===')
+          EOF
 
-      - name: Test launch file
+      - name: ROS2 Integration Tests
+        shell: bash
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
-              
-              timeout 30s bash -c "
-                ros2 launch race_monitor race_monitor.launch.py &
-                LAUNCH_PID=\$!
-                sleep 20
-                if kill -0 \$LAUNCH_PID 2>/dev/null; then
-                  echo \"✓ Launch file started successfully\"
-                  kill \$LAUNCH_PID || true
-                  exit 0
-                else
-                  echo \"✗ Launch file failed to start\"
-                  exit 1
-                fi
-              "
-            '
+          cd ws
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
 
-      - name: Test node executable
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/ws \
-            -e ROS_DISTRO=humble \
-            ${{ steps.select-image.outputs.image }} \
-            bash -c '
-              source /opt/ros/humble/setup.bash
-              source install/setup.bash
+          # Smoke pub/sub test
+          echo "Running ROS2 pub/sub smoke test..."
+          python3 - <<'PY'
+          import rclpy
+          from rclpy.node import Node
+          from std_msgs.msg import String
+          import time
+          import sys
+
+          try:
+              rclpy.init()
               
-              timeout 18s bash -c "
-                ros2 run race_monitor race_monitor &
-                NODE_PID=\$!
-                sleep 12
-                if kill -0 \$NODE_PID 2>/dev/null; then
-                  echo \"✓ Node executable started successfully\"
-                  kill \$NODE_PID || true
-                  exit 0
-                else
-                  echo \"✗ Node executable failed to start\"
-                  exit 1
-                fi
-              "
-            '
+              class TestNode(Node):
+                  def __init__(self):
+                      super().__init__('ci_smoke_test')
+                      self.pub = self.create_publisher(String, 'ci_test_topic', 10)
+                      self.sub = self.create_subscription(String, 'ci_test_topic', self.cb, 10) 
+                      self.received = False
+
+                  def cb(self, msg):
+                      if msg.data == 'ping':
+                          self.received = True
+
+              node = TestNode()
+              
+              # Give some time for setup
+              time.sleep(0.5)
+              
+              # Publish and check for message reception
+              for i in range(5):
+                  node.pub.publish(String(data='ping'))
+                  rclpy.spin_once(node, timeout_sec=0.5)
+                  if node.received:
+                      break
+                  time.sleep(0.1)
+
+              if not node.received:
+                  print('✗ ROS2 pub/sub smoke test failed: no message loopback')
+                  sys.exit(1)
+              else:
+                  print('✓ ROS2 pub/sub smoke test passed')
+                  
+          except Exception as e:
+              print(f'✗ ROS2 pub/sub smoke test failed with error: {e}')
+              sys.exit(1)
+          finally:
+              try:
+                  if 'node' in locals():
+                      node.destroy_node()
+                  if rclpy.ok():
+                      rclpy.shutdown()
+              except Exception as cleanup_e:
+                  print(f'✗ ROS2 cleanup error: {cleanup_e}')
+          PY
+
+      - name: Test Launch File
+        shell: bash
+        run: |
+          cd ws
+          
+          echo "Testing launch file..."
+          timeout 30s bash -c '
+            export PATH="/opt/ros/humble/bin:${PATH}"
+            source /opt/ros/humble/setup.bash
+            source install/setup.bash
+            
+            ros2 launch race_monitor race_monitor.launch.py &
+            LAUNCH_PID=$!
+            sleep 20
+            if kill -0 $LAUNCH_PID 2>/dev/null; then
+              echo "✓ Launch file started successfully (PID $LAUNCH_PID)"
+              kill $LAUNCH_PID || true
+              exit 0
+            else
+              echo "✗ Launch file failed to start"
+              exit 1
+            fi
+          '
+
+      - name: Test Node Executable
+        shell: bash
+        run: |
+          cd ws
+
+          echo "Testing node executable..."
+          timeout 18s bash -c '
+            export PATH="/opt/ros/humble/bin:${PATH}"
+            source /opt/ros/humble/setup.bash
+            source install/setup.bash
+            
+            ros2 run race_monitor race_monitor &
+            NODE_PID=$!
+            sleep 12
+            if kill -0 $NODE_PID 2>/dev/null; then
+              echo "✓ Node executable started successfully (PID $NODE_PID)"
+              kill $NODE_PID || true
+              exit 0
+            else
+              echo "✗ Node executable failed to start"
+              exit 1
+            fi
+          '
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-ros2-build-${{ github.run_id }}
-          path: ws/install/
+          path: |
+            install/
+            build/
           retention-days: 3

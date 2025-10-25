@@ -41,7 +41,7 @@ import numpy as np
 import json
 import csv
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, TYPE_CHECKING
 import logging
 from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
@@ -57,8 +57,12 @@ try:
     import evo
     EVO_AVAILABLE = True
 except ImportError as e:
-    print(f"❌ EVO not available: {e}")
+    print(f"⚠️ EVO not available: {e}")
+    print("⚠️ Advanced trajectory analysis features will be disabled.")
     EVO_AVAILABLE = False
+    # Create dummy types for type hints when evo is not available
+    if TYPE_CHECKING:
+        from evo.core import trajectory
 
 
 class ResearchTrajectoryEvaluator:
@@ -146,7 +150,7 @@ class ResearchTrajectoryEvaluator:
         if self.config.get('save_intermediate_results', True):
             self._save_lap_results(lap_number)
 
-    def _convert_to_evo_trajectory(self, trajectory_data: List[Dict]) -> Optional[trajectory.PoseTrajectory3D]:
+    def _convert_to_evo_trajectory(self, trajectory_data: List[Dict]) -> Optional['trajectory.PoseTrajectory3D']:
         """Convert trajectory data to EVO format with error handling"""
         try:
             if len(trajectory_data) < 2:
@@ -193,7 +197,7 @@ class ResearchTrajectoryEvaluator:
             self.logger.error(f"Error converting trajectory: {e}")
             return None
 
-    def _apply_filtering(self, traj: trajectory.PoseTrajectory3D) -> trajectory.PoseTrajectory3D:
+    def _apply_filtering(self, traj: 'trajectory.PoseTrajectory3D') -> 'trajectory.PoseTrajectory3D':
         """Apply trajectory filtering using EVO filters"""
         try:
             if not self.config.get('filter_types'):
@@ -264,7 +268,7 @@ class ResearchTrajectoryEvaluator:
             self.logger.error(f"Error applying filtering: {e}")
             return traj
 
-    def _analyze_lap_trajectory(self, lap_number: int, traj: trajectory.PoseTrajectory3D):
+    def _analyze_lap_trajectory(self, lap_number: int, traj: 'trajectory.PoseTrajectory3D'):
         """Perform comprehensive trajectory analysis"""
         metrics_dict = {}
 
@@ -288,7 +292,7 @@ class ResearchTrajectoryEvaluator:
 
         self.detailed_metrics[lap_number] = metrics_dict
 
-    def _calculate_basic_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, float]:
+    def _calculate_basic_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, float]:
         """Calculate basic trajectory metrics"""
         metrics = {}
 
@@ -315,7 +319,7 @@ class ResearchTrajectoryEvaluator:
 
         return metrics
 
-    def _calculate_advanced_evo_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, Any]:
+    def _calculate_advanced_evo_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, Any]:
         """Calculate advanced EVO metrics with all pose relations and statistics"""
         results = {}
 
@@ -395,7 +399,7 @@ class ResearchTrajectoryEvaluator:
 
         return results
 
-    def _calculate_geometric_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, float]:
+    def _calculate_geometric_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, float]:
         """Calculate geometric analysis metrics"""
         metrics = {}
 
@@ -434,7 +438,7 @@ class ResearchTrajectoryEvaluator:
 
         return metrics
 
-    def _calculate_research_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, float]:
+    def _calculate_research_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, float]:
         """Calculate research-specific metrics for controller comparison"""
         metrics = {}
 
@@ -507,7 +511,7 @@ class ResearchTrajectoryEvaluator:
 
         return metrics
 
-    def _calculate_statistical_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, Any]:
+    def _calculate_statistical_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, Any]:
         """Calculate statistical analysis metrics"""
         metrics = {}
 
