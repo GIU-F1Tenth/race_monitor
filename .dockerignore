@@ -36,8 +36,7 @@ htmlcov/
 # Data and logs
 data/
 web_ui/
-ref_trajectory/
-evo/
+resource
 
 # OS files
 .DS_Store

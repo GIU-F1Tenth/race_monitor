@@ -82,10 +82,6 @@ demo_*.py
 *_demo.py
 analyze_*.py
 
-# Documentation
-*.md
-!README.md
-
 # Temporary files
 *.tmp
 *.temp

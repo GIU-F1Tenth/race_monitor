@@ -1,0 +1,23 @@
+=== RACE RESULTS ===
+Generated,2025-10-25T17:23:09.089688
+
+=== BASIC INFORMATION ===
+Timestamp,2025-10-25T17:22:57.498112
+Controller Name,lqr_controller_node
+Experiment ID,exp_011
+Total Race Time (s),138.230
+Laps Completed,7
+Race Ending Reason,Laps completed
+Crashed,No
+Total Distance (m),470.252
+Sampling Rate (Hz),10
+
+=== LAP TIMES ===
+Lap Number,Lap Time (s)
+1,19.670
+2,19.729
+3,19.940
+4,19.840
+5,19.530
+6,19.580
+7,19.940

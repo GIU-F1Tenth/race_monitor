@@ -195,7 +195,7 @@ class PerformanceMonitor:
                     self.last_performance_log = current_time
 
             except Exception as e:
-                self.logger.error(f"Error in performance monitoring: {e}", LogLevel.DEBUG)
+                self.logger.error(f"Error in performance monitoring", exception=e)
 
             time.sleep(self.cpu_monitoring_interval)
 
@@ -365,7 +365,7 @@ class PerformanceMonitor:
             self._generate_performance_summary(filepath)
 
         except Exception as e:
-            self.logger.error(f"Error saving performance data: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error saving performance data", exception=e)
 
     def _generate_performance_summary(self, csv_filepath: str):
         """Generate a JSON summary of computational performance data."""
@@ -478,7 +478,7 @@ class PerformanceMonitor:
             self.logger.debug(f"Performance summary generated: {summary_path}")
 
         except Exception as e:
-            self.logger.error(f"Error generating performance summary: {e}", LogLevel.DEBUG)
+            self.logger.error(f"Error generating performance summary", exception=e)
 
     def reset_performance_data(self):
         """Clear all performance monitoring data."""

@@ -128,7 +128,7 @@ class RaceMonitorLogger:
         """Log a metric value."""
         if self._should_log(level):
             value_str = f"{value:.4f}" if isinstance(value, float) else str(value)
-            message = f"📊 {metric_name}: {value_str}"
+            message = f"-> {metric_name}: {value_str}"
             if unit:
                 message += f" {unit}"
             self.node.get_logger().info(self._format_message(message))

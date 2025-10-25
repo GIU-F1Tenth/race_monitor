@@ -249,13 +249,13 @@ class MetadataManager:
                 f.write("=" * 60 + "\n")
 
             if self.logger:
-                self.logger.success(f"Saved experiment metadata to: {filepath}", LogLevel.NORMAL)
+                self.logger.success(f"Saved experiment metadata to: {filepath}", LogLevel.DEBUG)
 
             return filepath
 
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error saving metadata file: {e}", LogLevel.NORMAL)
+                self.logger.error(f"Error saving metadata file", exception=e)
             return ""
 
     def update_metadata(self, key: str, value: Any):

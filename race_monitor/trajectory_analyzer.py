@@ -41,7 +41,7 @@ import numpy as np
 import json
 import csv
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, TYPE_CHECKING
 import logging
 from race_monitor.logger_utils import RaceMonitorLogger, LogLevel
 
@@ -57,8 +57,12 @@ try:
     import evo
     EVO_AVAILABLE = True
 except ImportError as e:
-    print(f"❌ EVO not available: {e}")
+    print(f"⚠️ EVO not available: {e}")
+    print("⚠️ Advanced trajectory analysis features will be disabled.")
     EVO_AVAILABLE = False
+    # Create dummy types for type hints when evo is not available
+    if TYPE_CHECKING:
+        from evo.core import trajectory
 
 
 class ResearchTrajectoryEvaluator:
@@ -146,7 +150,7 @@ class ResearchTrajectoryEvaluator:
         if self.config.get('save_intermediate_results', True):
             self._save_lap_results(lap_number)
 
-    def _convert_to_evo_trajectory(self, trajectory_data: List[Dict]) -> Optional[trajectory.PoseTrajectory3D]:
+    def _convert_to_evo_trajectory(self, trajectory_data: List[Dict]) -> Optional['trajectory.PoseTrajectory3D']:
         """Convert trajectory data to EVO format with error handling"""
         try:
             if len(trajectory_data) < 2:
@@ -190,11 +194,10 @@ class ResearchTrajectoryEvaluator:
             )
 
         except Exception as e:
-            self.logger.error(f"Error converting trajectory: {e}", LogLevel.DEBUG)
-            return None
+            self.logger.error(f"Error converting trajectory: {e}")
             return None
 
-    def _apply_filtering(self, traj: trajectory.PoseTrajectory3D) -> trajectory.PoseTrajectory3D:
+    def _apply_filtering(self, traj: 'trajectory.PoseTrajectory3D') -> 'trajectory.PoseTrajectory3D':
         """Apply trajectory filtering using EVO filters"""
         try:
             if not self.config.get('filter_types'):
@@ -215,7 +218,7 @@ class ResearchTrajectoryEvaluator:
                     filtered_indices = filters.filter_by_motion(poses_se3, motion_threshold, angle_threshold)
                     poses_se3 = [poses_se3[i] for i in filtered_indices]
                 except Exception as e:
-                    self.logger.error(f"Error applying motion filtering: {e}", LogLevel.NORMAL)
+                    self.logger.error(f"Error applying motion filtering: {e}")
                     # Continue without filtering if there's an error
 
             # Apply distance filtering (using alternative approach since filter_pairs_by_distance is not available)
@@ -237,7 +240,7 @@ class ResearchTrajectoryEvaluator:
 
                         poses_se3 = filtered_poses
                 except Exception as e:
-                    self.logger.error(f"Error applying distance filtering: {e}", LogLevel.NORMAL)
+                    self.logger.error(f"Error applying distance filtering: {e}")
                     # Continue without filtering if there's an error
 
             # Convert back to trajectory format
@@ -262,10 +265,10 @@ class ResearchTrajectoryEvaluator:
             )
 
         except Exception as e:
-            self.logger.error(f"Error applying filtering: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error applying filtering: {e}")
             return traj
 
-    def _analyze_lap_trajectory(self, lap_number: int, traj: trajectory.PoseTrajectory3D):
+    def _analyze_lap_trajectory(self, lap_number: int, traj: 'trajectory.PoseTrajectory3D'):
         """Perform comprehensive trajectory analysis"""
         metrics_dict = {}
 
@@ -289,7 +292,7 @@ class ResearchTrajectoryEvaluator:
 
         self.detailed_metrics[lap_number] = metrics_dict
 
-    def _calculate_basic_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, float]:
+    def _calculate_basic_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, float]:
         """Calculate basic trajectory metrics"""
         metrics = {}
 
@@ -316,7 +319,7 @@ class ResearchTrajectoryEvaluator:
 
         return metrics
 
-    def _calculate_advanced_evo_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, Any]:
+    def _calculate_advanced_evo_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, Any]:
         """Calculate advanced EVO metrics with all pose relations and statistics"""
         results = {}
 
@@ -353,7 +356,7 @@ class ResearchTrajectoryEvaluator:
                     traj_est = trajectory.PoseTrajectory3D(est_positions, est_orientations, aligned_timestamps)
 
                 except Exception as e:
-                    self.logger.error(f"Failed to align trajectories: {e}", LogLevel.NORMAL)
+                    self.logger.error(f"Failed to align trajectories: {e}")
                     return results
 
             # Calculate metrics for all pose relations
@@ -392,11 +395,11 @@ class ResearchTrajectoryEvaluator:
                     continue
 
         except Exception as e:
-            self.logger.error(f"Error calculating advanced EVO metrics: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error calculating advanced EVO metrics: {e}")
 
         return results
 
-    def _calculate_geometric_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, float]:
+    def _calculate_geometric_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, float]:
         """Calculate geometric analysis metrics"""
         metrics = {}
 
@@ -431,11 +434,11 @@ class ResearchTrajectoryEvaluator:
                 metrics['curvature_variation'] = float(np.std(curvatures) / np.mean(curvatures))
 
         except Exception as e:
-            self.logger.error(f"Error calculating geometric metrics: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error calculating geometric metrics: {e}")
 
         return metrics
 
-    def _calculate_research_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, float]:
+    def _calculate_research_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, float]:
         """Calculate research-specific metrics for controller comparison"""
         metrics = {}
 
@@ -504,11 +507,11 @@ class ResearchTrajectoryEvaluator:
                     metrics['path_efficiency'] = 1.0
 
         except Exception as e:
-            self.logger.error(f"Error calculating research metrics: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error calculating research metrics: {e}")
 
         return metrics
 
-    def _calculate_statistical_metrics(self, traj: trajectory.PoseTrajectory3D) -> Dict[str, Any]:
+    def _calculate_statistical_metrics(self, traj: 'trajectory.PoseTrajectory3D') -> Dict[str, Any]:
         """Calculate statistical analysis metrics"""
         metrics = {}
 
@@ -530,7 +533,7 @@ class ResearchTrajectoryEvaluator:
             metrics['sampling_rate_std'] = float(np.std(1.0 / time_diffs)) if np.all(time_diffs > 0) else 0
 
         except Exception as e:
-            self.logger.error(f"Error calculating statistical metrics: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error calculating statistical metrics: {e}")
 
         return metrics
 
@@ -542,14 +545,15 @@ class ResearchTrajectoryEvaluator:
             elif format_type == 'kitti':
                 self.reference_trajectory = file_interface.read_kitti_poses_file(reference_file)
             else:
-                self.logger.error(f"Unsupported reference format: {format_type}", LogLevel.NORMAL)
+                # This is a simple error message without an exception
+                self.logger.warning(f"Unsupported reference format: {format_type}")
                 return False
 
-            self.logger.info(f"Reference trajectory loaded with {len(self.reference_trajectory.positions_xyz)} poses", LogLevel.NORMAL)
+            self.logger.info(f"Reference trajectory loaded with {len(self.reference_trajectory.positions_xyz)} poses")
             return True
 
         except Exception as e:
-            self.logger.error(f"Error loading reference trajectory: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Error loading reference trajectory: {e}")
             return False
 
     def _save_lap_results(self, lap_number: int):
@@ -566,7 +570,7 @@ class ResearchTrajectoryEvaluator:
             with open(metrics_file, 'w') as f:
                 json.dump(self.detailed_metrics[lap_number], f, indent=2)
         except Exception as e:
-            self.logger.error(f"Failed to save metrics for lap {lap_number}: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Failed to save metrics for lap {lap_number}: {e}")
 
         if lap_number in self.filtered_trajectories:
             filtered_dir = os.path.join(self.experiment_dir, 'filtered')
@@ -576,7 +580,7 @@ class ResearchTrajectoryEvaluator:
             try:
                 file_interface.write_tum_trajectory_file(filtered_file, self.filtered_trajectories[lap_number])
             except Exception as e:
-                self.logger.error(f"Failed to save filtered trajectory for lap {lap_number}: {e}", LogLevel.DEBUG)
+                self.logger.error(f"Failed to save filtered trajectory for lap {lap_number}: {e}")
 
     def generate_research_summary(self) -> Dict[str, Any]:
         """Generate comprehensive research summary for paper writing"""
@@ -632,7 +636,7 @@ class ResearchTrajectoryEvaluator:
     def export_research_data(self):
         """Export all data in research-friendly formats"""
         if not EVO_AVAILABLE:
-            self.logger.warn("EVO not available, skipping research data export", LogLevel.NORMAL)
+            self.logger.warning("EVO not available, skipping research data export")
             return
 
         try:
@@ -673,10 +677,10 @@ class ResearchTrajectoryEvaluator:
                                 'summary': summary
                             }, f)
                     except Exception as pickle_e:
-                        self.logger.error(f"Failed to save pickle data: {pickle_e}", LogLevel.NORMAL)
+                        self.logger.error(f"Failed to save pickle data: {pickle_e}")
 
         except Exception as e:
-            self.logger.error(f"Failed to export research data: {e}", LogLevel.NORMAL)
+            self.logger.error(f"Failed to export research data: {e}")
 
     def _export_metrics_csv(self, csv_file: str):
         """Export metrics to CSV format for analysis"""
