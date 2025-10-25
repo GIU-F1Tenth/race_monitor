@@ -1198,7 +1198,7 @@ class RaceMonitor(Node):
                     # Start next lap
                     self.lap_count += 1
                     self.lap_start_time = current_time
-                    self.get_logger().info(f"Starting lap {self.lap_count}")
+                    self.get_logger().info(f"-> Starting lap {self.lap_count}")
 
                     # EVO: Start new lap trajectory
                     if self.enable_trajectory_evaluation and EVO_AVAILABLE:

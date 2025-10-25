@@ -779,7 +779,7 @@ class RaceMonitor(Node):
 
                     except Exception as e:
                         self.logger.debug(
-                            f"Could not get publisher info for {topic}: {e}", LogLevel.DEBUG)
+                            f"Could not get publisher info for {topic}: {e}")
 
             # Stop detection after 30 seconds to avoid continuous polling
             if (self.controller_first_detection_time and
@@ -1315,7 +1315,7 @@ class RaceMonitor(Node):
                 if advanced_metrics:
                     summary['advanced_metrics'] = advanced_metrics
                     self.logger.debug(
-                        f"Added {len(advanced_metrics)} averaged advanced metrics to race summary", LogLevel.DEBUG)
+                        f"Added {len(advanced_metrics)} averaged advanced metrics to race summary")
                 else:
                     # No advanced metrics available - this is normal for basic monitoring
                     summary['advanced_metrics'] = {}
@@ -1339,16 +1339,16 @@ class RaceMonitor(Node):
                     hasattr(self.research_evaluator, 'detailed_metrics') and self.research_evaluator.detailed_metrics):
                 detailed_metrics = self.research_evaluator.detailed_metrics
                 self.logger.debug(
-                    f"Using in-memory detailed metrics from research evaluator: {len(detailed_metrics)} laps", LogLevel.DEBUG)
+                    f"Using in-memory detailed metrics from research evaluator: {len(detailed_metrics)} laps")
             else:
                 # Fallback: Load metrics from saved lap files
                 self.logger.debug(
-                    "Research evaluator not available or no in-memory metrics, loading from saved lap files", LogLevel.DEBUG)
+                    "Research evaluator not available or no in-memory metrics, loading from saved lap files")
                 detailed_metrics = self._load_metrics_from_files()
 
             if not detailed_metrics:
                 self.logger.debug(
-                    "No detailed metrics available from research evaluator or saved files", LogLevel.DEBUG)
+                    "No detailed metrics available from research evaluator or saved files")
                 return {}
 
             # Collect all metrics from all laps
@@ -1422,7 +1422,7 @@ class RaceMonitor(Node):
                         overall_cv)
 
             self.logger.debug(
-                f"Calculated {len(averaged_metrics)} averaged metrics from {lap_count} laps", LogLevel.DEBUG)
+                f"Calculated {len(averaged_metrics)} averaged metrics from {lap_count} laps")
             return averaged_metrics
 
         except Exception as e:
@@ -1439,13 +1439,13 @@ class RaceMonitor(Node):
                     hasattr(self.research_evaluator, 'experiment_dir') and self.research_evaluator.experiment_dir):
                 metrics_dir = os.path.join(
                     self.research_evaluator.experiment_dir, 'metrics')
-                self.logger.debug(
-                    f"Using research evaluator experiment_dir for metrics: {metrics_dir}", LogLevel.VERBOSE)
+                self.logger.verbose(
+                    f"Using research evaluator experiment_dir for metrics: {metrics_dir}")
             else:
                 # Fallback to data manager's path
                 metrics_dir = self.data_manager.get_metrics_directory()
-                self.logger.debug(
-                    f"Using data manager metrics directory: {metrics_dir}", LogLevel.VERBOSE)
+                self.logger.verbose(
+                    f"Using data manager metrics directory: {metrics_dir}")
 
             if not os.path.exists(metrics_dir):
                 self.logger.warn(
@@ -1457,8 +1457,8 @@ class RaceMonitor(Node):
                 'lap_') and f.endswith('_metrics.json')]
             lap_files.sort()
 
-            self.logger.debug(
-                f"Found {len(lap_files)} lap metric files in {metrics_dir}", LogLevel.VERBOSE)
+            self.logger.verbose(
+                f"Found {len(lap_files)} lap metric files in {metrics_dir}")
 
             for lap_file in lap_files:
                 try:
@@ -1471,8 +1471,8 @@ class RaceMonitor(Node):
                         lap_metrics = json.load(f)
 
                     detailed_metrics[lap_num] = lap_metrics
-                    self.logger.debug(
-                        f"Loaded {len(lap_metrics)} metrics for lap {lap_num}", LogLevel.VERBOSE)
+                    self.logger.verbose(
+                        f"Loaded {len(lap_metrics)} metrics for lap {lap_num}")
 
                 except Exception as e:
                     self.logger.warn(
@@ -1480,7 +1480,7 @@ class RaceMonitor(Node):
                     continue
 
             self.logger.debug(
-                f"Successfully loaded metrics for {len(detailed_metrics)} laps from files", LogLevel.DEBUG)
+                f"Successfully loaded metrics for {len(detailed_metrics)} laps from files")
             return detailed_metrics
 
         except Exception as e:
@@ -1496,7 +1496,7 @@ class RaceMonitor(Node):
 
             if not os.path.exists(controller_dir):
                 self.logger.debug(
-                    f"Controller directory does not exist: {controller_dir}", LogLevel.DEBUG)
+                    f"Controller directory does not exist: {controller_dir}")
                 return False
 
             # Look for any directory that starts with the experiment_id
@@ -1504,8 +1504,8 @@ class RaceMonitor(Node):
             exp_pattern = os.path.join(controller_dir, f'{experiment_id}_*')
             existing_dirs = glob.glob(exp_pattern)
 
-            self.logger.debug(
-                f"Checking for existing experiment {experiment_id} in {controller_dir}", LogLevel.VERBOSE)
+            self.logger.verbose(
+                f"Checking for existing experiment {experiment_id} in {controller_dir}")
             self.logger.verbose(f"Pattern: {exp_pattern}")
             self.logger.verbose(f"Found: {existing_dirs}")
 

@@ -347,8 +347,8 @@ class LapDetector:
         crossing_positive = cross_product > 0
 
         if self.log_level == "debug":
-            self.logger.debug(f"Direction analysis: heading={self.current_heading:.3f}rad, "
-                              f"cross_product={cross_product:.3f}, positive={crossing_positive}", LogLevel.VERBOSE)
+            self.logger.verbose(f"Direction analysis: heading={self.current_heading:.3f}rad, "
+                              f"cross_product={cross_product:.3f}, positive={crossing_positive}")
 
         if self.expected_direction == "positive":
             return crossing_positive
@@ -446,11 +446,6 @@ class LapDetector:
         lap_time = (time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.last_lap_time)) / 1e9
         self.lap_times.append(lap_time)
 
-        if self.log_level == "minimal":
-            self.logger.event("Lap complete", f"Lap {self.current_lap}: {lap_time:.3f}s", LogLevel.MINIMAL)
-        else:
-            self.logger.event("Lap complete", f"Lap {self.current_lap} in {lap_time:.3f}s", LogLevel.NORMAL)
-
         is_final_lap = (self.race_ending_mode == "lap_complete" and 
                        len(self.lap_times) >= self.required_laps)
         
@@ -468,10 +463,7 @@ class LapDetector:
             # Start next lap
             self.current_lap += 1
             self.last_lap_time = timestamp
-            if self.log_level == "minimal":
-                self.logger.info(f"Starting lap {self.current_lap}", LogLevel.NORMAL)
-            else:
-                self.logger.info(f"Starting lap {self.current_lap}", LogLevel.NORMAL)
+            self.logger.info(f"Starting lap {self.current_lap}", LogLevel.NORMAL)
         else:
             # For crash and manual modes, continue laps indefinitely
             self.current_lap += 1

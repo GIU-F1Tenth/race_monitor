@@ -332,8 +332,8 @@ class ReferenceTrajectoryManager:
                 self.horizon_reference_data.append(point_data)
 
             self.reference_updated = True
-            self.logger.debug(
-                f"Updated reference trajectory with {len(self.horizon_reference_data)} points", LogLevel.VERBOSE)
+            self.logger.verbose(
+                f"Updated reference trajectory with {len(self.horizon_reference_data)} points")
 
         except Exception as e:
             self.logger.error(f"Error updating reference trajectory", exception=e)
@@ -362,8 +362,8 @@ class ReferenceTrajectoryManager:
                 self.reference_path_data.append(point_data)
 
             self.reference_updated = True
-            self.logger.debug(
-                f"Updated reference path with {len(self.reference_path_data)} points", LogLevel.VERBOSE)
+            self.logger.verbose(
+                f"Updated reference path with {len(self.reference_path_data)} points")
 
         except Exception as e:
             self.logger.error(f"Error updating reference path", exception=e)

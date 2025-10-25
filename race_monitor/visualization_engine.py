@@ -634,6 +634,8 @@ class EVOPlotter:
                 speeds.append(0.0)
 
         return np.array(speeds)
+
+    def _generate_error_plots(self):
         """Generate APE/RPE error analysis plots"""
         if not self.reference_trajectory or not self.lap_trajectories:
             return
