@@ -312,9 +312,9 @@ class DataManager:
         # Initialize metadata manager
         self.metadata_manager = MetadataManager(self.trajectory_output_directory, self.logger)
 
-        self.logger.config(f"Data manager configured with {len(self.output_formats)} format(s)", LogLevel.NORMAL)
+        self.logger.info(f"Data manager configured with {len(self.output_formats)} format(s)", LogLevel.DEBUG)
         if self.enable_advanced_metrics:
-            self.logger.config("Advanced metrics and plotting enabled", LogLevel.NORMAL)
+            self.logger.info("Advanced metrics and plotting enabled", LogLevel.DEBUG)
 
     def _setup_directories(self):
         """Create base directory structure for data storage."""
@@ -322,7 +322,6 @@ class DataManager:
             self.base_output_dir = self.trajectory_output_directory
 
             # Only create base output directory initially
-            # Specific experiment directories will be created by create_run_directory()
             os.makedirs(self.base_output_dir, exist_ok=True)
             self.trajectory_dir = None
             self.results_dir = None

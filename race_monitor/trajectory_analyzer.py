@@ -190,8 +190,7 @@ class ResearchTrajectoryEvaluator:
             )
 
         except Exception as e:
-            self.logger.error(f"Error converting trajectory", exception=e)
-            return None
+            self.logger.error(f"Error converting trajectory: {e}")
             return None
 
     def _apply_filtering(self, traj: trajectory.PoseTrajectory3D) -> trajectory.PoseTrajectory3D:
@@ -215,7 +214,7 @@ class ResearchTrajectoryEvaluator:
                     filtered_indices = filters.filter_by_motion(poses_se3, motion_threshold, angle_threshold)
                     poses_se3 = [poses_se3[i] for i in filtered_indices]
                 except Exception as e:
-                    self.logger.error(f"Error applying motion filtering", exception=e)
+                    self.logger.error(f"Error applying motion filtering: {e}")
                     # Continue without filtering if there's an error
 
             # Apply distance filtering (using alternative approach since filter_pairs_by_distance is not available)
@@ -237,7 +236,7 @@ class ResearchTrajectoryEvaluator:
 
                         poses_se3 = filtered_poses
                 except Exception as e:
-                    self.logger.error(f"Error applying distance filtering", exception=e)
+                    self.logger.error(f"Error applying distance filtering: {e}")
                     # Continue without filtering if there's an error
 
             # Convert back to trajectory format
@@ -262,7 +261,7 @@ class ResearchTrajectoryEvaluator:
             )
 
         except Exception as e:
-            self.logger.error(f"Error applying filtering", exception=e)
+            self.logger.error(f"Error applying filtering: {e}")
             return traj
 
     def _analyze_lap_trajectory(self, lap_number: int, traj: trajectory.PoseTrajectory3D):
@@ -353,7 +352,7 @@ class ResearchTrajectoryEvaluator:
                     traj_est = trajectory.PoseTrajectory3D(est_positions, est_orientations, aligned_timestamps)
 
                 except Exception as e:
-                    self.logger.error(f"Failed to align trajectories", exception=e)
+                    self.logger.error(f"Failed to align trajectories: {e}")
                     return results
 
             # Calculate metrics for all pose relations
@@ -392,7 +391,7 @@ class ResearchTrajectoryEvaluator:
                     continue
 
         except Exception as e:
-            self.logger.error(f"Error calculating advanced EVO metrics", exception=e)
+            self.logger.error(f"Error calculating advanced EVO metrics: {e}")
 
         return results
 
@@ -431,7 +430,7 @@ class ResearchTrajectoryEvaluator:
                 metrics['curvature_variation'] = float(np.std(curvatures) / np.mean(curvatures))
 
         except Exception as e:
-            self.logger.error(f"Error calculating geometric metrics", exception=e)
+            self.logger.error(f"Error calculating geometric metrics: {e}")
 
         return metrics
 
@@ -504,7 +503,7 @@ class ResearchTrajectoryEvaluator:
                     metrics['path_efficiency'] = 1.0
 
         except Exception as e:
-            self.logger.error(f"Error calculating research metrics", exception=e)
+            self.logger.error(f"Error calculating research metrics: {e}")
 
         return metrics
 
@@ -530,7 +529,7 @@ class ResearchTrajectoryEvaluator:
             metrics['sampling_rate_std'] = float(np.std(1.0 / time_diffs)) if np.all(time_diffs > 0) else 0
 
         except Exception as e:
-            self.logger.error(f"Error calculating statistical metrics", exception=e)
+            self.logger.error(f"Error calculating statistical metrics: {e}")
 
         return metrics
 
@@ -543,14 +542,14 @@ class ResearchTrajectoryEvaluator:
                 self.reference_trajectory = file_interface.read_kitti_poses_file(reference_file)
             else:
                 # This is a simple error message without an exception
-                self.logger.warn(f"Unsupported reference format: {format_type}", LogLevel.NORMAL)
+                self.logger.warning(f"Unsupported reference format: {format_type}")
                 return False
 
-            self.logger.info(f"Reference trajectory loaded with {len(self.reference_trajectory.positions_xyz)} poses", LogLevel.NORMAL)
+            self.logger.info(f"Reference trajectory loaded with {len(self.reference_trajectory.positions_xyz)} poses")
             return True
 
         except Exception as e:
-            self.logger.error(f"Error loading reference trajectory", exception=e)
+            self.logger.error(f"Error loading reference trajectory: {e}")
             return False
 
     def _save_lap_results(self, lap_number: int):
@@ -567,7 +566,7 @@ class ResearchTrajectoryEvaluator:
             with open(metrics_file, 'w') as f:
                 json.dump(self.detailed_metrics[lap_number], f, indent=2)
         except Exception as e:
-            self.logger.error(f"Failed to save metrics for lap {lap_number}", exception=e)
+            self.logger.error(f"Failed to save metrics for lap {lap_number}: {e}")
 
         if lap_number in self.filtered_trajectories:
             filtered_dir = os.path.join(self.experiment_dir, 'filtered')
@@ -577,7 +576,7 @@ class ResearchTrajectoryEvaluator:
             try:
                 file_interface.write_tum_trajectory_file(filtered_file, self.filtered_trajectories[lap_number])
             except Exception as e:
-                self.logger.error(f"Failed to save filtered trajectory for lap {lap_number}", exception=e)
+                self.logger.error(f"Failed to save filtered trajectory for lap {lap_number}: {e}")
 
     def generate_research_summary(self) -> Dict[str, Any]:
         """Generate comprehensive research summary for paper writing"""
@@ -633,7 +632,7 @@ class ResearchTrajectoryEvaluator:
     def export_research_data(self):
         """Export all data in research-friendly formats"""
         if not EVO_AVAILABLE:
-            self.logger.warn("EVO not available, skipping research data export", LogLevel.NORMAL)
+            self.logger.warning("EVO not available, skipping research data export")
             return
 
         try:
@@ -674,10 +673,10 @@ class ResearchTrajectoryEvaluator:
                                 'summary': summary
                             }, f)
                     except Exception as pickle_e:
-                        self.logger.error(f"Failed to save pickle data", exception=pickle_e)
+                        self.logger.error(f"Failed to save pickle data: {pickle_e}")
 
         except Exception as e:
-            self.logger.error(f"Failed to export research data", exception=e)
+            self.logger.error(f"Failed to export research data: {e}")
 
     def _export_metrics_csv(self, csv_file: str):
         """Export metrics to CSV format for analysis"""

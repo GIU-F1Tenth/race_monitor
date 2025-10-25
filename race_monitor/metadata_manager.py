@@ -249,7 +249,7 @@ class MetadataManager:
                 f.write("=" * 60 + "\n")
 
             if self.logger:
-                self.logger.success(f"Saved experiment metadata to: {filepath}", LogLevel.NORMAL)
+                self.logger.success(f"Saved experiment metadata to: {filepath}", LogLevel.DEBUG)
 
             return filepath
 

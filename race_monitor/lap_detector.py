@@ -425,13 +425,15 @@ class LapDetector:
         self.lap_times = []
         self.last_lap_time = timestamp
 
+        # Trigger race start callback first (for experiment setup)
+        if self.on_race_start:
+            self.on_race_start(timestamp)
+
+        # Log race start event after callback completes
         if self.log_level == "minimal":
             self.logger.event("Race started", f"Lap {self.current_lap}", LogLevel.MINIMAL)
         else:
             self.logger.event("Race started", f"Beginning lap {self.current_lap}", LogLevel.NORMAL)
-
-        if self.on_race_start:
-            self.on_race_start(timestamp)
 
     def _complete_lap(self, timestamp):
         """

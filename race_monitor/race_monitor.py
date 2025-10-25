@@ -533,7 +533,7 @@ class RaceMonitor(Node):
         self.data_manager.configure(self.config)
 
         self.original_base_output_dir = self.data_manager.trajectory_output_directory
-        self.logger.config("📂 Results directory", self.original_base_output_dir, LogLevel.NORMAL)
+        self.logger.info(f"📂 Results directory: {self.original_base_output_dir}", LogLevel.NORMAL)
 
         # Create dedicated run directory for this session
         controller_name = self.config.get(
@@ -545,7 +545,7 @@ class RaceMonitor(Node):
             experiment_id = self._get_next_experiment_id(controller_name)
             self.config['experiment_id'] = experiment_id
             self.experiment_id_generated = True
-            self.logger.info(f"Auto-generated experiment ID: {experiment_id}", LogLevel.NORMAL)
+            self.logger.info(f"Auto-generated experiment ID: {experiment_id}", LogLevel.DEBUG)
 
             run_directory = self.data_manager.create_run_directory(
                 controller_name, experiment_id)
@@ -760,7 +760,7 @@ class RaceMonitor(Node):
                                                                    new_name)])
 
                                     self.logger.info(
-                                        f"Controller name automatically updated to: {new_name}", LogLevel.NORMAL)
+                                        f"Controller name automatically updated to: {new_name}", LogLevel.DEBUG)
 
                                 elif len(self.detected_controller_names) > 1:
                                     # Multiple controllers detected
@@ -836,8 +836,6 @@ class RaceMonitor(Node):
     # Race Event Handlers
     def _on_race_start(self, timestamp):
         """Handle race start event."""
-        self.logger.event("🏁 Race started", "Race has begun", LogLevel.MINIMAL)
-
         # Create run directory if not created yet (in case controller was detected after initialization)
         controller_name = self.config.get('controller_name', '')
 
@@ -853,7 +851,7 @@ class RaceMonitor(Node):
             self.config['experiment_id'] = experiment_id
             self.experiment_id_generated = True
             self.logger.info(
-                f"Auto-generated experiment ID for race start: {experiment_id}", LogLevel.NORMAL)
+                f"Auto-generated experiment ID for race start: {experiment_id}", LogLevel.DEBUG)
         else:
             experiment_id = self.config.get('experiment_id', 'exp_001')
 
@@ -872,6 +870,9 @@ class RaceMonitor(Node):
 
             # Initialize analysis components now that we have the run directory
             self._initialize_analysis_components()
+
+        # Log race start event after experiment setup is complete
+        self.logger.event("🏁 Race started", "Race has begun", LogLevel.MINIMAL)
 
         # Start new lap trajectory
         self.data_manager.start_new_lap_trajectory(1)
@@ -1489,7 +1490,6 @@ class RaceMonitor(Node):
     def _experiment_directory_exists(self, controller_name: str, experiment_id: str) -> bool:
         """Check if an experiment directory already exists for this controller and experiment ID."""
         try:
-            # Use the resolved results directory
             base_output_dir = getattr(
                 self, 'original_base_output_dir', 'data')
             controller_dir = os.path.join(base_output_dir, controller_name)
@@ -1717,7 +1717,9 @@ def main(args=None):
         # This happens when the process is killed externally (e.g., timeout)
         pass
     except Exception as e:
+        import traceback
         print(f"Unexpected error: {e}")
+        traceback.print_exc()
     finally:
         # Safe cleanup - only if node was created and RCL is still valid
         if node is not None:

@@ -126,11 +126,12 @@ class ReferenceTrajectoryManager:
         self.reference_trajectory_format = config.get(
             'reference_trajectory_format', "csv")
 
-        self.logger.info("Reference Trajectory Manager configured", LogLevel.NORMAL)
-        self.logger.config("File", self.reference_trajectory_file, LogLevel.NORMAL)
-        self.logger.config("Format", self.reference_trajectory_format, LogLevel.NORMAL)
+        if not self.reference_trajectory_file:
+            self.logger.warn("Reference Trajectory File does not exist / not specified", LogLevel.NORMAL)
+        else:
+            self.logger.config("Reference Trajectory File", self.reference_trajectory_file, LogLevel.NORMAL)
+            self.logger.config("Format", self.reference_trajectory_format, LogLevel.NORMAL)
 
-        # Try to load reference trajectory from file if specified
         if self.reference_trajectory_file:
             self.load_reference_trajectory()
 
