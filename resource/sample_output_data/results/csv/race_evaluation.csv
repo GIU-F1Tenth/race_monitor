@@ -1,0 +1,48 @@
+=== RACE EVALUATION ===
+Generated,2025-10-25T17:22:59.498488
+
+=== METADATA ===
+Controller Name,lqr_controller_node
+Experiment Id,exp001
+Timestamp,2025-10-25T17:22:59.497883
+Race Status,completed
+Grading Strictness,normal
+Evaluation Version,1.0
+
+=== PERFORMANCE SUMMARY ===
+Overall Grade,B+
+Numerical Score,75.0
+Best Lap Time,19.530493696
+Average Lap Time,19.747093650285713
+Worst Lap Time,19.940040192
+Lap Consistency CV,0.7758223868361247
+Total Laps,7
+Lap Times Grade,A
+
+=== SPEED ANALYSIS ===
+Average,3.291623625791613
+Max Achieved,3.785367169660355
+Consistency Cv,5.0
+Grade,A
+
+=== CATEGORY GRADES ===
+Trajectory Quality,F
+Control Quality,A
+Speed Performance,A
+Path Efficiency,A
+Lap Consistency,A
+
+=== TRAJECTORY EVALUATION ===
+--- APE Analysis ---
+APE Rmse,4044.4172
+APE Mean,4044.4172
+APE Std,0.1002
+APE Max,14.5970
+--- RPE Analysis ---
+RPE Rmse,4.4240
+RPE Mean,4.4240
+RPE Std,0.0004
+RPE Max,0.4479
+
+=== RECOMMENDATIONS ===
+Recommendation 1,Improve path following accuracy - significant deviation from optimal trajectory

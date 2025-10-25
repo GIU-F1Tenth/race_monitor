@@ -1,0 +1,49 @@
+# Race Monitor Python Dependencies
+# 
+# IMPORTANT: Use with constraints.txt to ensure compatibility:
+# pip install -c constraints.txt -r requirements.txt
+#
+
+# Core Python scientific computing
+numpy>=1.21.0,<2.0.0
+pandas>=1.5.0
+scipy>=1.9.0
+
+# Transforms and geometry
+transforms3d>=0.4.1
+
+# Trajectory evaluation and analysis (EVO submodule)
+evo>=1.26.0
+
+# Visualization and plotting
+matplotlib>=3.5.0
+seaborn>=0.12.0
+plotly>=5.0.0
+
+# System monitoring and performance
+psutil>=5.8.0
+
+# Data serialization and I/O
+PyYAML>=6.0
+json5>=0.9.0
+
+# Scientific computing utilities
+colorama>=0.4.4
+tqdm>=4.64.0
+
+# Development and testing dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+mypy>=1.0.0
+flake8>=5.0.0
+black>=22.0.0
+pip-audit>=2.0.0
+
+# Build tools
+setuptools>=65.0.0
+wheel>=0.37.0
+build>=0.8.0
+
+# Optional: Enhanced analysis capabilities
+scikit-learn>=1.1.0
+statsmodels>=0.13.0

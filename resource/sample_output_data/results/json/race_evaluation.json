@@ -1,0 +1,95 @@
+{
+  "race_evaluation": {
+    "metadata": {
+      "controller_name": "lqr_controller_node",
+      "experiment_id": "exp001",
+      "timestamp": "2025-10-25T17:22:59.497883",
+      "race_status": "completed",
+      "grading_strictness": "normal",
+      "evaluation_version": "1.0"
+    },
+    "performance_summary": {
+      "overall_grade": "B+",
+      "numerical_score": 75.0,
+      "lap_times": {
+        "best": 19.530493696,
+        "average": 19.747093650285713,
+        "worst": 19.940040192,
+        "consistency_cv": 0.7758223868361247,
+        "total_laps": 7,
+        "grade": "A"
+      },
+      "speed_analysis": {
+        "average": 3.291623625791613,
+        "max_achieved": 3.785367169660355,
+        "consistency_cv": 5.0,
+        "grade": "A"
+      },
+      "category_grades": {
+        "trajectory_quality": "F",
+        "control_quality": "A",
+        "speed_performance": "A",
+        "path_efficiency": "A",
+        "lap_consistency": "A"
+      }
+    },
+    "trajectory_evaluation": {
+      "ape_analysis": {
+        "rmse": 4044.417168281913,
+        "mean": 4044.417168281913,
+        "std": 0.10018818832486509,
+        "max": 14.5969608093706
+      },
+      "rpe_analysis": {
+        "rmse": 4.423984588921343,
+        "mean": 4.423984588921343,
+        "std": 0.0004262032433156273,
+        "max": 0.4479214890732748
+      },
+      "reference_comparison": {
+        "available": true,
+        "deviation_score": 4044.417168281913
+      },
+      "smoothness": {
+        "score": 0.9803921568627451,
+        "grade": "B"
+      }
+    },
+    "control_quality": {
+      "smoothness_score": 0.9803921568627451,
+      "steering_aggressiveness": 0.1,
+      "velocity_consistency": 0.9523809523809523,
+      "acceleration_smoothness": 0.9090909090909091,
+      "overall_grade": "A"
+    },
+    "racing_line_analysis": {
+      "path_efficiency": 0.9,
+      "mean_curvature": 0.3,
+      "path_length_consistency": 0.9923076923076923,
+      "grade": "A"
+    },
+    "detailed_metrics": {
+      "path_length_stats": {},
+      "curvature_stats": {
+        "mean": 0,
+        "variation": 0
+      },
+      "velocity_stats": {},
+      "individual_grades": {
+        "lap_consistency": "A",
+        "speed_consistency": "A",
+        "path_efficiency": "A",
+        "smoothness": "B",
+        "ape_error": "F",
+        "rpe_error": "F"
+      }
+    },
+    "comparison_analysis": {
+      "available": false,
+      "message": "No previous experiments found for comparison"
+    },
+    "recommendations": [
+      "Improve path following accuracy - significant deviation from optimal trajectory"
+    ]
+  }
+}

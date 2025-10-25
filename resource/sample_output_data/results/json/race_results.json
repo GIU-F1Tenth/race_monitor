@@ -1,0 +1,20 @@
+{
+  "timestamp": "2025-10-25T17:22:57.498112",
+  "controller_name": "lqr_controller_node",
+  "experiment_id": "exp_011",
+  "total_race_time": 138.229655552,
+  "laps_completed": 7,
+  "race_ending_reason": "Laps completed",
+  "crashed": false,
+  "lap_times": [
+    19.669789696,
+    19.729353984,
+    19.940040192,
+    19.840286208,
+    19.530493696,
+    19.57977344,
+    19.939918336
+  ],
+  "total_distance": 470.25161990371424,
+  "sampling_rate": 10
+}
