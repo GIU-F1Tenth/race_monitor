@@ -70,7 +70,10 @@ For detailed installation instructions, including system requirements and troubl
 ```bash
 # 1. Configure start/finish line coordinates
 nano config/race_monitor.yaml
-
+```
+Or change it by publishing 2 points on topic "/clicked_point" from RViz
+![This is how to change the Race Line](docs/change_race_line.gif)
+```bash
 # 2. Launch Race Monitor node
 ros2 launch race_monitor race_monitor.launch.py
 
@@ -97,8 +100,8 @@ Race Monitor implements a modular architecture designed for extensibility and re
 │  │  Lap Timing   │  │   Trajectory   │  │  Performance   │  │
 │  │   Monitor     │  │    Analyzer    │  │    Monitor     │  │
 │  └───────┬───────┘  └────────┬───────┘  └────────┬───────┘  │
-│          │                   │                    │         │
-│  ┌───────▼──────────────────▼────────────────────▼───────┐  │
+│          │                   │                   │          │
+│  ┌───────▼───────────────────▼───────────────────▼───────┐  │
 │  │            Race Evaluator (Core Engine)               │  │
 │  └───────────────────────────┬───────────────────────────┘  │
 │  ┌──────────────┬────────────▼─────────────┬─────────────┐  │
