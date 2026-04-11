@@ -1408,7 +1408,7 @@ class RaceMonitor(Node):
             return 0.0
 
         # Lower values indicate smoother trajectories
-        return np.mean(curvatures)
+        return float(np.mean(curvatures))
 
     def calculate_consistency(self, traj):
         """Calculate trajectory consistency based on velocity variations"""
