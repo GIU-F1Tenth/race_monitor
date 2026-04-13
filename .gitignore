@@ -251,3 +251,5 @@ log/
 data/
 trajectory_evaluation/
 evaluation_results/
+*.md
+!README.md
