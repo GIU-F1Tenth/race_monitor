@@ -248,13 +248,6 @@ race_monitor:
     # PERFORMANCE MONITORING
     # ═══════════════════════════════════════════════════════════════════════════
     # Monitor computational performance and resource usage
-    
-    # --- Topic Configuration ---
-    odometry_topics: ["/odom"]              # Odometry topics to subscribe to
-    control_command_topics: ["/kayn/drive"] # Control command topics to subscribe to
-
-    # --- Controller Config Snapshotting ---
-    controller_config_file: ""             # Path to controller config file to copy into results dir
 
     # --- Monitoring Control ---
     enable_computational_monitoring: false  # Enable CPU/memory monitoring
@@ -270,3 +263,15 @@ race_monitor:
     max_acceptable_cpu_usage: 80.0          # Maximum acceptable CPU usage (%)
     max_acceptable_memory_mb: 500.0         # Maximum acceptable memory usage (MB)
     max_acceptable_latency_ms: 100.0        # Maximum acceptable processing latency (ms)
+
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # ROS TOPICS & CONTROLLER CONFIGURATION
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    # --- Topic Configuration ---
+    odometry_topics: ["/odom", "/car_state/odom", "/ego_racecar/odom"]       # Odometry topics to subscribe to
+    control_command_topics: ["/drive", "ackermann_cmd"]                      # Control command topics to subscribe to
+
+    # --- Controller Config Snapshotting ---
+    controller_config_file: ""             # Path to controller config file to copy into results dir
