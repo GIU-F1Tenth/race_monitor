@@ -1242,7 +1242,7 @@ class DataManager:
             self.logger.error(f"Error saving race results CSV", exception=e)
             return False
 
-    def create_run_directory(self, controller_name: str, experiment_id: str) -> str:
+    def create_run_directory(self, controller_name: str, experiment_id: str, controller_config_file: str = "") -> str:
         """
         Create a dedicated directory for this run.
 
@@ -1294,6 +1294,13 @@ class DataManager:
 
                 # Log experiment summary
                 self.logger.info(f"Experiment setup: {self.metadata_manager.get_experiment_summary()}", LogLevel.NORMAL)
+
+            # Snapshot controller config file if provided
+            if controller_config_file and os.path.isfile(controller_config_file):
+                import shutil
+                dest = os.path.join(experiment_dir, os.path.basename(controller_config_file))
+                shutil.copy2(controller_config_file, dest)
+                self.logger.info(f"Controller config snapshotted: {dest}", LogLevel.DEBUG)
 
             return experiment_dir
 

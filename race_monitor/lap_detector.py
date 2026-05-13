@@ -704,6 +704,8 @@ class LapDetector:
 
     def get_race_ending_reason(self) -> str:
         """Get the reason why the race ended."""
+        if not self.race_started:
+            return "Not started"
         if not self.race_completed:
             return "Race still active"
         elif self.race_ended_by_crash:

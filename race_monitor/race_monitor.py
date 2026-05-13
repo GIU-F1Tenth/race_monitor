@@ -35,7 +35,8 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.parameter import Parameter
 from std_msgs.msg import Int32, Float32, Bool, String
 from nav_msgs.msg import Odometry, Path
-from geometry_msgs.msg import PointStamped, Twist, PoseWithCovarianceStamped
+from geometry_msgs.msg import PointStamped, Twist, PoseWithCovarianceStamped, PoseArray
+from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
 from ackermann_msgs.msg import AckermannDriveStamped
 
@@ -84,6 +85,36 @@ try:
     EVO_AVAILABLE = True
 except ImportError:
     EVO_AVAILABLE = False
+
+
+class _MockStamp:
+    def __init__(self, ts):
+        if ts is not None:
+            self.sec = int(ts)
+            self.nanosec = int((ts - int(ts)) * 1e9)
+        else:
+            self.sec = 0
+            self.nanosec = 0
+
+
+class _MockHeader:
+    def __init__(self, timestamp):
+        self.stamp = _MockStamp(timestamp)
+        self.timestamp = timestamp
+
+
+class _MockPose:
+    def __init__(self, x, y, z, qx, qy, qz, qw, theta=None):
+        self.x = x
+        self.y = y
+        self.z = z
+        if theta is not None:
+            self.theta = theta
+        if qx is not None:
+            self.qx = qx
+            self.qy = qy
+            self.qz = qz
+            self.qw = qw
 
 
 class RaceMonitor(Node):
@@ -293,10 +324,13 @@ class RaceMonitor(Node):
         self.declare_parameter('enable_computational_monitoring', False)
 
         # Odometry input topics
-        self.declare_parameter('odometry_topics', ['car_state/odom'])
+        self.declare_parameter('odometry_topics', ['/odom'])
 
         # Control command output topics
-        self.declare_parameter('control_command_topics', ['/drive'])
+        self.declare_parameter('control_command_topics', ['/kayn/drive'])
+
+        # Controller config snapshotting
+        self.declare_parameter('controller_config_file', '')
 
         # Performance monitoring configuration
         self.declare_parameter('monitoring_window_size', 100)
@@ -432,6 +466,7 @@ class RaceMonitor(Node):
             'enable_computational_monitoring': self.get_parameter('enable_computational_monitoring').value,
             'odometry_topics': self.get_parameter('odometry_topics').value,
             'control_command_topics': self.get_parameter('control_command_topics').value,
+            'controller_config_file': self.get_parameter('controller_config_file').value,
             'monitoring_window_size': self.get_parameter('monitoring_window_size').value,
             'cpu_monitoring_interval': self.get_parameter('cpu_monitoring_interval').value,
             'enable_performance_logging': self.get_parameter('enable_performance_logging').value,
@@ -510,20 +545,33 @@ class RaceMonitor(Node):
             Marker, '/race_monitor/start_line_marker', 10)
 
         # Subscribers
-        self.odom_sub = self.create_subscription(
-            Odometry, '/car_state/odom', self._odometry_callback, 10
-        )
+        self._odom_subs = [
+            self.create_subscription(Odometry, topic, self._odometry_callback, 10)
+            for topic in self.config['odometry_topics']
+        ]
         self.clicked_point_sub = self.create_subscription(
             PointStamped, '/clicked_point', self._clicked_point_callback, 10
+        )
+        self._set_start_line_sub = self.create_subscription(
+            PoseArray, '~/set_start_line_points', self._set_start_line_callback, 10
+        )
+
+        # Services
+        self._reset_race_srv = self.create_service(
+            Trigger, '~/reset_race', self._reset_race_callback
+        )
+        self._force_lap_srv = self.create_service(
+            Trigger, '~/force_lap_complete', self._force_lap_complete_callback
         )
 
         # Optional subscribers based on configuration
 
         # Control command subscriber for performance monitoring
         if self.config['enable_computational_monitoring']:
-            self.control_cmd_sub = self.create_subscription(
-                AckermannDriveStamped, '/drive', self._control_command_callback, 10
-            )
+            self._ctrl_subs = [
+                self.create_subscription(AckermannDriveStamped, topic, self._control_command_callback, 10)
+                for topic in self.config['control_command_topics']
+            ]
 
     def _configure_components(self):
         """Configure all components with loaded parameters."""
@@ -551,7 +599,8 @@ class RaceMonitor(Node):
             self.logger.info(f"Auto-generated experiment ID: {experiment_id}", LogLevel.DEBUG)
 
             run_directory = self.data_manager.create_run_directory(
-                controller_name, experiment_id)
+                controller_name, experiment_id,
+                controller_config_file=self.config.get('controller_config_file', ''))
 
             # Update configuration paths for all components to use the run directory
             if self.config.get('auto_generate_graphs', False):
@@ -832,6 +881,43 @@ class RaceMonitor(Node):
                 self.config['start_line_p1'], self.config['start_line_p2'], self.config['frame_id']
             )
 
+    def _set_start_line_callback(self, msg: PoseArray):
+        """Update start/finish line from a PoseArray with exactly two poses."""
+        if len(msg.poses) < 2:
+            self.logger.warn("set_start_line_points requires at least 2 poses", LogLevel.NORMAL)
+            return
+        p1 = msg.poses[0].position
+        p2 = msg.poses[1].position
+        self.config['start_line_p1'] = [p1.x, p1.y]
+        self.config['start_line_p2'] = [p2.x, p2.y]
+        self.lap_detector.configure(self.config)
+        self.visualization_publisher.publish_start_line_markers(
+            self.config['start_line_p1'], self.config['start_line_p2'], self.config['frame_id']
+        )
+        self.logger.info(
+            f"Start line updated via PoseArray: "
+            f"P1=({p1.x:.2f},{p1.y:.2f}) P2=({p2.x:.2f},{p2.y:.2f})", LogLevel.NORMAL
+        )
+
+    def _reset_race_callback(self, request, response):
+        """Service callback: reset race state."""
+        self.lap_detector.reset_race()
+        self.data_manager.current_lap_trajectory = []
+        response.success = True
+        response.message = "Race reset"
+        return response
+
+    def _force_lap_complete_callback(self, request, response):
+        """Service callback: force the current lap to complete."""
+        if self.lap_detector.is_race_active():
+            self.lap_detector._complete_lap(self.get_clock().now())
+            response.success = True
+            response.message = "Lap forced complete"
+        else:
+            response.success = False
+            response.message = "Race not active"
+        return response
+
     def _publish_marker(self, marker: Marker):
         """Publish visualization marker."""
         self.start_line_marker_pub.publish(marker)
@@ -868,7 +954,8 @@ class RaceMonitor(Node):
         # Create experiment directory if we have a controller name and haven't created one yet
         if controller_name and not hasattr(self.data_manager, 'run_directory_created'):
             run_directory = self.data_manager.create_run_directory(
-                controller_name, experiment_id)
+                controller_name, experiment_id,
+                controller_config_file=self.config.get('controller_config_file', ''))
             self.data_manager.run_directory_created = True
             # self.get_logger().info(f"Created experiment directory for {controller_name}: {run_directory}")
 
@@ -915,10 +1002,6 @@ class RaceMonitor(Node):
             self.visualization_publisher.publish_race_status_marker(
                 "RACING", race_stats['current_lap'], self.config['required_laps']
             )
-
-        # Perform trajectory evaluation if enabled
-        if self.config['enable_trajectory_evaluation'] and EVO_AVAILABLE:
-            self._evaluate_lap_trajectory(lap_number)
 
     def _on_race_complete(self, total_time: float, lap_times: list):
         """Handle race completion event."""
@@ -1020,25 +1103,6 @@ class RaceMonitor(Node):
                 os.path.join(
                     self.config['trajectory_output_directory'], 'cpu_performance_data')
             )
-
-    def _evaluate_lap_trajectory(self, lap_number: int):
-        """Evaluate individual lap trajectory."""
-        try:
-            # Create EVO trajectory for the lap
-            evo_trajectory = self.data_manager.create_evo_trajectory(
-                lap_number)
-            if not evo_trajectory:
-                return
-
-            # Perform evaluation using research evaluator if available
-            if self.research_evaluator and self.reference_manager.is_reference_available():
-                reference_trajectory = self.reference_manager.get_reference_trajectory()
-                if reference_trajectory:
-                    # TODO: Implement single lap evaluation
-                    pass
-
-        except Exception as e:
-            self.logger.error(f"Error evaluating lap {lap_number}", exception=e)
 
     def _perform_comprehensive_analysis(self, race_data: dict):
         """Perform comprehensive race analysis after completion."""
@@ -1175,37 +1239,6 @@ class RaceMonitor(Node):
                             # Convert trajectory points to proper format for plotting
                             poses = []
                             for i, point in enumerate(trajectory_data['points']):
-                                # Create a simple object-like structure that the visualization engine expects
-                                class MockPose:
-                                    def __init__(self, x, y, z, qx, qy, qz, qw, theta=None):
-                                        self.x = x
-                                        self.y = y
-                                        self.z = z
-                                        if theta is not None:
-                                            self.theta = theta
-                                        # Also store quaternion data if available
-                                        if qx is not None:
-                                            self.qx = qx
-                                            self.qy = qy
-                                            self.qz = qz
-                                            self.qw = qw
-
-                                class MockHeader:
-                                    def __init__(self, timestamp):
-                                        # Create a proper stamp object that the visualization engine expects
-                                        class MockStamp:
-                                            def __init__(self, ts):
-                                                if ts is not None:
-                                                    self.sec = int(ts)
-                                                    self.nanosec = int(
-                                                        (ts - int(ts)) * 1e9)
-                                                else:
-                                                    self.sec = 0
-                                                    self.nanosec = 0
-
-                                        self.stamp = MockStamp(timestamp)
-                                        self.timestamp = timestamp
-
                                 # Calculate theta from quaternion if not provided
                                 qz = point.get('qz', 0.0)
                                 qw = point.get('qw', 1.0)
@@ -1213,7 +1246,7 @@ class RaceMonitor(Node):
                                     np.arctan2(qz, qw) if qw != 0 else 0.0
 
                                 pose_data = {
-                                    'pose': MockPose(
+                                    'pose': _MockPose(
                                         x=point['x'],
                                         y=point['y'],
                                         z=point.get('z', 0.0),
@@ -1223,7 +1256,7 @@ class RaceMonitor(Node):
                                         qw=point.get('qw', 1.0),
                                         theta=theta
                                     ),
-                                    'header': MockHeader(point.get('timestamp', i * 0.1))
+                                    'header': _MockHeader(point.get('timestamp', i * 0.1))
                                 }
                                 poses.append(pose_data)
 

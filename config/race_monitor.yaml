@@ -134,6 +134,18 @@ race_monitor:
     enable_comparison: false                # Compare with previous experiments
     enable_recommendations: false           # Generate performance improvement suggestions
 
+    race_evaluation:
+      enable_export: true                   # Export evaluation results to file
+      auto_increment_experiment: true       # Auto-increment experiment ID
+      include_recommendations: true         # Include improvement recommendations
+      enable_comparison: false              # Compare with previous experiments
+      grading_strictness: "normal"          # "lenient", "normal", "strict"
+      focus_on_consistency: true            # Weight consistency in grading
+      focus_on_trajectory_accuracy: true    # Weight trajectory accuracy in grading
+      focus_on_racing_efficiency: true      # Weight racing efficiency in grading
+      include_detailed_metrics: true        # Include per-metric breakdown
+      max_recommendations: 5               # Maximum number of recommendations to include
+
     # ═══════════════════════════════════════════════════════════════════════════
     # TRAJECTORY METRICS
     # ═══════════════════════════════════════════════════════════════════════════
@@ -237,6 +249,13 @@ race_monitor:
     # ═══════════════════════════════════════════════════════════════════════════
     # Monitor computational performance and resource usage
     
+    # --- Topic Configuration ---
+    odometry_topics: ["/odom"]              # Odometry topics to subscribe to
+    control_command_topics: ["/kayn/drive"] # Control command topics to subscribe to
+
+    # --- Controller Config Snapshotting ---
+    controller_config_file: ""             # Path to controller config file to copy into results dir
+
     # --- Monitoring Control ---
     enable_computational_monitoring: false  # Enable CPU/memory monitoring
     enable_performance_logging: true        # Log performance metrics periodically
