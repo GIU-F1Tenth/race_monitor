@@ -2,76 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+/* ── base ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  padding: 0;
+  background: #0a0a0a;
+  color: #e8e8e8;
+  font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Carbon-fibre grid background */
+body {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
+/* ── panel glass card ────────────────────────────────────────────────────── */
+.panel {
+  background: rgba(17, 17, 17, 0.92);
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
+.panel-glow-red {
+  border-color: #e8000d;
+  box-shadow: 0 0 12px rgba(232, 0, 13, 0.25), inset 0 0 8px rgba(232, 0, 13, 0.06);
 }
 
-::-webkit-scrollbar-thumb {
-  background: #888;
+.panel-glow-green {
+  border-color: #00e676;
+  box-shadow: 0 0 12px rgba(0, 230, 118, 0.2), inset 0 0 8px rgba(0, 230, 118, 0.04);
+}
+
+/* ── HUD number ──────────────────────────────────────────────────────────── */
+.hud-number {
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: #ffffff;
+}
+
+/* ── status pill ─────────────────────────────────────────────────────────── */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.status-pill-red    { background: rgba(232,0,13,0.15);  color: #ff1a25; border: 1px solid #e8000d; }
+.status-pill-green  { background: rgba(0,230,118,0.12); color: #00e676; border: 1px solid #00e676; }
+.status-pill-yellow { background: rgba(255,214,0,0.12); color: #ffd600; border: 1px solid #ffd600; }
+.status-pill-muted  { background: rgba(80,80,80,0.15);  color: #888;    border: 1px solid #333; }
+
+/* ── racing button ───────────────────────────────────────────────────────── */
+.race-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.race-btn:hover  { transform: translateY(-1px); }
+.race-btn:active { transform: translateY(0); }
+.race-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.race-btn-red {
+  background: #e8000d;
+  color: white;
+  box-shadow: 0 0 12px rgba(232, 0, 13, 0.4);
+}
+.race-btn-red:hover { background: #ff1a25; box-shadow: 0 0 20px rgba(232, 0, 13, 0.6); }
+
+.race-btn-outline {
+  background: transparent;
+  color: #e8e8e8;
+  border-color: #333;
+}
+.race-btn-outline:hover { border-color: #e8000d; color: #ff1a25; }
+
+.race-btn-green {
+  background: transparent;
+  color: #00e676;
+  border-color: #00e676;
+}
+.race-btn-green:hover { background: rgba(0,230,118,0.1); box-shadow: 0 0 12px rgba(0,230,118,0.3); }
+
+/* ── scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: #0a0a0a; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+/* ── lap-time row ────────────────────────────────────────────────────────── */
+.lap-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
   border-radius: 4px;
+  transition: background 0.1s;
 }
+.lap-row:hover { background: rgba(255,255,255,0.04); }
+.lap-row.best  { background: rgba(255,214,0,0.07); }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
+/* ── connection dot ──────────────────────────────────────────────────────── */
+.conn-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
 }
-
-/* Animation utilities */
-.animate-pulse-slow {
-  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.animate-bounce-slow {
-  animation: bounce 2s infinite;
-}
-
-/* Custom components */
-.config-tab {
-  @apply px-4 py-2 text-sm font-medium border-b-2 border-transparent hover:border-gray-300 hover:text-gray-700 transition-colors duration-200;
-}
-
-.config-tab.active {
-  @apply border-race-primary text-race-primary;
-}
-
-.metric-card {
-  @apply bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg transition-shadow duration-200;
-}
-
-.status-indicator {
-  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-}
-
-.status-indicator.success {
-  @apply bg-green-100 text-green-800;
-}
-
-.status-indicator.warning {
-  @apply bg-yellow-100 text-yellow-800;
-}
-
-.status-indicator.error {
-  @apply bg-red-100 text-red-800;
-}
-
-.status-indicator.info {
-  @apply bg-blue-100 text-blue-800;
-}
+.conn-dot.on  { background: #00e676; box-shadow: 0 0 6px #00e676; }
+.conn-dot.off { background: #444; }
