@@ -59,6 +59,7 @@ setup(
     entry_points={
         'console_scripts': [
             'race_monitor = race_monitor.race_monitor:main',
+            'ctrl_node = race_monitor.ctrl_node:main',
         ],
     },
 )

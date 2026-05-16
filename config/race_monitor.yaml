@@ -1,10 +1,10 @@
 race_monitor:
   ros__parameters:
+
     # ═══════════════════════════════════════════════════════════════════════════
-    # CORE RACE CONFIGURATION
+    # CORE Params
     # ═══════════════════════════════════════════════════════════════════════════
-    # Essential parameters for race monitoring and lap detection
-    
+
     # --- Start/Finish Line Definition ---
     # Define the start/finish line as two points in the map frame
     start_line_p1: [0.0, -2.0]  # First endpoint [x, y] in meters
@@ -26,7 +26,6 @@ race_monitor:
     # ═══════════════════════════════════════════════════════════════════════════
     # LOGGING & DEBUGGING
     # ═══════════════════════════════════════════════════════════════════════════
-    # Control verbosity of console output and diagnostic information
     
     # Log verbosity level
     # • "minimal"  → Only critical events and final results

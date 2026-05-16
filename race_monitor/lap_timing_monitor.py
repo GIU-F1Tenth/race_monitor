@@ -61,6 +61,8 @@ import psutil
 import threading
 from collections import deque
 
+from .logger_utils import RaceMonitorLogger, LogLevel
+
 
 def time_to_nanoseconds(time_obj):
     """
@@ -129,10 +131,12 @@ class RaceMonitor(Node):
                          allow_undeclared_parameters=True,
                          automatically_declare_parameters_from_overrides=True)
 
-        self.get_logger().info('Race Monitor node started')
-
         # Declare all parameters matching the config file structure
         self._declare_all_parameters()
+
+        log_level = str(self.get_parameter('log_level').value) if self.has_parameter('log_level') else 'normal'
+        self.logger = RaceMonitorLogger(self, "LapTimingMonitor", log_level)
+        self.logger.startup('Race Monitor node started')
 
         # Read parameters
         self.start_line_p1 = np.array(
@@ -259,7 +263,7 @@ class RaceMonitor(Node):
                         'type': 'nav_msgs/Odometry', 'enabled': True}
                 ]
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Error parsing odometry_topics parameter: {e}")
             self.odometry_topics_config = [
                 {'topic': 'car_state/odom',
@@ -311,7 +315,7 @@ class RaceMonitor(Node):
                     {'topic': '/drive', 'type': 'ackermann', 'enabled': True}
                 ]
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Error parsing control_command_topics parameter: {e}")
             self.control_command_topics_config = [
                 {'topic': '/drive', 'type': 'ackermann', 'enabled': True}
@@ -331,12 +335,12 @@ class RaceMonitor(Node):
         self.performance_log_interval = float(
             self.get_parameter('performance_log_interval').value)
 
-        self.get_logger().info(
+        self.logger.info(
             f"Initial start line: P1={self.start_line_p1}, P2={self.start_line_p2}")
 
         if self.enable_trajectory_evaluation:
             if not EVO_AVAILABLE:
-                self.get_logger().warn("EVO library not available - trajectory evaluation disabled")
+                self.logger.warn("EVO library not available - trajectory evaluation disabled")
                 self.enable_trajectory_evaluation = False
 
         # Race state
@@ -399,7 +403,7 @@ class RaceMonitor(Node):
                 self.computational_monitoring_initialized = True
 
             except Exception as e:
-                self.get_logger().error(
+                self.logger.error(
                     f"Failed to initialize computational monitoring: {e}")
                 self.enable_computational_monitoring = False
 
@@ -420,7 +424,7 @@ class RaceMonitor(Node):
 
             # Initialize EVO plotter if available
             if EVO_PLOTTER_AVAILABLE and self.auto_generate_graphs:
-                self.get_logger().info("Initializing EVO plotter...")
+                self.logger.info("Initializing EVO plotter...")
                 # Create configuration dict for plotter
                 plotter_config = {
                     'auto_generate_graphs': self.auto_generate_graphs,
@@ -481,7 +485,7 @@ class RaceMonitor(Node):
                             self.reference_trajectory_format
                         )
                 except Exception as e:
-                    self.get_logger().error(
+                    self.logger.error(
                         f"Failed to initialize Research Evaluator: {e}")
                     self.research_evaluator = None
             else:
@@ -502,7 +506,7 @@ class RaceMonitor(Node):
             try:
                 self.race_evaluator = create_race_evaluator(race_eval_config)
             except Exception as e:
-                self.get_logger().error(
+                self.logger.error(
                     f"Failed to initialize Race Evaluator: {e}")
                 self.race_evaluator = None
 
@@ -540,13 +544,13 @@ class RaceMonitor(Node):
                         sub = self.create_subscription(
                             PoseWithCovarianceStamped, topic, callback, 20)
                     else:
-                        self.get_logger().warn(
+                        self.logger.warn(
                             f"Unsupported odometry message type: {msg_type} for topic {topic}")
                         continue
 
                     self.odom_subscribers[topic] = sub
                     self.active_odom_topics.append(topic)
-                    self.get_logger().info(
+                    self.logger.info(
                         f"Subscribed to odometry topic: {topic} ({msg_type})")
 
         # Clicked point subscriber
@@ -573,13 +577,13 @@ class RaceMonitor(Node):
                         sub = self.create_subscription(
                             Twist, topic, callback, 20)
                     else:
-                        self.get_logger().warn(
+                        self.logger.warn(
                             f"Unsupported control command type: {cmd_type} for topic {topic}")
                         continue
 
                     self.control_subscribers[topic] = sub
                     self.active_control_topics.append(topic)
-                    self.get_logger().info(
+                    self.logger.info(
                         f"Subscribed to control topic: {topic} ({cmd_type})")
 
             # Fallback to legacy single topic if no topics are configured
@@ -593,14 +597,14 @@ class RaceMonitor(Node):
                         Twist, self.control_command_topic,
                         lambda msg: self.control_command_callback(msg, self.control_command_topic), 20)
                 else:
-                    self.get_logger().warn(
+                    self.logger.warn(
                         f"Unsupported control command type: {self.control_command_type}")
                     self.enable_computational_monitoring = False
 
                 if self.enable_computational_monitoring:
                     self.active_control_topics.append(
                         self.control_command_topic)
-                    self.get_logger().info(
+                    self.logger.info(
                         f"Using legacy control topic: {self.control_command_topic} ({self.control_command_type})")
 
         # Publishers
@@ -658,22 +662,22 @@ class RaceMonitor(Node):
                 # Time-based evaluation
                 self.evaluation_timer = self.create_timer(
                     self.evaluation_interval_seconds, self.evaluate_current_trajectory)
-                self.get_logger().info(
+                self.logger.info(
                     f"Time-based evaluation every {self.evaluation_interval_seconds} seconds")
             elif self.evaluation_interval_laps > 0:
                 # Lap-based evaluation (will be triggered in lap completion)
                 self.evaluation_timer = None
-                self.get_logger().info(
+                self.logger.info(
                     f"Lap-based evaluation every {self.evaluation_interval_laps} laps")
             elif self.evaluation_interval_meters > 0:
                 # Distance-based evaluation (will be triggered in odom callback)
                 self.evaluation_timer = None
-                self.get_logger().info(
+                self.logger.info(
                     f"Distance-based evaluation every {self.evaluation_interval_meters} meters")
             else:
                 # No real-time evaluation, only on lap completion
                 self.evaluation_timer = None
-                self.get_logger().info("Evaluation only on lap completion")
+                self.logger.info("Evaluation only on lap completion")
 
         # Computational Performance Monitoring timer (only if enabled)
         if self.enable_computational_monitoring and self.computational_monitoring_initialized:
@@ -686,11 +690,13 @@ class RaceMonitor(Node):
         # Remember last published line to avoid re-publishing identical markers unnecessarily
         self._last_line = (None, None)
 
-        self.get_logger().info(
+        self.logger.info(
             'Enhanced Race Monitor initialized. Use RViz Publish Point to set start/finish line (click two points).')
 
     def _declare_all_parameters(self):
         """Declare all parameters matching the config file structure."""
+        self.declare_parameter('log_level', 'normal')
+
         # ========================================
         # RACE MONITORING PARAMETERS
         # ========================================
@@ -910,7 +916,7 @@ class RaceMonitor(Node):
                     timestamps=timestamps
                 )
             else:
-                self.get_logger().warn(
+                self.logger.warn(
                     f"Unsupported reference trajectory format: {self.reference_trajectory_format}")
                 return
 
@@ -921,10 +927,10 @@ class RaceMonitor(Node):
                 num_poses = len(self.reference_trajectory.positions_xyz)
             else:
                 num_poses = 'unknown'
-            self.get_logger().info(
+            self.logger.info(
                 f"Loaded reference trajectory with {num_poses} poses")
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Failed to load reference trajectory: {e}")
 
     def odom_callback(self, msg, topic_name='car_state/odom'):
@@ -966,7 +972,7 @@ class RaceMonitor(Node):
                     distance_traveled = np.linalg.norm(
                         self.current_position - self.last_position)
                     if distance_traveled >= self.evaluation_interval_meters:
-                        self.get_logger().info(
+                        self.logger.info(
                             f"Distance-based evaluation triggered after {distance_traveled:.2f}m")
                         self.evaluate_current_trajectory()
 
@@ -1070,7 +1076,7 @@ class RaceMonitor(Node):
             self.lap_start_time = current_time
             self.race_running = True
             self.lap_count = 1
-            self.get_logger().info(f"Race started! Lap {self.lap_count}")
+            self.logger.info(f"Race started! Lap {self.lap_count}")
 
             # EVO: Start new lap trajectory
             if self.enable_trajectory_evaluation and EVO_AVAILABLE:
@@ -1090,11 +1096,11 @@ class RaceMonitor(Node):
                     # Check if we should evaluate based on lap interval
                     if (self.evaluation_interval_laps > 0 and
                             self.lap_count % self.evaluation_interval_laps == 0):
-                        self.get_logger().info(
+                        self.logger.info(
                             f"Lap-based evaluation triggered for lap {self.lap_count}")
                         self.evaluate_current_trajectory()
 
-                self.get_logger().info(
+                self.logger.info(
                     f"Lap {self.lap_count} completed in {lap_time:.2f}s")
 
                 # Check if race is finished (only if not already finished)
@@ -1103,7 +1109,7 @@ class RaceMonitor(Node):
                     self.race_running = False
                     total_time = (time_to_nanoseconds(
                         current_time) - time_to_nanoseconds(self.race_start_time)) / 1e9
-                    self.get_logger().info(
+                    self.logger.info(
                         f"Race finished! Total time: {total_time:.2f}s")
 
                     # EVO: Save final evaluation summary and generate plots
@@ -1112,21 +1118,21 @@ class RaceMonitor(Node):
 
                         # Export comprehensive research data
                         if hasattr(self, 'research_evaluator') and self.research_evaluator:
-                            self.get_logger().info("Exporting comprehensive research data...")
+                            self.logger.info("Exporting comprehensive research data...")
                             try:
                                 self.research_evaluator.export_research_data()
                                 summary = self.research_evaluator.generate_research_summary()
-                                self.get_logger().info(
+                                self.logger.info(
                                     f"Research analysis complete - analyzed {summary['experiment_info']['total_laps']} laps")
-                                self.get_logger().info(
+                                self.logger.info(
                                     f"Controller: {summary['experiment_info']['controller_name']}")
                             except Exception as e:
-                                self.get_logger().error(
+                                self.logger.error(
                                     f"Error exporting research data: {e}")
 
                         # Generate custom race evaluation
                         if hasattr(self, 'race_evaluator') and self.race_evaluator:
-                            self.get_logger().info("Generating custom race evaluation...")
+                            self.logger.info("Generating custom race evaluation...")
                             try:
                                 # Get research data if available
                                 research_data = {}
@@ -1170,35 +1176,35 @@ class RaceMonitor(Node):
                                 score = eval_data['performance_summary']['numerical_score']
                                 experiment_id = eval_data['metadata']['experiment_id']
 
-                                self.get_logger().info(
+                                self.logger.info(
                                     f"Race evaluation saved: {evaluation_filepath}")
-                                self.get_logger().info(
+                                self.logger.info(
                                     f"Overall Grade: {overall_grade} (Score: {score:.1f}/100)")
-                                self.get_logger().info(
+                                self.logger.info(
                                     f"Experiment ID: {experiment_id}")
 
                                 # Log top recommendations
                                 recommendations = eval_data.get(
                                     'recommendations', [])
                                 if recommendations:
-                                    self.get_logger().info("Top recommendations:")
+                                    self.logger.info("Top recommendations:")
                                     for i, rec in enumerate(recommendations[:3], 1):
-                                        self.get_logger().info(f"  {i}. {rec}")
+                                        self.logger.info(f"  {i}. {rec}")
 
                             except Exception as e:
-                                self.get_logger().error(
+                                self.logger.error(
                                     f"Error generating race evaluation: {e}")
 
                         # Generate all EVO plots if plotter is available (only once when race finishes)
                         if self.evo_plotter and not self.evo_plots_generated:
-                            self.get_logger().info("Generating comprehensive EVO analysis plots...")
+                            self.logger.info("Generating comprehensive EVO analysis plots...")
                             self.evo_plotter.generate_all_plots()
                             self.evo_plots_generated = True  # Mark as generated to prevent re-generation
                 else:
                     # Start next lap
                     self.lap_count += 1
                     self.lap_start_time = current_time
-                    self.get_logger().info(f"-> Starting lap {self.lap_count}")
+                    self.logger.info(f"-> Starting lap {self.lap_count}")
 
                     # EVO: Start new lap trajectory
                     if self.enable_trajectory_evaluation and EVO_AVAILABLE:
@@ -1225,7 +1231,7 @@ class RaceMonitor(Node):
         self.current_lap_trajectory = []
         self.last_lap_number = lap_number
 
-        self.get_logger().info(
+        self.logger.info(
             f"Started tracking trajectory for lap {lap_number}")
 
     def complete_lap_trajectory(self, lap_number, lap_time):
@@ -1238,20 +1244,20 @@ class RaceMonitor(Node):
 
         # Add to Research Evaluator for comprehensive analysis
         if hasattr(self, 'research_evaluator') and self.research_evaluator:
-            self.get_logger().info(
+            self.logger.info(
                 f"Adding lap {lap_number} to Research Evaluator for comprehensive analysis (data points: {len(self.current_lap_trajectory)})")
             try:
                 self.research_evaluator.add_trajectory(
                     lap_number, self.current_lap_trajectory.copy(), lap_time)
-                self.get_logger().info(
+                self.logger.info(
                     f"Research analysis completed for lap {lap_number}")
             except Exception as e:
-                self.get_logger().error(
+                self.logger.error(
                     f"Error in research evaluation for lap {lap_number}: {e}")
 
         # Add to EVO plotter if available
         if self.evo_plotter:
-            self.get_logger().info(
+            self.logger.info(
                 f"Adding lap {lap_number} trajectory to EVO plotter (data points: {len(self.current_lap_trajectory)})")
             self.evo_plotter.add_lap_trajectory(
                 lap_number, self.current_lap_trajectory.copy())
@@ -1300,11 +1306,11 @@ class RaceMonitor(Node):
                     filtered_orientations.append(orientations[i])
 
             if len(filtered_timestamps) < 2:
-                self.get_logger().warn(
+                self.logger.warn(
                     f"Insufficient unique timestamps for lap {lap_number} trajectory evaluation")
                 return
 
-            self.get_logger().info(
+            self.logger.info(
                 f"Filtered trajectory: {len(poses)} -> {len(filtered_timestamps)} poses (removed {len(poses) - len(filtered_timestamps)} duplicates)")
 
             # Create trajectory object with filtered data
@@ -1356,11 +1362,11 @@ class RaceMonitor(Node):
             if self.save_trajectories:
                 self.save_trajectory_to_file(traj, lap_number)
 
-            self.get_logger().info(
+            self.logger.info(
                 f"Evaluated lap {lap_number} trajectory: {metrics_dict}")
 
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Error evaluating lap {lap_number} trajectory: {e}")
 
     def calculate_path_length(self, traj):
@@ -1465,7 +1471,7 @@ class RaceMonitor(Node):
             }
 
         except Exception as e:
-            self.get_logger().warn(f"Could not compare with reference: {e}")
+            self.logger.warn(f"Could not compare with reference: {e}")
             return {}
 
     def save_trajectory_to_file(self, traj, lap_number):
@@ -1483,11 +1489,11 @@ class RaceMonitor(Node):
                     f.write(
                         f"{timestamp:.6f} {x:.6f} {y:.6f} {z:.6f} {qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f}\n")
 
-            self.get_logger().info(
+            self.logger.info(
                 f"Saved trajectory for lap {lap_number} to {filepath}")
 
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Error saving trajectory for lap {lap_number}: {e}")
 
     def _save_horizon_reference_trajectory(self, reference_data):
@@ -1526,13 +1532,13 @@ class RaceMonitor(Node):
                     f.write(
                         f"{timestamp:.6f} {x:.6f} {y:.6f} {z:.6f} {qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f}\n")
 
-            self.get_logger().info(
+            self.logger.info(
                 f"Saved horizon mapper reference trajectory to {reference_filepath} with {len(reference_data)} points")
-            self.get_logger().info(
+            self.logger.info(
                 f"Use this file for EVO comparisons: evo_ape tum {reference_filename} lap_001_trajectory.txt --plot")
 
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Error saving horizon reference trajectory: {e}")
 
     def evaluate_current_trajectory(self):
@@ -1614,11 +1620,11 @@ class RaceMonitor(Node):
                         row.append(value)
                     writer.writerow(row)
 
-            self.get_logger().info(
+            self.logger.info(
                 f"Saved trajectory evaluation summary to {summary_file}")
 
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Error saving trajectory evaluation summary: {e}")
 
     # --------------------------- Computational Performance Monitoring ---------------------------------
@@ -1663,7 +1669,7 @@ class RaceMonitor(Node):
                 self.processing_efficiency_pub.publish(efficiency_msg)
 
         except Exception as e:
-            self.get_logger().error(
+            self.logger.error(
                 f"Error monitoring computational performance: {e}")
 
     def log_performance_stats(self):
@@ -1678,7 +1684,7 @@ class RaceMonitor(Node):
             stats = self.calculate_performance_statistics()
 
             # Log to console
-            self.get_logger().info(f"Performance Stats - Avg Latency: {stats['avg_latency_ms']:.2f}ms, "
+            self.logger.info(f"Performance Stats - Avg Latency: {stats['avg_latency_ms']:.2f}ms, "
                                    f"Max Latency: {stats['max_latency_ms']:.2f}ms, "
                                    f"CPU: {stats['avg_cpu_usage']:.1f}%, "
                                    f"Memory: {stats['avg_memory_usage']:.1f}MB, "
@@ -1696,7 +1702,7 @@ class RaceMonitor(Node):
             self.last_performance_log_time = current_time
 
         except Exception as e:
-            self.get_logger().error(f"Error logging performance stats: {e}")
+            self.logger.error(f"Error logging performance stats: {e}")
 
     def calculate_performance_statistics(self):
         """Calculate comprehensive performance statistics"""
@@ -1789,11 +1795,11 @@ class RaceMonitor(Node):
                     for row in self.performance_log_data:
                         writer.writerow(row)
 
-            self.get_logger().info(
+            self.logger.info(
                 f"Computational performance data saved to: {filename}")
 
         except Exception as e:
-            self.get_logger().error(f"Failed to save performance data: {e}")
+            self.logger.error(f"Failed to save performance data: {e}")
 
     # --------------------------- Callbacks ---------------------------------
     def clicked_point_callback(self, msg: PointStamped):
@@ -1808,7 +1814,7 @@ class RaceMonitor(Node):
 
         if self.pending_point is None:
             self.pending_point = point
-            self.get_logger().info(
+            self.logger.info(
                 f"Pending start/finish point set to ({point[0]:.3f}, {point[1]:.3f}). Click second point to complete the line.")
         else:
             # Use previous P2 if pending_point is only update for P1 -- but here we set both
@@ -1836,10 +1842,10 @@ class RaceMonitor(Node):
 
             # Log the new line
             line_length = np.linalg.norm(new_p2 - new_p1)
-            self.get_logger().info(
+            self.logger.info(
                 f"Start/finish line updated: P1=({new_p1[0]:.3f}, {new_p1[1]:.3f}), "
                 f"P2=({new_p2[0]:.3f}, {new_p2[1]:.3f}), length={line_length:.3f}m")
-            self.get_logger().info("Lap detection state reset for new start line")
+            self.logger.info("Lap detection state reset for new start line")
 
     def control_command_callback(self, msg, topic_name='drive'):
         """Callback for control command messages (computational monitoring)"""
@@ -1867,7 +1873,7 @@ class RaceMonitor(Node):
             if latency > 0.05:  # 50ms threshold
                 self.latency_violations += 1
 
-            self.get_logger().debug(
+            self.logger.debug(
                 f"Control latency from {odom_topic} to {topic_name}: {latency*1000:.2f}ms")
 
         # Publish average latency if we calculated any
@@ -2001,7 +2007,7 @@ class RaceMonitor(Node):
 
         # Calculate line length for logging
         line_length = np.linalg.norm(self.start_line_p2 - self.start_line_p1)
-        self.get_logger().info(
+        self.logger.info(
             f"Published start line (length: {line_length:.2f}m) in frame '{self.frame_id}'")
 
     def publish_raceline_markers(self):
@@ -2040,7 +2046,7 @@ class RaceMonitor(Node):
                     # Don't log error too frequently
                     if not hasattr(self, '_last_raceline_error_time') or time.time() - \
                             self._last_raceline_error_time > 10.0:
-                        self.get_logger().warn(
+                        self.logger.warn(
                             f"Could not load reference trajectory for visualization: {e}")
                         self._last_raceline_error_time = time.time()
                     return
@@ -2093,7 +2099,7 @@ class RaceMonitor(Node):
 
         # Log only once or every 30 seconds
         if not hasattr(self, '_last_raceline_log_time') or time.time() - self._last_raceline_log_time > 30.0:
-            self.get_logger().info(
+            self.logger.info(
                 f"Published raceline with {len(data)} points")
             self._last_raceline_log_time = time.time()
 
@@ -2141,7 +2147,7 @@ class RaceMonitor(Node):
 
         # Log only once or every 30 seconds
         if not hasattr(self, '_last_raceline_log_time') or time.time() - self._last_raceline_log_time > 30.0:
-            self.get_logger().info(
+            self.logger.info(
                 f"Published raceline with {len(positions)} points")
             self._last_raceline_log_time = time.time()
 
@@ -2172,9 +2178,9 @@ class RaceMonitor(Node):
                     writer.writerow(
                         ['average_lap_s', f"{np.mean(self.lap_times):.4f}"])
 
-            self.get_logger().info(f"Saved race results to: {filepath}")
+            self.logger.info(f"Saved race results to: {filepath}")
         except Exception as e:
-            self.get_logger().error(f"Error saving CSV: {e}")
+            self.logger.error(f"Error saving CSV: {e}")
 
 
 def main(args=None):
@@ -2184,7 +2190,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('Keyboard interrupt received — shutting down')
+        node.logger.info('Keyboard interrupt received — shutting down')
         # Save partial results if running or any laps recorded
         if node.race_started and len(node.lap_times) > 0:
             total = 0.0

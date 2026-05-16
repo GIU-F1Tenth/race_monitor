@@ -530,6 +530,9 @@ class RaceMonitor(Node):
         self.race_evaluator = None
         self.evo_plotter = None
 
+        # Race control state
+        self.race_paused = False
+
     def _setup_ros_interfaces(self):
         """Set up ROS2 publishers, subscribers, and services."""
         # Publishers
@@ -562,6 +565,15 @@ class RaceMonitor(Node):
         )
         self._force_lap_srv = self.create_service(
             Trigger, '~/force_lap_complete', self._force_lap_complete_callback
+        )
+        self._pause_race_srv = self.create_service(
+            Trigger, '~/pause_race', self._pause_race_callback
+        )
+        self._resume_race_srv = self.create_service(
+            Trigger, '~/resume_race', self._resume_race_callback
+        )
+        self._reset_lap_time_srv = self.create_service(
+            Trigger, '~/reset_lap_time', self._reset_lap_time_callback
         )
 
         # Optional subscribers based on configuration
@@ -702,6 +714,9 @@ class RaceMonitor(Node):
     def _odometry_callback(self, msg: Odometry):
         """Handle odometry messages."""
         try:
+            if self.race_paused:
+                return
+
             # Extract position
             x = msg.pose.pose.position.x
             y = msg.pose.pose.position.y
@@ -746,6 +761,9 @@ class RaceMonitor(Node):
 
     def _control_command_callback(self, msg: AckermannDriveStamped):
         """Handle control command messages for performance monitoring."""
+        if self.race_paused:
+            return
+
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.record_control_command_timestamp(
                 '/drive', msg.header.stamp)
@@ -903,6 +921,7 @@ class RaceMonitor(Node):
         """Service callback: reset race state."""
         self.lap_detector.reset_race()
         self.data_manager.current_lap_trajectory = []
+        self.race_paused = False
         response.success = True
         response.message = "Race reset"
         return response
@@ -916,6 +935,71 @@ class RaceMonitor(Node):
         else:
             response.success = False
             response.message = "Race not active"
+        return response
+
+    def _pause_race_callback(self, request, response):
+        """Service callback: pause race timing and recording."""
+        if not self.lap_detector.is_race_active():
+            response.success = False
+            response.message = "Race not active"
+            return response
+
+        if self.race_paused:
+            response.success = False
+            response.message = "Race already paused"
+            return response
+
+        self.race_paused = True
+        self.lap_detector.pause_race(self.get_clock().now())
+
+        if self.config['enable_computational_monitoring']:
+            self.performance_monitor.stop_monitoring()
+
+        self._publish_race_status()
+        response.success = True
+        response.message = "Race paused"
+        return response
+
+    def _resume_race_callback(self, request, response):
+        """Service callback: resume race timing and recording."""
+        if not self.lap_detector.is_race_active():
+            response.success = False
+            response.message = "Race not active"
+            return response
+
+        if not self.race_paused:
+            response.success = False
+            response.message = "Race not paused"
+            return response
+
+        self.race_paused = False
+        self.lap_detector.resume_race(self.get_clock().now())
+
+        if self.config['enable_computational_monitoring']:
+            self.performance_monitor.start_monitoring()
+
+        self._publish_race_status()
+        response.success = True
+        response.message = "Race resumed"
+        return response
+
+    def _reset_lap_time_callback(self, request, response):
+        """Service callback: reset the current lap timer and trajectory."""
+        if not self.lap_detector.is_race_active():
+            response.success = False
+            response.message = "Race not active"
+            return response
+
+        if self.race_paused:
+            response.success = False
+            response.message = "Race is paused"
+            return response
+
+        now = self.get_clock().now()
+        self.lap_detector.last_lap_time = now
+        self.data_manager.start_new_lap_trajectory(self.lap_detector.current_lap)
+        response.success = True
+        response.message = "Current lap time reset"
         return response
 
     def _publish_marker(self, marker: Marker):
@@ -1627,7 +1711,10 @@ class RaceMonitor(Node):
             else:
                 status = "FINISHED"
         elif race_stats['race_started']:
-            status = f"RACING-{race_stats['race_ending_mode'].upper()}"
+            if self.race_paused:
+                status = "PAUSED"
+            else:
+                status = f"RACING-{race_stats['race_ending_mode'].upper()}"
         else:
             status = "WAITING"
 
@@ -1637,7 +1724,7 @@ class RaceMonitor(Node):
 
         # Publish race running status
         race_running_msg = Bool()
-        race_running_msg.data = race_stats['race_started'] and not race_stats['race_completed']
+        race_running_msg.data = race_stats['race_started'] and not race_stats['race_completed'] and not self.race_paused
         self.race_running_pub.publish(race_running_msg)
 
     def _periodic_visualization_update(self):
@@ -1652,6 +1739,9 @@ class RaceMonitor(Node):
 
     def _save_intermediate_results(self):
         """Save intermediate results for manual mode."""
+        if self.race_paused:
+            return
+
         race_stats = self.lap_detector.get_race_stats()
 
         if race_stats['race_started'] and not race_stats['race_completed']:

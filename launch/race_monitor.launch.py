@@ -1,60 +1,51 @@
 #!/usr/bin/env python3
 
 """
-Race Monitor Launch File
-
-Unified launch file supporting three race ending modes:
-1. lap_complete - Race ends after completing required laps (default)
-2. crash - Race ends when crash is detected
-3. manual - Race continues until manually killed
-
-Launch arguments override values from race_monitor.yaml configuration file.
-
-Usage Examples:
-  # Default lap complete mode
-  ros2 launch race_monitor race_monitor.launch.py
-
-  # Lap complete mode with custom laps
-  ros2 launch race_monitor race_monitor.launch.py race_mode:=lap_complete required_laps:=10
-
-  # Crash detection mode
-  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash
-
-  # Manual endurance mode
-  ros2 launch race_monitor race_monitor.launch.py race_mode:=manual save_interval:=60.0
-
-  # Custom crash detection parameters
-  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash max_stationary_time:=10.0 enable_collision_detection:=false
-
-Author: Mohammed Abdelazim (mohammed@azab.io)
-License: MIT License
+Race monitor launch file
+    Author: Mohammed S. Azab Abdelazim (mohammed@azab.io)
+    License: MIT License
 """
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-import os
-from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
     """Generate unified launch description supporting all race ending modes."""
 
-    # Get package directory and config file
     config_file_path = PathJoinSubstitution([
         FindPackageShare('race_monitor'),
         'config',
         'race_monitor.yaml'
     ])
 
-    # Common launch arguments
     race_mode_arg = DeclareLaunchArgument(
         'race_mode',
         default_value='lap_complete',
         description='Race ending mode: lap_complete, crash, or manual',
         choices=['lap_complete', 'crash', 'manual']
+    )
+
+    control_config_file_path = PathJoinSubstitution([
+        FindPackageShare('race_monitor'),
+        'config',
+        'ctrl_node.yaml'
+    ])
+
+    enable_control_node_arg = DeclareLaunchArgument(
+        'enable_control_node',
+        default_value='false',
+        description='Enable ctrl_node for keyboard/joy input'
+    )
+
+    control_config_arg = DeclareLaunchArgument(
+        'control_config',
+        default_value=control_config_file_path,
+        description='Config file for ctrl_node'
     )
 
     controller_name_arg = DeclareLaunchArgument(
@@ -63,16 +54,12 @@ def generate_launch_description():
         description='Name of the controller being tested'
     )
 
-    # Note: experiment_id is now fully auto-generated and not configurable
-
-    # Lap complete mode arguments
     required_laps_arg = DeclareLaunchArgument(
         'required_laps',
         default_value='20',
         description='Number of laps required to complete the race (lap_complete mode only)'
     )
 
-    # Crash detection mode arguments
     max_stationary_time_arg = DeclareLaunchArgument(
         'max_stationary_time',
         default_value='5.0',
@@ -109,7 +96,6 @@ def generate_launch_description():
         description='Time window for collision detection (seconds)'
     )
 
-    # Manual mode arguments
     save_interval_arg = DeclareLaunchArgument(
         'save_interval',
         default_value='30.0',
@@ -128,7 +114,6 @@ def generate_launch_description():
         description='Enable periodic intermediate result saves in manual mode'
     )
 
-    # Advanced configuration arguments
     enable_crash_detection_arg = DeclareLaunchArgument(
         'enable_crash_detection',
         default_value='true',
@@ -159,14 +144,12 @@ def generate_launch_description():
         description='Automatically generate analysis graphs'
     )
 
-    # Smart controller detection arguments
     enable_smart_controller_detection_arg = DeclareLaunchArgument(
         'enable_smart_controller_detection',
         default_value='true',
         description='Enable automatic controller detection from topic publishers (only when controller_name is empty)'
     )
 
-    # Auto-shutdown arguments
     auto_shutdown_on_race_complete_arg = DeclareLaunchArgument(
         'auto_shutdown_on_race_complete',
         default_value='true',
@@ -184,38 +167,20 @@ def generate_launch_description():
 
         import sys
 
-        # Get parameter values
         race_mode = LaunchConfiguration('race_mode').perform(context)
-
-        # Build parameter overrides only for explicitly provided arguments
         override_parameters = {}
-
-        # Always set race mode since it controls behavior
         override_parameters['race_ending_mode'] = race_mode
-
-        # Check command line arguments to see what was explicitly provided
         cmd_args = sys.argv
 
-        # Helper function to check if an argument was explicitly provided
         def was_explicitly_provided(arg_name):
             """Check if a launch argument was explicitly provided on command line."""
             return any(f'{arg_name}:=' in arg for arg in cmd_args)
-
-        # Only override parameters that were explicitly provided via command line
         if was_explicitly_provided('controller_name'):
             override_parameters['controller_name'] = LaunchConfiguration('controller_name').perform(context)
-
-        # Note: experiment_id is auto-generated, so we don't accept it from command line
-
         if was_explicitly_provided('required_laps'):
             override_parameters['required_laps'] = int(LaunchConfiguration('required_laps').perform(context))
-
-        # Mode-specific overrides
         if race_mode == 'crash':
-            # For crash mode, override lap count to prevent normal completion
             override_parameters['required_laps'] = 999
-
-            # Only override crash detection parameters if explicitly provided
             if was_explicitly_provided('enable_crash_detection'):
                 override_parameters['crash_detection.enable_crash_detection'] = LaunchConfiguration(
                     'enable_crash_detection')
@@ -238,10 +203,7 @@ def generate_launch_description():
                     'collision_detection_window')
 
         elif race_mode == 'manual':
-            # For manual mode, override lap count to prevent normal completion
             override_parameters['required_laps'] = 999
-
-            # Only override manual mode parameters if explicitly provided
             if was_explicitly_provided('enable_intermediate_saves'):
                 override_parameters['manual_mode.save_intermediate_results'] = LaunchConfiguration(
                     'enable_intermediate_saves')
@@ -250,9 +212,6 @@ def generate_launch_description():
             if was_explicitly_provided('max_duration'):
                 override_parameters['manual_mode.max_race_duration'] = LaunchConfiguration('max_duration')
 
-        # For lap_complete mode, only use config file + any explicitly provided overrides
-
-        # Create race monitor node with config file as primary source
         race_monitor_node = Node(
             package='race_monitor',
             executable='race_monitor',
@@ -266,82 +225,41 @@ def generate_launch_description():
             }
         )
 
-        return [race_monitor_node]
+        control_node = Node(
+            package='race_monitor',
+            executable='ctrl_node',
+            name='ctrl_node',
+            parameters=[LaunchConfiguration('control_config')],
+            output='screen',
+            emulate_tty=True,
+            condition=IfCondition(LaunchConfiguration('enable_control_node'))
+        )
+
+        return [race_monitor_node, control_node]
 
     return LaunchDescription([
         race_mode_arg,
+        enable_control_node_arg,
+        control_config_arg,
         controller_name_arg,
 
-        # Lap complete mode arguments
         required_laps_arg,
-
-        # Crash detection arguments
         max_stationary_time_arg,
         min_velocity_threshold_arg,
         max_odometry_timeout_arg,
         enable_collision_detection_arg,
         collision_velocity_threshold_arg,
         collision_detection_window_arg,
-
-        # Manual mode arguments
         save_interval_arg,
         max_duration_arg,
         enable_intermediate_saves_arg,
-
-        # Advanced arguments
         enable_crash_detection_arg,
         enable_trajectory_evaluation_arg,
         enable_computational_monitoring_arg,
         save_trajectories_arg,
         auto_generate_graphs_arg,
-
-        # Smart controller detection arguments
         enable_smart_controller_detection_arg,
-
-        # Auto-shutdown arguments
         auto_shutdown_on_race_complete_arg,
         shutdown_delay_seconds_arg,
-
-        # Setup function
         OpaqueFunction(function=launch_setup)
     ])
-
-
-if __name__ == '__main__':
-    print("Race Monitor - Unified Launch File")
-    print("=" * 40)
-    print()
-    print("Available race modes:")
-    print("  lap_complete - Race ends after completing required laps (default)")
-    print("  crash        - Race ends when crash is detected")
-    print("  manual       - Race continues until manually killed")
-    print()
-    print("Quick start examples:")
-    print()
-    print("Standard 5-lap race:")
-    print("  ros2 launch race_monitor race_monitor.launch.py")
-    print()
-    print("10-lap race:")
-    print("  ros2 launch race_monitor race_monitor.launch.py required_laps:=10")
-    print()
-    print("Crash detection mode:")
-    print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash")
-    print()
-    print("With smart controller detection disabled:")
-    print("  ros2 launch race_monitor race_monitor.launch.py enable_smart_controller_detection:=false")
-    print()
-    print("With auto-shutdown disabled:")
-    print("  ros2 launch race_monitor race_monitor.launch.py auto_shutdown_on_race_complete:=false")
-    print()
-    print("Set custom controller name (disables auto-detection):")
-    print("  ros2 launch race_monitor race_monitor.launch.py controller_name:=my_controller")
-    print()
-    print("Manual endurance mode:")
-    print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=manual")
-    print()
-    print("Custom crash detection:")
-    print("  ros2 launch race_monitor race_monitor.launch.py race_mode:=crash \\")
-    print("    max_stationary_time:=10.0 enable_collision_detection:=false")
-    print()
-    print("For full argument list:")
-    print("  ros2 launch race_monitor race_monitor.launch.py --show-args")

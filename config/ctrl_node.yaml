@@ -1,0 +1,28 @@
+ctrl_node:
+  ros__parameters:
+    enable_keyboard: true
+    enable_joy: true
+    joy_topic: "/joy"
+
+    # Keyboard bindings: key -> action
+    keyboard_bindings:
+      r: reset_race
+      f: force_lap_complete
+      p: pause_race
+      u: resume_race
+      t: reset_lap_time
+
+    # Joy bindings: action -> button index
+    joy_bindings:
+      reset_race: 1
+      force_lap_complete: 0
+      pause_race: 2
+      resume_race: 3
+      reset_lap_time: 4
+
+    # Service names
+    reset_race_service: "/race_monitor/reset_race"
+    force_lap_complete_service: "/race_monitor/force_lap_complete"
+    pause_race_service: "/race_monitor/pause_race"
+    resume_race_service: "/race_monitor/resume_race"
+    reset_lap_time_service: "/race_monitor/reset_lap_time"
