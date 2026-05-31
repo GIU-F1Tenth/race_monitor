@@ -7,7 +7,6 @@ Provides keyboard and joystick control over race_monitor services.
 Supports configurable key/button mappings and optional input sources.
 """
 
-import sys
 import threading
 import select
 import termios
@@ -52,6 +51,7 @@ class RaceMonitorControl(Node):
 
         log_level = str(self.get_parameter('log_level').value)
         self.logger = RaceMonitorLogger(self, "CtrlNode", log_level)
+        self.logger.startup("Race Monitor Control Node")
 
         self.enable_keyboard = bool(self.get_parameter('enable_keyboard').value)
         self.enable_joy = bool(self.get_parameter('enable_joy').value)
@@ -68,6 +68,9 @@ class RaceMonitorControl(Node):
             'reset_lap_time': str(self.get_parameter('reset_lap_time_service').value)
         }
 
+        self.logger.debug(f"Keyboard bindings: {dict(self.keyboard_bindings)}")
+        self.logger.debug(f"Joy bindings: {dict(self.joy_bindings)}")
+
         self._service_clients = {
             action: self.create_client(Trigger, service_name)
             for action, service_name in self.service_names.items()
@@ -77,45 +80,53 @@ class RaceMonitorControl(Node):
         self._keyboard_thread = None
         self._keyboard_stop = threading.Event()
         self._keyboard_settings = None
+        self._tty_file = None
 
         if self.enable_joy:
             self.create_subscription(Joy, self.joy_topic, self._joy_callback, 10)
-            self.logger.info(f"Joy control enabled on {self.joy_topic}")
+            self.logger.info(f"Joy control enabled on topic: {self.joy_topic}")
 
         if self.enable_keyboard:
             self._start_keyboard_listener()
 
-        self.logger.info("Race monitor control node ready")
+        self.logger.success("Control node ready", LogLevel.NORMAL)
 
     def _start_keyboard_listener(self):
-        if not sys.stdin.isatty():
-            self.logger.warn("Keyboard control disabled: stdin is not a TTY")
+        # Open /dev/tty directly so keyboard input works even when stdin is
+        # redirected (e.g. when launched via ros2 launch instead of ros2 run)
+        try:
+            self._tty_file = open('/dev/tty', 'rb', buffering=0)
+        except OSError as e:
+            self.logger.warn(f"Keyboard control disabled: cannot open /dev/tty: {e}")
             return
 
         self._keyboard_thread = threading.Thread(target=self._keyboard_loop, daemon=True)
         self._keyboard_thread.start()
-        self.logger.info("Keyboard control enabled")
+        self.logger.success("Keyboard control enabled", LogLevel.NORMAL)
 
     def _keyboard_loop(self):
-        fd = sys.stdin.fileno()
+        fd = self._tty_file.fileno()
         self._keyboard_settings = termios.tcgetattr(fd)
         tty.setraw(fd)
         try:
             while rclpy.ok() and not self._keyboard_stop.is_set():
-                rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+                rlist, _, _ = select.select([self._tty_file], [], [], 0.1)
                 if not rlist:
                     continue
 
-                ch = sys.stdin.read(1)
+                ch = self._tty_file.read(1)
                 if not ch:
                     continue
 
-                action = self.keyboard_bindings.get(ch.lower())
+                char = ch.decode('utf-8', errors='replace')
+                action = self.keyboard_bindings.get(char.lower())
                 if action:
-                    self._invoke_action(action, source=f"key:{ch}")
+                    self._invoke_action(action, source=f"key:{char}")
         finally:
             if self._keyboard_settings is not None:
                 termios.tcsetattr(fd, termios.TCSADRAIN, self._keyboard_settings)
+            self._tty_file.close()
+            self._tty_file = None
 
     def _joy_callback(self, msg: Joy):
         if not self.joy_bindings:
@@ -140,9 +151,13 @@ class RaceMonitorControl(Node):
             return
 
         if not client.wait_for_service(timeout_sec=0.2):
-            self.logger.warn(f"Service unavailable for action {action}: {self.service_names.get(action)}")
+            self.logger.warn(
+                f"Service unavailable for action '{action}': {self.service_names.get(action)}",
+                LogLevel.NORMAL
+            )
             return
 
+        self.logger.event(action, f"triggered by {source}", LogLevel.NORMAL)
         request = Trigger.Request()
         future = client.call_async(request)
         future.add_done_callback(lambda fut: self._handle_response(action, source, fut))
@@ -151,15 +166,16 @@ class RaceMonitorControl(Node):
         try:
             response = future.result()
             if response.success:
-                msg = response.message or "OK"
-                self.logger.info(f"Action {action} ({source}) -> {msg}")
+                self.logger.success(
+                    f"{action} -> {response.message or 'OK'}", LogLevel.NORMAL)
             else:
-                msg = response.message or "Failed"
-                self.logger.warn(f"Action {action} ({source}) failed: {msg}")
+                self.logger.warn(
+                    f"{action} failed: {response.message or 'no message'}", LogLevel.NORMAL)
         except Exception as exc:
-            self.logger.error(f"Action {action} ({source}) error", exception=exc)
+            self.logger.error(f"Service call failed for action '{action}' ({source})", exception=exc)
 
     def destroy_node(self):
+        self.logger.shutdown("Race Monitor Control Node")
         self._keyboard_stop.set()
         if self._keyboard_thread and self._keyboard_thread.is_alive():
             self._keyboard_thread.join(timeout=1.0)

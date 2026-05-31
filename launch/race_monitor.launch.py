@@ -9,7 +9,6 @@ Race monitor launch file
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -28,24 +27,6 @@ def generate_launch_description():
         default_value='lap_complete',
         description='Race ending mode: lap_complete, crash, or manual',
         choices=['lap_complete', 'crash', 'manual']
-    )
-
-    control_config_file_path = PathJoinSubstitution([
-        FindPackageShare('race_monitor'),
-        'config',
-        'ctrl_node.yaml'
-    ])
-
-    enable_control_node_arg = DeclareLaunchArgument(
-        'enable_control_node',
-        default_value='false',
-        description='Enable ctrl_node for keyboard/joy input'
-    )
-
-    control_config_arg = DeclareLaunchArgument(
-        'control_config',
-        default_value=control_config_file_path,
-        description='Config file for ctrl_node'
     )
 
     controller_name_arg = DeclareLaunchArgument(
@@ -225,22 +206,10 @@ def generate_launch_description():
             }
         )
 
-        control_node = Node(
-            package='race_monitor',
-            executable='ctrl_node',
-            name='ctrl_node',
-            parameters=[LaunchConfiguration('control_config')],
-            output='screen',
-            emulate_tty=True,
-            condition=IfCondition(LaunchConfiguration('enable_control_node'))
-        )
-
-        return [race_monitor_node, control_node]
+        return [race_monitor_node]
 
     return LaunchDescription([
         race_mode_arg,
-        enable_control_node_arg,
-        control_config_arg,
         controller_name_arg,
 
         required_laps_arg,
