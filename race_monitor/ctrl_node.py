@@ -86,6 +86,22 @@ class RaceMonitorControl(Node):
 
         self.logger.success("Control node ready", LogLevel.NORMAL)
 
+    def _print_key_bindings(self):
+        action_labels = {
+            'reset_race':        'Reset race',
+            'force_lap_complete': 'Force lap complete',
+            'pause_race':        'Pause race',
+            'resume_race':       'Resume race',
+            'reset_lap_time':    'Reset lap timer',
+        }
+        self.logger.info("─" * 40)
+        self.logger.info("  Keyboard controls:")
+        for key, action in sorted(self.keyboard_bindings.items()):
+            label = action_labels.get(action, action)
+            self.logger.info(f"    [{key.upper()}]  {label}")
+        self.logger.info("  Press Ctrl+C to exit")
+        self.logger.info("─" * 40)
+
     def _start_keyboard_listener(self):
         # Open /dev/tty directly so keyboard input works even when stdin is
         # redirected (e.g. when launched via ros2 launch instead of ros2 run)
@@ -98,11 +114,13 @@ class RaceMonitorControl(Node):
         self._keyboard_thread = threading.Thread(target=self._keyboard_loop, daemon=True)
         self._keyboard_thread.start()
         self.logger.success("Keyboard control enabled", LogLevel.NORMAL)
+        self._print_key_bindings()
 
     def _keyboard_loop(self):
         fd = self._tty_file.fileno()
         self._keyboard_settings = termios.tcgetattr(fd)
-        tty.setraw(fd)
+        # setcbreak: character-by-character input, but keeps Ctrl+C as SIGINT
+        tty.setcbreak(fd)
         try:
             while rclpy.ok() and not self._keyboard_stop.is_set():
                 rlist, _, _ = select.select([self._tty_file], [], [], 0.1)
