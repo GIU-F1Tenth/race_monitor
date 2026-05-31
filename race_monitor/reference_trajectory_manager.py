@@ -72,9 +72,15 @@ class ReferenceTrajectoryManager:
         """
         Configure reference trajectory manager parameters.
 
+        Note: silently skips when enable_evo=false since reference trajectories
+        are only used for EVO-based analysis.
+
         Args:
             config: Dictionary containing configuration parameters
         """
+        if not config.get('enable_evo', False):
+            return
+
         # File-based reference trajectory configuration
         raw_ref_file = config.get('reference_trajectory_file', "")
 
@@ -127,7 +133,7 @@ class ReferenceTrajectoryManager:
             'reference_trajectory_format', "csv")
 
         if not self.reference_trajectory_file:
-            self.logger.warn("Reference Trajectory File does not exist / not specified", LogLevel.NORMAL)
+            self.logger.warn("Reference trajectory not specified — no file-based reference will be used", LogLevel.DEBUG)
         else:
             self.logger.config("Reference Trajectory File", self.reference_trajectory_file, LogLevel.NORMAL)
             self.logger.config("Format", self.reference_trajectory_format, LogLevel.NORMAL)

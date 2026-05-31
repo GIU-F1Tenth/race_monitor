@@ -605,8 +605,8 @@ class RaceMonitor(Node):
             # No controller name yet, delay analysis components initialization until race start
             self.experiment_id_generated = False  # Will be generated during race start
 
-        # Load reference trajectory if specified
-        if self.config['reference_trajectory_file']:
+        # Load reference trajectory only when EVO is enabled
+        if self.config.get('enable_evo', False) and self.config['reference_trajectory_file']:
             self.reference_manager.load_reference_trajectory()
 
     def _initialize_analysis_components(self):
