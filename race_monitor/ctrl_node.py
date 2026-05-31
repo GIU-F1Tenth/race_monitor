@@ -30,7 +30,7 @@ class RaceMonitorControl(Node):
         self.declare_parameter('enable_joy', True)
         self.declare_parameter('joy_topic', '/joy')
         self.declare_parameter('reset_race_service', '/race_monitor/reset_race')
-        self.declare_parameter('force_lap_complete_service', '/race_monitor/force_lap_complete')
+        self.declare_parameter('force_race_complete_service', '/race_monitor/force_race_complete')
         self.declare_parameter('pause_race_service', '/race_monitor/pause_race')
         self.declare_parameter('resume_race_service', '/race_monitor/resume_race')
         self.declare_parameter('reset_lap_time_service', '/race_monitor/reset_lap_time')
@@ -46,18 +46,19 @@ class RaceMonitorControl(Node):
         # ROS2 doesn't support dict parameters — read nested keys via prefix
         kb = self.get_parameters_by_prefix('keyboard_bindings')
         self.keyboard_bindings = {k: v.value for k, v in kb.items()} if kb else {
-            'r': 'reset_race', 'f': 'force_lap_complete', 'p': 'pause_race',
-            'u': 'resume_race', 't': 'reset_lap_time'
+            'r': 'reset_race', 'b': 'reset_race',
+            'f': 'force_race_complete',
+            'p': 'pause_race', 'u': 'resume_race', 't': 'reset_lap_time'
         }
         joy = self.get_parameters_by_prefix('joy_bindings')
         self.joy_bindings = {k: v.value for k, v in joy.items()} if joy else {
-            'reset_race': 1, 'force_lap_complete': 0, 'pause_race': 2,
+            'reset_race': 1, 'force_race_complete': 0, 'pause_race': 2,
             'resume_race': 3, 'reset_lap_time': 4
         }
 
         self.service_names = {
             'reset_race': str(self.get_parameter('reset_race_service').value),
-            'force_lap_complete': str(self.get_parameter('force_lap_complete_service').value),
+            'force_race_complete': str(self.get_parameter('force_race_complete_service').value),
             'pause_race': str(self.get_parameter('pause_race_service').value),
             'resume_race': str(self.get_parameter('resume_race_service').value),
             'reset_lap_time': str(self.get_parameter('reset_lap_time_service').value)
@@ -88,19 +89,25 @@ class RaceMonitorControl(Node):
 
     def _print_key_bindings(self):
         action_labels = {
-            'reset_race':        'Reset race',
-            'force_lap_complete': 'Force lap complete',
-            'pause_race':        'Pause race',
-            'resume_race':       'Resume race',
-            'reset_lap_time':    'Reset lap timer',
+            'reset_race':          'Reset race (no save)',
+            'force_race_complete': 'End race + save completed laps',
+            'pause_race':          'Pause race',
+            'resume_race':         'Resume race',
+            'reset_lap_time':      'Reset current lap timer',
         }
-        self.logger.info("─" * 40)
+        # Group keys that share the same action
+        action_to_keys: dict = {}
+        for key, action in self.keyboard_bindings.items():
+            action_to_keys.setdefault(action, []).append(key.upper())
+
+        self.logger.info("─" * 44)
         self.logger.info("  Keyboard controls:")
-        for key, action in sorted(self.keyboard_bindings.items()):
+        for action, keys in action_to_keys.items():
             label = action_labels.get(action, action)
-            self.logger.info(f"    [{key.upper()}]  {label}")
-        self.logger.info("  Press Ctrl+C to exit")
-        self.logger.info("─" * 40)
+            keys_str = " / ".join(f"[{k}]" for k in sorted(keys))
+            self.logger.info(f"    {keys_str:<12}  {label}")
+        self.logger.info("  Ctrl+C to exit")
+        self.logger.info("─" * 44)
 
     def _start_keyboard_listener(self):
         # Open /dev/tty directly so keyboard input works even when stdin is

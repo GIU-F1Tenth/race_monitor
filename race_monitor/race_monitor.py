@@ -537,8 +537,8 @@ class RaceMonitor(Node):
         self._reset_race_srv = self.create_service(
             Trigger, '~/reset_race', self._reset_race_callback
         )
-        self._force_lap_srv = self.create_service(
-            Trigger, '~/force_lap_complete', self._force_lap_complete_callback
+        self._force_race_complete_srv = self.create_service(
+            Trigger, '~/force_race_complete', self._force_race_complete_callback
         )
         self._pause_race_srv = self.create_service(
             Trigger, '~/pause_race', self._pause_race_callback
@@ -911,7 +911,8 @@ class RaceMonitor(Node):
         )
 
     def _reset_race_callback(self, request, response):
-        """Service callback: reset race state."""
+        """Service callback: reset race state (no save)."""
+        self.logger.event("[Control] Reset race", "state cleared, no data saved", LogLevel.MINIMAL)
         self.lap_detector.reset_race()
         self.data_manager.current_lap_trajectory = []
         self.race_paused = False
@@ -919,15 +920,48 @@ class RaceMonitor(Node):
         response.message = "Race reset"
         return response
 
-    def _force_lap_complete_callback(self, request, response):
-        """Service callback: force the current lap to complete."""
-        if self.lap_detector.is_race_active():
-            self.lap_detector._complete_lap(self.get_clock().now())
-            response.success = True
-            response.message = "Lap forced complete"
-        else:
+    def _force_race_complete_callback(self, request, response):
+        """Service callback: end the race now, save all completed laps, ignore current partial lap."""
+        if not self.lap_detector.is_race_active():
             response.success = False
             response.message = "Race not active"
+            return response
+
+        race_stats = self.lap_detector.get_race_stats()
+        lap_times = list(race_stats.get('lap_times', []))
+
+        if not lap_times:
+            response.success = False
+            response.message = "No completed laps to save"
+            return response
+
+        total_time = sum(lap_times)
+        self.logger.event(
+            "[Control] Force race complete",
+            f"{len(lap_times)} laps saved, current partial lap discarded",
+            LogLevel.MINIMAL
+        )
+
+        race_data = {
+            'total_race_time': total_time,
+            'lap_times': lap_times,
+            'controller_name': self.config.get('controller_name', ''),
+            'experiment_id': self.config.get('experiment_id', 'exp_001'),
+            'race_ending_mode': self.config['race_ending_mode'],
+            'race_ending_reason': 'Force ended by control node',
+            'laps_completed': len(lap_times),
+            'timestamp': datetime.now().isoformat()
+        }
+
+        self.data_manager.save_race_results_to_csv(race_data)
+        self._perform_comprehensive_analysis(race_data)
+
+        self.lap_detector.reset_race()
+        self.data_manager.current_lap_trajectory = []
+        self.race_paused = False
+
+        response.success = True
+        response.message = f"Race complete: {len(lap_times)} laps saved"
         return response
 
     def _pause_race_callback(self, request, response):
@@ -948,6 +982,7 @@ class RaceMonitor(Node):
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.stop_monitoring()
 
+        self.logger.event("[Control] Race paused", "", LogLevel.MINIMAL)
         self._publish_race_status()
         response.success = True
         response.message = "Race paused"
@@ -971,6 +1006,7 @@ class RaceMonitor(Node):
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.start_monitoring()
 
+        self.logger.event("[Control] Race resumed", "", LogLevel.MINIMAL)
         self._publish_race_status()
         response.success = True
         response.message = "Race resumed"
@@ -991,6 +1027,7 @@ class RaceMonitor(Node):
         now = self.get_clock().now()
         self.lap_detector.last_lap_time = now
         self.data_manager.start_new_lap_trajectory(self.lap_detector.current_lap)
+        self.logger.event("[Control] Lap timer reset", f"lap {self.lap_detector.current_lap}", LogLevel.MINIMAL)
         response.success = True
         response.message = "Current lap time reset"
         return response
