@@ -55,36 +55,8 @@ from .visualization_publisher import VisualizationPublisher
 from .logger_utils import RaceMonitorLogger, LogLevel
 from .data_manager import DataManager
 
-# Import existing analysis components
-try:
-    from .trajectory_analyzer import ResearchTrajectoryEvaluator, create_research_evaluator
-    RESEARCH_EVALUATOR_AVAILABLE = True
-except ImportError:
-    RESEARCH_EVALUATOR_AVAILABLE = False
-
-try:
-    from .race_evaluator import RaceEvaluator, create_race_evaluator
-    RACE_EVALUATOR_AVAILABLE = True
-except ImportError:
-    RACE_EVALUATOR_AVAILABLE = False
-
-try:
-    from .visualization_engine import EVOPlotter
-    EVO_PLOTTER_AVAILABLE = True
-except ImportError:
-    EVO_PLOTTER_AVAILABLE = False
-
-# EVO library availability
-try:
-    import sys
-    evo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'evo')
-    if os.path.exists(evo_path) and evo_path not in sys.path:
-        sys.path.insert(0, evo_path)
-
-    from evo.core import trajectory, metrics, sync
-    EVO_AVAILABLE = True
-except ImportError:
-    EVO_AVAILABLE = False
+# Analysis components are imported lazily inside _initialize_analysis_components
+# when enable_evo=true, to avoid import warnings when EVO is not installed.
 
 
 class _MockStamp:
@@ -231,6 +203,7 @@ class RaceMonitor(Node):
         # ========================================
         # EVO INTEGRATION PARAMETERS
         # ========================================
+        self.declare_parameter('enable_evo', False)  # requires EVO library (pip install evo)
         self.declare_parameter('enable_trajectory_evaluation', True)
         self.declare_parameter('evaluation_interval_seconds', 0.0)
         self.declare_parameter('evaluation_interval_laps', 1)
@@ -406,6 +379,7 @@ class RaceMonitor(Node):
             'statistical_significance': self.get_parameter('statistical_significance').value,
 
             # EVO integration
+            'enable_evo': self.get_parameter('enable_evo').value,
             'enable_trajectory_evaluation': self.get_parameter('enable_trajectory_evaluation').value,
             'evaluation_interval_seconds': self.get_parameter('evaluation_interval_seconds').value,
             'evaluation_interval_laps': self.get_parameter('evaluation_interval_laps').value,
@@ -637,38 +611,57 @@ class RaceMonitor(Node):
 
     def _initialize_analysis_components(self):
         """Initialize analysis components after run directory is configured."""
-        if RESEARCH_EVALUATOR_AVAILABLE and self.config['enable_trajectory_evaluation']:
-            try:
-                self.research_evaluator = create_research_evaluator(
-                    self.config)
+        if not self.config.get('enable_evo', False):
+            return
 
-                # Connect data manager for proper directory handling
+        # Lazy imports — only triggered when enable_evo=true so missing EVO
+        # library never prints warnings during normal (non-EVO) operation.
+        research_evaluator_available = False
+        race_evaluator_available = False
+        evo_plotter_available = False
+
+        try:
+            from .trajectory_analyzer import ResearchTrajectoryEvaluator, create_research_evaluator
+            research_evaluator_available = True
+        except ImportError:
+            pass
+
+        try:
+            from .race_evaluator import RaceEvaluator, create_race_evaluator
+            race_evaluator_available = True
+        except ImportError:
+            pass
+
+        try:
+            from .visualization_engine import EVOPlotter
+            evo_plotter_available = True
+        except ImportError:
+            pass
+
+        if research_evaluator_available and self.config['enable_trajectory_evaluation']:
+            try:
+                self.research_evaluator = create_research_evaluator(self.config)
                 if hasattr(self.research_evaluator, 'set_data_manager'):
                     self.research_evaluator.set_data_manager(self.data_manager)
-
-                # Set up reference trajectory for APE/RPE calculations
                 if self.reference_manager.is_reference_available():
                     reference_trajectory = self.reference_manager.get_reference_trajectory()
                     if reference_trajectory:
-                        # Pass the EVO trajectory object directly to research evaluator
                         self.research_evaluator.reference_trajectory = reference_trajectory
-
             except Exception as e:
                 self.logger.error(f"Failed to initialize research evaluator", exception=e)
 
-        if RACE_EVALUATOR_AVAILABLE and self.config.get('enable_race_evaluation', True):
+        if race_evaluator_available and self.config.get('enable_race_evaluation', True):
             try:
                 self.race_evaluator = create_race_evaluator(self.config)
             except Exception as e:
                 self.logger.error(f"Failed to initialize race evaluator", exception=e)
 
-        if EVO_PLOTTER_AVAILABLE and self.config['auto_generate_graphs']:
+        if evo_plotter_available and self.config['auto_generate_graphs']:
             try:
                 self.evo_plotter = EVOPlotter(self.config, logger=self.logger, node=self)
             except Exception as e:
                 self.logger.warn(f"EVO plotter initialization failed: {e}", LogLevel.NORMAL)
                 self.evo_plotter = None
-                # Disable auto_generate_graphs to prevent further attempts
                 self.config['auto_generate_graphs'] = False
 
     def _setup_component_callbacks(self):

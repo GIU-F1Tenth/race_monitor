@@ -23,26 +23,12 @@ class RaceMonitorControl(Node):
     """Control node for race_monitor services via keyboard or joystick."""
 
     def __init__(self):
-        super().__init__('ctrl_node')
+        super().__init__('ctrl_node', automatically_declare_parameters_from_overrides=True)
 
         self.declare_parameter('log_level', 'normal')
         self.declare_parameter('enable_keyboard', True)
         self.declare_parameter('enable_joy', True)
         self.declare_parameter('joy_topic', '/joy')
-        self.declare_parameter('keyboard_bindings', {
-            'r': 'reset_race',
-            'f': 'force_lap_complete',
-            'p': 'pause_race',
-            'u': 'resume_race',
-            't': 'reset_lap_time'
-        })
-        self.declare_parameter('joy_bindings', {
-            'reset_race': 1,
-            'force_lap_complete': 0,
-            'pause_race': 2,
-            'resume_race': 3,
-            'reset_lap_time': 4
-        })
         self.declare_parameter('reset_race_service', '/race_monitor/reset_race')
         self.declare_parameter('force_lap_complete_service', '/race_monitor/force_lap_complete')
         self.declare_parameter('pause_race_service', '/race_monitor/pause_race')
@@ -57,8 +43,17 @@ class RaceMonitorControl(Node):
         self.enable_joy = bool(self.get_parameter('enable_joy').value)
         self.joy_topic = str(self.get_parameter('joy_topic').value)
 
-        self.keyboard_bindings = dict(self.get_parameter('keyboard_bindings').value)
-        self.joy_bindings = dict(self.get_parameter('joy_bindings').value)
+        # ROS2 doesn't support dict parameters — read nested keys via prefix
+        kb = self.get_parameters_by_prefix('keyboard_bindings')
+        self.keyboard_bindings = {k: v.value for k, v in kb.items()} if kb else {
+            'r': 'reset_race', 'f': 'force_lap_complete', 'p': 'pause_race',
+            'u': 'resume_race', 't': 'reset_lap_time'
+        }
+        joy = self.get_parameters_by_prefix('joy_bindings')
+        self.joy_bindings = {k: v.value for k, v in joy.items()} if joy else {
+            'reset_race': 1, 'force_lap_complete': 0, 'pause_race': 2,
+            'resume_race': 3, 'reset_lap_time': 4
+        }
 
         self.service_names = {
             'reset_race': str(self.get_parameter('reset_race_service').value),
