@@ -532,7 +532,7 @@ class LapDetector:
         self.velocity_history = []
         self.last_position_update = None
 
-        self.logger.info("Race state reset", LogLevel.NORMAL)
+        #self.logger.info("Race state reset", LogLevel.NORMAL)
 
     def pause_race(self, timestamp) -> bool:
         """Pause race timing and lap detection."""

@@ -46,9 +46,9 @@ class RaceMonitorControl(Node):
         # ROS2 doesn't support dict parameters — read nested keys via prefix
         kb = self.get_parameters_by_prefix('keyboard_bindings')
         self.keyboard_bindings = {k: v.value for k, v in kb.items()} if kb else {
-            'r': 'reset_race', 'b': 'reset_race',
+            'i': 'reset_race', 'b': 'reset_race',
             'f': 'force_race_complete',
-            'p': 'pause_race', 'u': 'resume_race', 't': 'reset_lap_time'
+            'p': 'pause_race', 'r': 'resume_race', 't': 'reset_lap_time'
         }
         joy = self.get_parameters_by_prefix('joy_bindings')
         self.joy_bindings = {k: v.value for k, v in joy.items()} if joy else {
@@ -89,7 +89,7 @@ class RaceMonitorControl(Node):
 
     def _print_key_bindings(self):
         action_labels = {
-            'reset_race':          'Reset race (no save)',
+            'reset_race':          'Ignore / reset race (no save)',
             'force_race_complete': 'End race + save completed laps',
             'pause_race':          'Pause race',
             'resume_race':         'Resume race',

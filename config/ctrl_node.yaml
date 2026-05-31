@@ -6,11 +6,11 @@ ctrl_node:
 
     # Keyboard bindings: key -> action
     keyboard_bindings:
-      r: reset_race
-      b: reset_race           # alias: begin / restart
+      i: reset_race           # ignore / reset (no save)
+      b: reset_race           # alias for ignore
       f: force_race_complete  # end race + save completed laps
       p: pause_race
-      u: resume_race
+      r: resume_race
       t: reset_lap_time
 
     # Joy bindings: action -> button index
