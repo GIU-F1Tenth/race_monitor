@@ -6,13 +6,15 @@ that the FastAPI layer can read at 10 Hz.  Service calls are executed via the
 ros2 CLI so they don't conflict with the spinning thread.
 """
 
+import glob
+import json
 import math
 import os
 import subprocess
 import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 # ── ROS2 optional import ──────────────────────────────────────────────────────
 ROS_AVAILABLE = False
@@ -80,6 +82,63 @@ class RaceBridge:
             print(f"[RosBridge] spin error: {exc}")
         finally:
             self._update({"ros_connected": False, "race_monitor_connected": False})
+
+    # ── file-based lap history ────────────────────────────────────────────────
+
+    @staticmethod
+    def _find_latest_summary() -> Optional[str]:
+        """Return the path of the most recently modified race_summary.json."""
+        search_roots = [
+            os.environ.get("RACE_DATA_DIR", ""),
+            os.path.expanduser("~/ws/src/racing_playground/race_monitor/data"),
+            os.path.expanduser("~/sim/racing_playground/race_monitor/data"),
+        ]
+        # Also try via ament index
+        try:
+            from ament_index_python.packages import get_package_share_directory  # type: ignore
+            share = get_package_share_directory("race_monitor")
+            search_roots.append(os.path.join(share, "data"))
+            # source tree alongside the install
+            src = os.path.join(share, "..", "..", "..", "..", "src",
+                               "racing_playground", "race_monitor", "data")
+            search_roots.append(os.path.normpath(src))
+        except Exception:
+            pass
+
+        candidates: List[str] = []
+        for root in search_roots:
+            if root and os.path.isdir(root):
+                candidates.extend(
+                    glob.glob(os.path.join(root, "**", "race_summary.json"), recursive=True)
+                )
+        if not candidates:
+            return None
+        return max(candidates, key=os.path.getmtime)
+
+    def read_latest_lap_times(self) -> List[float]:
+        """Read lap_times from the most recent race_summary.json."""
+        path = self._find_latest_summary()
+        if not path:
+            return []
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            return [round(float(t), 3)
+                    for t in data.get("lap_statistics", {}).get("lap_times", [])]
+        except Exception:
+            return []
+
+    def _reconcile_from_file(self) -> None:
+        """After race ends, replace live-tracked lap_times with the file version."""
+        s = self.get_state()
+        if s.get("race_running"):
+            return
+        file_times = self.read_latest_lap_times()
+        live_times = s.get("lap_times", [])
+        # Only update if the file has MORE laps or is MORE complete than what
+        # we tracked live (file is the ground truth after race ends).
+        if file_times and len(file_times) >= len(live_times):
+            self._update({"lap_times": file_times})
 
     def _poll_controller_name(self) -> None:
         """Poll race_monitor parameter for controller_name every 5 s."""
@@ -195,10 +254,13 @@ if ROS_AVAILABLE:
             self.bridge._update({"race_monitor_connected": connected})
 
         def _reconcile_lap_history(self) -> None:
-            """Catch the final lap missed when race ends naturally."""
+            """Reconcile lap history after race ends: topic-based first, then file."""
             s = self.bridge.get_state()
             if s.get("race_running"):
                 return
+
+            # 1. Topic-based: catch the final lap missed when race ends naturally
+            #    (current_lap never increments for the last lap in lap_complete mode).
             times     = list(s.get("lap_times", []))
             last_t    = round(s.get("lap_time", 0.0), 3)
             lap_count = s.get("lap_count", 0)
@@ -208,6 +270,10 @@ if ROS_AVAILABLE:
                     and not already_have):
                 times.append(last_t)
                 self.bridge._update({"lap_times": times})
+
+            # 2. File-based: replace with the authoritative race_summary.json if it
+            #    has more entries (written by race_monitor after analysis completes).
+            self.bridge._reconcile_from_file()
 
         def _cb_running(self, msg) -> None:
             s = self.bridge.get_state()

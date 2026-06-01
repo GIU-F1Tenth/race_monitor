@@ -119,6 +119,12 @@ def resume_race():
 def reset_lap():
     return bridge.reset_lap_time()
 
+@app.get("/api/race/lap_history")
+async def lap_history():
+    """Return lap times from the most recent race_summary.json file."""
+    times = bridge.read_latest_lap_times()
+    return {"lap_times": times, "count": len(times)}
+
 @app.get("/api/health")
 async def health():
     return {"ok": True}
