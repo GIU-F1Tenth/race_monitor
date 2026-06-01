@@ -191,12 +191,24 @@ if ROS_AVAILABLE:
             self.bridge._update({"lap_count": int(msg.data)})
 
         def _cb_lap_time(self, msg) -> None:
+            new_time = round(float(msg.data), 3)
             s = self.bridge.get_state()
             times = list(s.get("lap_times", []))
-            times.append(round(float(msg.data), 3))
-            if len(times) > 50:
-                times = times[-50:]
-            self.bridge._update({"lap_time": float(msg.data), "lap_times": times})
+            lap_count = s.get("lap_count", 0)
+
+            # race_monitor publishes lap_count = current lap being driven (1-indexed)
+            # and lap_time = last *completed* lap's time.
+            # So at any point: len(completed laps) == lap_count - 1.
+            # Only append when our list is shorter than expected — prevents
+            # duplicates from the topic firing on every odom tick.
+            expected = max(0, lap_count - 1)
+            if new_time > 0 and len(times) < expected:
+                times.append(new_time)
+                if len(times) > 50:
+                    times = times[-50:]
+                self.bridge._update({"lap_time": new_time, "lap_times": times})
+            else:
+                self.bridge._update({"lap_time": new_time})
 
         def _cb_odom(self, msg) -> None:
             p = msg.pose.pose.position

@@ -40,12 +40,14 @@ export function useRaceData() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Elapsed time tracking
-  const raceStartRef   = useRef<number | null>(null);
-  const lapStartRef    = useRef<number | null>(null);
-  const prevRunning    = useRef(false);
-  const prevLapCount   = useRef(0);
-  const isFirstUpdate  = useRef(true); // guard: don't treat first WS message as a transition
+  // Elapsed time tracking — accumulated handles pause/resume correctly
+  const raceStartRef    = useRef<number | null>(null); // wall-clock when current segment started
+  const lapStartRef     = useRef<number | null>(null);
+  const raceAccumRef    = useRef(0);  // ms accumulated across pause segments (race total)
+  const lapAccumRef     = useRef(0);  // ms accumulated across pause segments (current lap)
+  const prevRunning     = useRef(false);
+  const prevLapCount    = useRef(0);
+  const isFirstUpdate   = useRef(true);
 
   const [elapsed, setElapsed]       = useState(0);
   const [lapElapsed, setLapElapsed] = useState(0);
@@ -88,11 +90,11 @@ export function useRaceData() {
     };
   }, [connect]);
 
-  // Track start timestamps — skip first message so connecting mid-race
-  // doesn't falsely trigger a "race just started" transition.
+  // Track timestamps — skip first message, accumulate across pauses
   useEffect(() => {
     const running = state.race_running;
     const lap     = state.lap_count;
+    const now     = Date.now();
 
     if (isFirstUpdate.current) {
       isFirstUpdate.current = false;
@@ -101,27 +103,44 @@ export function useRaceData() {
       return;
     }
 
-    if (running && !prevRunning.current) {
-      raceStartRef.current = Date.now();
-      lapStartRef.current  = Date.now();
+    const wasRunning = prevRunning.current;
+
+    if (running && !wasRunning) {
+      // Started or resumed — begin a new wall-clock segment
+      raceStartRef.current = now;
+      lapStartRef.current  = now;
     }
-    if (!running && prevRunning.current) {
-      raceStartRef.current = null;
-      lapStartRef.current  = null;
+
+    if (!running && wasRunning) {
+      // Paused or stopped — bank elapsed time into accumulators
+      if (raceStartRef.current !== null) {
+        raceAccumRef.current += now - raceStartRef.current;
+        raceStartRef.current  = null;
+      }
+      if (lapStartRef.current !== null) {
+        lapAccumRef.current  += now - lapStartRef.current;
+        lapStartRef.current   = null;
+      }
     }
+
     if (lap > prevLapCount.current && running) {
-      lapStartRef.current = Date.now();
+      // New lap started — reset lap timer, keep race total running
+      lapStartRef.current  = now;
+      lapAccumRef.current  = 0;
     }
 
     prevRunning.current  = running;
     prevLapCount.current = lap;
   }, [state.race_running, state.lap_count]);
 
-  // Tick local timers at 10 Hz
+  // Tick at 10 Hz — add live segment to accumulated time
   useEffect(() => {
     const id = setInterval(() => {
-      setElapsed(raceStartRef.current ? Date.now() - raceStartRef.current : 0);
-      setLapElapsed(lapStartRef.current ? Date.now() - lapStartRef.current : 0);
+      const now = Date.now();
+      const liveSeg = raceStartRef.current !== null ? now - raceStartRef.current : 0;
+      const liveLap = lapStartRef.current  !== null ? now - lapStartRef.current  : 0;
+      setElapsed(raceAccumRef.current + liveSeg);
+      setLapElapsed(lapAccumRef.current + liveLap);
     }, 100);
     return () => clearInterval(id);
   }, []);
