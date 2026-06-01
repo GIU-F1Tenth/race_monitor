@@ -176,17 +176,11 @@ function CtrlBtn({ label, sub, path, color, wide, onAction, loading }: BtnProps)
 
 function TeamLogo() {
   return (
-    <div style={{ width: 42, height: 42, position: 'relative' }}>
-      {/* Replace this div with <img src="/logo.png" ... /> when logo is available */}
-      <svg viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
-        <circle cx="21" cy="21" r="20" stroke="#E8002D" strokeWidth="1.5" fill="none" />
-        <circle cx="21" cy="21" r="14" stroke="#E8002D" strokeWidth="0.5" strokeDasharray="2 3" fill="none" opacity="0.4" />
-        <text x="21" y="26" textAnchor="middle" fill="#E8002D"
-          style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: '-1px' }}>
-          C
-        </text>
-      </svg>
-    </div>
+    <img
+      src="/logo.png"
+      alt="Celeritas"
+      style={{ width: 42, height: 42, objectFit: 'contain' }}
+    />
   );
 }
 
