@@ -506,6 +506,7 @@ class RaceMonitor(Node):
 
         # Race control state
         self.race_paused = False
+        self._pause_start_time = None  # wall-clock when last paused
 
     def _setup_ros_interfaces(self):
         """Set up ROS2 publishers, subscribers, and services."""
@@ -910,12 +911,28 @@ class RaceMonitor(Node):
             f"P1=({p1.x:.2f},{p1.y:.2f}) P2=({p2.x:.2f},{p2.y:.2f})", LogLevel.NORMAL
         )
 
+    def _race_elapsed(self) -> str:
+        """Return current race elapsed time as a formatted string."""
+        stats = self.lap_detector.get_race_stats()
+        start_ns = stats.get('race_start_time')
+        if not start_ns:
+            return '0.000s'
+        elapsed = (self.get_clock().now().nanoseconds - start_ns) / 1e9
+        return f'{elapsed:.3f}s'
+
     def _reset_race_callback(self, request, response):
         """Service callback: reset race state (no save)."""
-        self.logger.event("[Control] Reset race", "state cleared, no data saved", LogLevel.MINIMAL)
+        stats = self.lap_detector.get_race_stats()
+        laps = len(stats.get('lap_times', []))
+        self.logger.event(
+            "[Control] Race reset",
+            f"at {self._race_elapsed()} — {laps} laps discarded, no save",
+            LogLevel.MINIMAL
+        )
         self.lap_detector.reset_race()
         self.data_manager.current_lap_trajectory = []
         self.race_paused = False
+        self._pause_start_time = None
         response.success = True
         response.message = "Race reset"
         return response
@@ -977,12 +994,18 @@ class RaceMonitor(Node):
             return response
 
         self.race_paused = True
+        self._pause_start_time = datetime.now()
         self.lap_detector.pause_race(self.get_clock().now())
 
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.stop_monitoring()
 
-        self.logger.event("[Control] Race paused", "", LogLevel.MINIMAL)
+        stats = self.lap_detector.get_race_stats()
+        self.logger.event(
+            "[Control] Race paused",
+            f"at {self._race_elapsed()} — lap {stats.get('current_lap', '?')}",
+            LogLevel.MINIMAL
+        )
         self._publish_race_status()
         response.success = True
         response.message = "Race paused"
@@ -1000,13 +1023,23 @@ class RaceMonitor(Node):
             response.message = "Race not paused"
             return response
 
+        paused_for = ''
+        if self._pause_start_time:
+            secs = (datetime.now() - self._pause_start_time).total_seconds()
+            paused_for = f' — paused for {secs:.1f}s'
+            self._pause_start_time = None
+
         self.race_paused = False
         self.lap_detector.resume_race(self.get_clock().now())
 
         if self.config['enable_computational_monitoring']:
             self.performance_monitor.start_monitoring()
 
-        self.logger.event("[Control] Race resumed", "", LogLevel.MINIMAL)
+        self.logger.event(
+            "[Control] Race resumed",
+            f"at {self._race_elapsed()}{paused_for}",
+            LogLevel.MINIMAL
+        )
         self._publish_race_status()
         response.success = True
         response.message = "Race resumed"

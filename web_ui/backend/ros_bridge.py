@@ -115,13 +115,21 @@ class RaceBridge:
         result = self._ros2_call("/race_monitor/reset_race")
         if result["success"]:
             self._update({
-                "lap_times": [], "lap_count": 0,
-                "race_running": False, "race_status": "Waiting...",
+                "lap_times": [], "lap_count": 0, "lap_time": 0.0,
+                "race_running": False, "race_status": "WAITING",
+                "lap_timer_reset_ts": time.time(),
             })
         return result
 
     def force_race_complete(self) -> Dict[str, Any]:
-        return self._ros2_call("/race_monitor/force_race_complete")
+        result = self._ros2_call("/race_monitor/force_race_complete")
+        if result["success"]:
+            self._update({
+                "lap_times": [], "lap_count": 0, "lap_time": 0.0,
+                "race_running": False, "race_status": "WAITING",
+                "lap_timer_reset_ts": time.time(),
+            })
+        return result
 
     def pause_race(self) -> Dict[str, Any]:
         return self._ros2_call("/race_monitor/pause_race")
