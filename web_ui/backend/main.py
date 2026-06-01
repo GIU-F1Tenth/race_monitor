@@ -100,11 +100,21 @@ async def get_status():
 async def reset_race():
     return bridge.reset_race()
 
+@app.post("/api/race/force_complete")
+async def force_complete():
+    return bridge.force_race_complete()
 
-@app.post("/api/race/force_lap")
-async def force_lap():
-    return bridge.force_lap()
+@app.post("/api/race/pause")
+async def pause_race():
+    return bridge.pause_race()
 
+@app.post("/api/race/resume")
+async def resume_race():
+    return bridge.resume_race()
+
+@app.post("/api/race/reset_lap")
+async def reset_lap():
+    return bridge.reset_lap_time()
 
 @app.get("/api/health")
 async def health():

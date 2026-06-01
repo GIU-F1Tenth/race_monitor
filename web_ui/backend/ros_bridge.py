@@ -2,14 +2,15 @@
 ROS2 bridge for the Race Monitor dashboard.
 
 Runs a rclpy node in a background thread and maintains a thread-safe state dict
-that the FastAPI layer can read at 10 Hz.  Service calls (reset / force-lap) are
-executed via the ros2 CLI so they don't conflict with the spinning thread.
+that the FastAPI layer can read at 10 Hz.  Service calls are executed via the
+ros2 CLI so they don't conflict with the spinning thread.
 """
 
 import math
 import os
 import subprocess
 import threading
+import time
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -21,7 +22,6 @@ try:
     from std_msgs.msg import Bool, Float32, Int32, String  # type: ignore
     from nav_msgs.msg import Odometry                   # type: ignore
 
-    # Optional camera support
     try:
         import base64
         import numpy as np
@@ -43,6 +43,7 @@ _EMPTY_STATE: Dict[str, Any] = {
     "lap_count": 0,
     "lap_time": 0.0,
     "lap_times": [],
+    "controller_name": "",
     "position": None,
     "velocity": 0.0,
     "heading": 0.0,
@@ -65,8 +66,8 @@ class RaceBridge:
         if not ROS_AVAILABLE:
             print("[RosBridge] rclpy not available — running in offline mode")
             return
-        t = threading.Thread(target=self._spin, daemon=True, name="ros_bridge")
-        t.start()
+        threading.Thread(target=self._spin, daemon=True, name="ros_bridge").start()
+        threading.Thread(target=self._poll_controller_name, daemon=True, name="ctrl_name_poll").start()
 
     def _spin(self) -> None:
         try:
@@ -79,6 +80,23 @@ class RaceBridge:
         finally:
             self._update({"ros_connected": False, "race_monitor_connected": False})
 
+    def _poll_controller_name(self) -> None:
+        """Poll race_monitor parameter for controller_name every 5 s."""
+        while True:
+            time.sleep(5)
+            try:
+                proc = subprocess.run(
+                    ["ros2", "param", "get", "/race_monitor", "controller_name"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                if proc.returncode == 0:
+                    line = proc.stdout.strip()
+                    if "value is:" in line:
+                        name = line.split("value is:")[-1].strip().strip("'\"")
+                        self._update({"controller_name": name})
+            except Exception:
+                pass
+
     # ── thread-safe state access ──────────────────────────────────────────────
 
     def _update(self, patch: Dict[str, Any]) -> None:
@@ -90,7 +108,7 @@ class RaceBridge:
         with self._lock:
             return dict(self._state)
 
-    # ── service calls via ros2 CLI ────────────────────────────────────────────
+    # ── service calls ─────────────────────────────────────────────────────────
 
     def reset_race(self) -> Dict[str, Any]:
         result = self._ros2_call("/race_monitor/reset_race")
@@ -101,8 +119,17 @@ class RaceBridge:
             })
         return result
 
-    def force_lap(self) -> Dict[str, Any]:
-        return self._ros2_call("/race_monitor/force_lap_complete")
+    def force_race_complete(self) -> Dict[str, Any]:
+        return self._ros2_call("/race_monitor/force_race_complete")
+
+    def pause_race(self) -> Dict[str, Any]:
+        return self._ros2_call("/race_monitor/pause_race")
+
+    def resume_race(self) -> Dict[str, Any]:
+        return self._ros2_call("/race_monitor/resume_race")
+
+    def reset_lap_time(self) -> Dict[str, Any]:
+        return self._ros2_call("/race_monitor/reset_lap_time")
 
     def _ros2_call(self, service: str) -> Dict[str, Any]:
         try:
@@ -121,7 +148,7 @@ class RaceBridge:
             return {"success": False, "message": str(exc)}
 
 
-# ── ROS2 node (only defined when rclpy is available) ─────────────────────────
+# ── ROS2 node ─────────────────────────────────────────────────────────────────
 
 if ROS_AVAILABLE:
     class _RaceNode(Node):  # type: ignore
@@ -129,25 +156,19 @@ if ROS_AVAILABLE:
             super().__init__("race_monitor_ui")
             self.bridge = bridge
 
-            # Race monitor topic subscriptions
             self.create_subscription(Bool,    "/race_monitor/race_running", self._cb_running,   10)
             self.create_subscription(String,  "/race_monitor/race_status",  self._cb_status,    10)
             self.create_subscription(Int32,   "/race_monitor/lap_count",    self._cb_lap_count, 10)
             self.create_subscription(Float32, "/race_monitor/lap_time",     self._cb_lap_time,  10)
 
-            # Odometry (configurable via env)
             odom_topic = os.getenv("ODOM_TOPIC", "/odom")
             self.create_subscription(Odometry, odom_topic, self._cb_odom, 10)
 
-            # Optional camera
             cam_topic = os.getenv("CAMERA_TOPIC", "")
             if cam_topic and CAMERA_AVAILABLE:
                 self.create_subscription(Image, cam_topic, self._cb_image, 1)
 
-            # Heartbeat: check if race_monitor topics are active
             self.create_timer(2.0, self._check_connection)
-
-        # ── topic callbacks ───────────────────────────────────────────────────
 
         def _check_connection(self) -> None:
             names = [n for n, _ in self.get_topic_names_and_types()]
@@ -189,12 +210,10 @@ if ROS_AVAILABLE:
         def _cb_image(self, msg) -> None:
             try:
                 arr = np.frombuffer(bytes(msg.data), dtype=np.uint8)
-                h, w, c = msg.height, msg.width, 3
-                img = arr.reshape((h, w, c))
-                # Encode to JPEG
+                img = arr.reshape((msg.height, msg.width, 3))
                 from PIL import Image as PilImage
-                pil = PilImage.fromarray(img if msg.encoding == "rgb8" else img[:, :, ::-1])
                 import io
+                pil = PilImage.fromarray(img if msg.encoding == "rgb8" else img[:, :, ::-1])
                 buf = io.BytesIO()
                 pil.save(buf, format="JPEG", quality=70)
                 b64 = base64.b64encode(buf.getvalue()).decode()
