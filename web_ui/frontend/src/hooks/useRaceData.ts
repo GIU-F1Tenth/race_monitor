@@ -9,6 +9,7 @@ export interface RaceState {
   lap_time: number;
   lap_times: number[];
   controller_name: string;
+  lap_timer_reset_ts: number;
   position: { x: number; y: number } | null;
   velocity: number;   // m/s
   heading: number;    // radians
@@ -25,6 +26,7 @@ const DEFAULT_STATE: RaceState = {
   lap_time: 0,
   lap_times: [],
   controller_name: '',
+  lap_timer_reset_ts: 0,
   position: null,
   velocity: 0,
   heading: 0,
@@ -132,6 +134,13 @@ export function useRaceData() {
     prevRunning.current  = running;
     prevLapCount.current = lap;
   }, [state.race_running, state.lap_count]);
+
+  // Reset local lap timer when backend signals reset_lap_time was called
+  useEffect(() => {
+    if (state.lap_timer_reset_ts === 0) return;
+    lapAccumRef.current  = 0;
+    lapStartRef.current  = state.race_running ? Date.now() : null;
+  }, [state.lap_timer_reset_ts]);
 
   // Tick at 10 Hz — add live segment to accumulated time
   useEffect(() => {

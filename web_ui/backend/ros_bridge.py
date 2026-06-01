@@ -44,6 +44,7 @@ _EMPTY_STATE: Dict[str, Any] = {
     "lap_time": 0.0,
     "lap_times": [],
     "controller_name": "",
+    "lap_timer_reset_ts": 0.0,   # bumped when reset_lap_time is called
     "position": None,
     "velocity": 0.0,
     "heading": 0.0,
@@ -129,7 +130,10 @@ class RaceBridge:
         return self._ros2_call("/race_monitor/resume_race")
 
     def reset_lap_time(self) -> Dict[str, Any]:
-        return self._ros2_call("/race_monitor/reset_lap_time")
+        result = self._ros2_call("/race_monitor/reset_lap_time")
+        if result["success"]:
+            self._update({"lap_timer_reset_ts": time.time()})
+        return result
 
     def _ros2_call(self, service: str) -> Dict[str, Any]:
         try:
@@ -175,11 +179,25 @@ if ROS_AVAILABLE:
                 self.create_subscription(Image, cam_topic, self._cb_image, 1)
 
             self.create_timer(2.0, self._check_connection)
+            self.create_timer(1.0, self._reconcile_lap_history)
 
         def _check_connection(self) -> None:
             node_names = self.get_node_names()
             connected = 'race_monitor' in node_names
             self.bridge._update({"race_monitor_connected": connected})
+
+        def _reconcile_lap_history(self) -> None:
+            """Catch the final lap that gets missed when race ends (current_lap
+            never increments for the last lap in lap_complete mode)."""
+            s = self.bridge.get_state()
+            if s.get("race_running"):
+                return
+            times    = list(s.get("lap_times", []))
+            last_t   = s.get("lap_time", 0.0)
+            lap_count = s.get("lap_count", 0)
+            if last_t > 0 and lap_count > 0 and len(times) < lap_count:
+                times.append(round(last_t, 3))
+                self.bridge._update({"lap_times": times})
 
         def _cb_running(self, msg) -> None:
             s = self.bridge.get_state()
