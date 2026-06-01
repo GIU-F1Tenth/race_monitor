@@ -157,7 +157,7 @@ export function fmtMs(ms: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(millis).padStart(2, '0')}`;
 }
 
-/** Format seconds → "MM:SS.mmm" */
+/** Format seconds → "15.994s" */
 export function fmtSec(s: number): string {
-  return fmtMs(s * 1000);
+  return `${Math.max(0, s).toFixed(3)}s`;
 }
