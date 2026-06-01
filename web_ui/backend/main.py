@@ -96,24 +96,27 @@ async def get_status():
     return bridge.get_state()
 
 
+# These are sync (not async) so FastAPI runs them in a thread pool,
+# preventing the subprocess.run() call from blocking the event loop.
+
 @app.post("/api/race/reset")
-async def reset_race():
+def reset_race():
     return bridge.reset_race()
 
 @app.post("/api/race/force_complete")
-async def force_complete():
+def force_complete():
     return bridge.force_race_complete()
 
 @app.post("/api/race/pause")
-async def pause_race():
+def pause_race():
     return bridge.pause_race()
 
 @app.post("/api/race/resume")
-async def resume_race():
+def resume_race():
     return bridge.resume_race()
 
 @app.post("/api/race/reset_lap")
-async def reset_lap():
+def reset_lap():
     return bridge.reset_lap_time()
 
 @app.get("/api/health")

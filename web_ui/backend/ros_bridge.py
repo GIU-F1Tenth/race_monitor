@@ -137,9 +137,14 @@ class RaceBridge:
                 ["ros2", "service", "call", service, "std_srvs/srv/Trigger", "{}"],
                 capture_output=True, text=True, timeout=5,
             )
+            output = proc.stdout + proc.stderr
             if proc.returncode == 0:
-                return {"success": True, "message": "OK"}
-            return {"success": False, "message": (proc.stderr or proc.stdout)[:200]}
+                # Parse "message='...' " from ros2 service call output
+                import re
+                m = re.search(r"message='([^']*)'", output)
+                msg = m.group(1) if m else "OK"
+                return {"success": True, "message": msg}
+            return {"success": False, "message": (proc.stderr or proc.stdout)[:200].strip()}
         except subprocess.TimeoutExpired:
             return {"success": False, "message": "Service call timed out"}
         except FileNotFoundError:
