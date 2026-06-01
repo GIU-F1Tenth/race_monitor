@@ -133,10 +133,12 @@ class RaceBridge:
         s = self.get_state()
         if s.get("race_running"):
             return
+        # lap_count is 0 after a reset — nothing to reconcile, and we must not
+        # re-populate from the previous race's file.
+        if s.get("lap_count", 0) == 0:
+            return
         file_times = self.read_latest_lap_times()
         live_times = s.get("lap_times", [])
-        # Only update if the file has MORE laps or is MORE complete than what
-        # we tracked live (file is the ground truth after race ends).
         if file_times and len(file_times) >= len(live_times):
             self._update({"lap_times": file_times})
 
