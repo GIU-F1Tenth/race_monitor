@@ -177,8 +177,8 @@ if ROS_AVAILABLE:
             self.create_timer(2.0, self._check_connection)
 
         def _check_connection(self) -> None:
-            names = [n for n, _ in self.get_topic_names_and_types()]
-            connected = any("/race_monitor/" in n for n in names)
+            node_names = self.get_node_names()
+            connected = 'race_monitor' in node_names
             self.bridge._update({"race_monitor_connected": connected})
 
         def _cb_running(self, msg) -> None:
