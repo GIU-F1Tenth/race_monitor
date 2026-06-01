@@ -195,16 +195,18 @@ if ROS_AVAILABLE:
             self.bridge._update({"race_monitor_connected": connected})
 
         def _reconcile_lap_history(self) -> None:
-            """Catch the final lap that gets missed when race ends (current_lap
-            never increments for the last lap in lap_complete mode)."""
+            """Catch the final lap missed when race ends naturally."""
             s = self.bridge.get_state()
             if s.get("race_running"):
                 return
-            times    = list(s.get("lap_times", []))
-            last_t   = s.get("lap_time", 0.0)
+            times     = list(s.get("lap_times", []))
+            last_t    = round(s.get("lap_time", 0.0), 3)
             lap_count = s.get("lap_count", 0)
-            if last_t > 0 and lap_count > 0 and len(times) < lap_count:
-                times.append(round(last_t, 3))
+            already_have = bool(times) and abs(times[-1] - last_t) < 0.001
+            if (last_t > 0 and lap_count > 0
+                    and len(times) < lap_count
+                    and not already_have):
+                times.append(last_t)
                 self.bridge._update({"lap_times": times})
 
         def _cb_running(self, msg) -> None:
@@ -213,13 +215,20 @@ if ROS_AVAILABLE:
             running = bool(msg.data)
 
             if was_running and not running:
-                # Race just ended. lap_count and lap_time are already updated
-                # (published before race_running). Check if the final lap is missing.
-                times = list(s.get("lap_times", []))
-                last_time = s.get("lap_time", 0.0)
+                # Transition to not-running (race ended OR paused).
+                # Only append the final lap if the lap_time is genuinely new —
+                # i.e. not already the last entry in times.
+                # During a mid-lap pause, lap_time == times[-1] (last completed lap),
+                # so the guard prevents a duplicate. On natural race end, lap_time
+                # is the just-finished final lap and differs from times[-1].
+                times     = list(s.get("lap_times", []))
+                last_time = round(s.get("lap_time", 0.0), 3)
                 lap_count = s.get("lap_count", 0)
-                if last_time > 0 and lap_count > 0 and len(times) < lap_count:
-                    times.append(round(last_time, 3))
+                already_have = bool(times) and abs(times[-1] - last_time) < 0.001
+                if (last_time > 0 and lap_count > 0
+                        and len(times) < lap_count
+                        and not already_have):
+                    times.append(last_time)
                     self.bridge._update({"race_running": running, "lap_times": times})
                     return
 
