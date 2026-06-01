@@ -14,7 +14,7 @@ def get_data_files(directory):
 
 setup(
     name=package_name,
-    version='1.0.0',
+    version='1.1.0',
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -59,6 +59,7 @@ setup(
     entry_points={
         'console_scripts': [
             'race_monitor = race_monitor.race_monitor:main',
+            'ctrl_node = race_monitor.ctrl_node:main',
         ],
     },
 )

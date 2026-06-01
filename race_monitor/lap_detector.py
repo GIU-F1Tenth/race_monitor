@@ -92,6 +92,7 @@ class LapDetector:
         self.race_completed = False
         self.race_ended_by_crash = False
         self.race_ended_manually = False
+        self.race_paused = False
         self.current_lap = 0
         self.lap_times = []
         self.race_start_time = None
@@ -104,6 +105,7 @@ class LapDetector:
         self.current_position = None
         self.previous_position = None
         self.current_heading = 0.0  # Vehicle heading in radians
+        self.pause_start_time = None
 
         # Lap detection configuration
         self.expected_direction = "any"  # "any", "positive", "negative"
@@ -201,6 +203,9 @@ class LapDetector:
 
         if timestamp is None:
             timestamp = self.clock.now()        # Update crash detection parameters
+
+        if self.race_paused:
+            return
         self.last_odometry_time = timestamp
         if velocity is not None:
             self.last_velocity = velocity
@@ -509,6 +514,7 @@ class LapDetector:
         self.race_completed = False
         self.race_ended_by_crash = False
         self.race_ended_manually = False
+        self.race_paused = False
         self.current_lap = 0
         self.lap_times = []
         self.race_start_time = None
@@ -517,6 +523,7 @@ class LapDetector:
         self.last_crossing_time = None
         self.previous_side = None
         self.current_heading = 0.0
+        self.pause_start_time = None
 
         # Reset crash detection state
         self.last_odometry_time = None
@@ -525,7 +532,56 @@ class LapDetector:
         self.velocity_history = []
         self.last_position_update = None
 
-        self.logger.info("Race state reset", LogLevel.NORMAL)
+        #self.logger.info("Race state reset", LogLevel.NORMAL)
+
+    def pause_race(self, timestamp) -> bool:
+        """Pause race timing and lap detection."""
+        if self.race_paused:
+            return False
+
+        self.race_paused = True
+        self.pause_start_time = timestamp
+        return True
+
+    def resume_race(self, timestamp) -> bool:
+        """Resume race timing and lap detection, excluding paused duration."""
+        if not self.race_paused:
+            return False
+
+        if self.pause_start_time is None:
+            self.race_paused = False
+            return True
+
+        delta_ns = time_to_nanoseconds(timestamp) - time_to_nanoseconds(self.pause_start_time)
+        if delta_ns > 0:
+            self.race_start_time = self._shift_time(self.race_start_time, delta_ns)
+            self.last_lap_time = self._shift_time(self.last_lap_time, delta_ns)
+            self.last_crossing_time = self._shift_time(self.last_crossing_time, delta_ns)
+            self.last_odometry_time = self._shift_time(self.last_odometry_time, delta_ns)
+            self.last_position_update = self._shift_time(self.last_position_update, delta_ns)
+            self.stationary_start_time = self._shift_time(self.stationary_start_time, delta_ns)
+
+        self.pause_start_time = None
+        self.race_paused = False
+        return True
+
+    def is_paused(self) -> bool:
+        """Check if race timing is currently paused."""
+        return self.race_paused
+
+    def _shift_time(self, time_obj, delta_ns: int):
+        """Shift a ROS time object forward by delta_ns nanoseconds."""
+        if time_obj is None:
+            return None
+
+        total_ns = time_to_nanoseconds(time_obj) + delta_ns
+        if hasattr(time_obj, 'nanoseconds'):
+            return rclpy.time.Time(nanoseconds=total_ns)
+
+        from builtin_interfaces.msg import Time as RosTime
+        sec = int(total_ns // 1e9)
+        nanosec = int(total_ns - sec * 1e9)
+        return RosTime(sec=sec, nanosec=nanosec)
 
     def get_race_stats(self) -> dict:
         """
@@ -539,6 +595,7 @@ class LapDetector:
             'race_completed': self.race_completed,
             'race_ended_by_crash': self.race_ended_by_crash,
             'race_ended_manually': self.race_ended_manually,
+            'race_paused': self.race_paused,
             'race_ending_mode': self.race_ending_mode,
             'race_ending_reason': self.get_race_ending_reason(),
             'current_lap': self.current_lap,
@@ -704,6 +761,8 @@ class LapDetector:
 
     def get_race_ending_reason(self) -> str:
         """Get the reason why the race ended."""
+        if not self.race_started:
+            return "Not started"
         if not self.race_completed:
             return "Race still active"
         elif self.race_ended_by_crash:

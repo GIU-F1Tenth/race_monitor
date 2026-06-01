@@ -1,353 +1,139 @@
 """
-Race Monitor Web UI Backend
+Race Monitor Dashboard — FastAPI backend.
 
-FastAPI application providing REST API and WebSocket endpoints for race monitoring
-and trajectory analysis. Supports configuration management, data analysis, live monitoring,
-and EVO trajectory evaluation integration.
+Bridges rclpy state to the browser via WebSocket at 10 Hz.
+Exposes REST endpoints for race-control service calls.
 """
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import json
-import yaml
-import pandas as pd
-import os
-import shutil
-from pathlib import Path
 import asyncio
-from datetime import datetime
-import numpy as np
+import json
+import os
+from typing import List
 
-# Import custom modules
-try:
-    from config_manager import ConfigManager
-    from data_analyzer import DataAnalyzer
-    from evo_integration import EvoIntegration
-    from live_monitor import LiveMonitor
-except ImportError as e:
-    print(f"Warning: Some modules not available: {e}")
-    # Placeholder classes for testing
-    class ConfigManager:
-        def list_configs(self): return {"configs": [], "templates": {}, "config_dir": ""}
-        def get_config(self, filename): return ""
-        def save_config(self, filename, content): pass
-        def delete_config(self, filename): pass
-    
-    class DataAnalyzer:
-        def get_experiments(self, filter_params=None): return {"experiments": [], "total_count": 0}
-        def get_experiment_details(self, experiment_id): return {}
-        def get_summary(self): return {"experiments_count": 0, "total_laps": 0}
-        def get_lap_analysis(self, experiment_id): return {}
-        def get_trajectory_plot_data(self, experiment_id): return {}
-        def get_performance_plot_data(self, experiment_id): return {}
-        def get_comparison_plot_data(self, exp_list): return {}
-        def export_experiment(self, experiment_id, format): return None
-    
-    class EvoIntegration:
-        def get_metrics(self, experiment_id): return {"evo_available": False}
-        async def run_analysis(self, experiment_id): return {"error": "EVO not available"}
-        async def compare_experiments(self, exp1, exp2): return {"error": "EVO not available"}
-    
-    class LiveMonitor:
-        async def get_live_data(self): return {"monitoring_active": False}
-        def get_status(self): return {"monitoring_active": False}
-        async def start(self): return {"status": "disabled"}
-        async def stop(self): pass
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
-def get_frontend_origins():
-    """Get allowed origins for CORS based on dynamic port configuration."""
-    origins = [
-        "http://localhost:3000", 
-        "http://localhost:5173",  # Default Vite port
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://localhost:3003",
-        "http://localhost:3004",
-        "http://localhost:3005"
-    ]
-    
-    # Add dynamic port if available
-    frontend_port = os.getenv('FRONTEND_PORT')
-    if frontend_port:
-        origins.append(f"http://localhost:{frontend_port}")
-    
-    # Add network access
-    try:
-        import socket
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        if frontend_port:
-            origins.append(f"http://{local_ip}:{frontend_port}")
-        for port in [3000, 3001, 3002, 3003, 3004, 3005]:
-            origins.append(f"http://{local_ip}:{port}")
-    except:
-        pass
-    
-    return origins
+from ros_bridge import RaceBridge
 
-app = FastAPI(title="Race Monitor Web UI", version="1.0.0")
+# ── app ───────────────────────────────────────────────────────────────────────
 
-# Enable CORS for frontend
+app = FastAPI(title="Race Monitor Dashboard", version="2.0.0")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_frontend_origins(),
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize managers
-config_manager = ConfigManager()
-data_analyzer = DataAnalyzer()
-evo_integration = EvoIntegration()
-live_monitor = LiveMonitor()
+bridge = RaceBridge()
+bridge.start()
 
-# WebSocket connection manager
-class ConnectionManager:
+# ── WebSocket manager ─────────────────────────────────────────────────────────
+
+class _WsManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self._conns: List[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
+    async def connect(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self._conns.append(ws)
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, ws: WebSocket) -> None:
+        if ws in self._conns:
+            self._conns.remove(ws)
 
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
+    async def broadcast(self, payload: str) -> None:
+        dead = []
+        for ws in self._conns:
             try:
-                await connection.send_text(message)
-            except:
-                # Remove disconnected clients
-                if connection in self.active_connections:
-                    self.active_connections.remove(connection)
+                await ws.send_text(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
 
-manager = ConnectionManager()
 
-# Request/Response models
-class ConfigUpdate(BaseModel):
-    content: str
-    filename: str
+_mgr = _WsManager()
 
-class ExperimentFilter(BaseModel):
-    date_from: Optional[str] = None
-    date_to: Optional[str] = None
-    controller_name: Optional[str] = None
-    experiment_id: Optional[str] = None
 
-# API Routes
+# ── background broadcast loop (10 Hz) ─────────────────────────────────────────
 
-@app.get("/")
-async def root():
-    return {"message": "Race Monitor Web UI Backend"}
+@app.on_event("startup")
+async def _startup() -> None:
+    asyncio.create_task(_broadcast_loop())
 
-@app.get("/api/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "version": "1.0.0"
-    }
 
-@app.get("/api/info/ports")
-async def get_port_info():
-    """Get current port configuration"""
-    backend_port = os.getenv('BACKEND_PORT', 'unknown')
-    frontend_port = os.getenv('FRONTEND_PORT', 'unknown')
-    
-    return {
-        "backend_port": backend_port,
-        "frontend_port": frontend_port,
-        "backend_url": f"http://localhost:{backend_port}" if backend_port != 'unknown' else 'unknown',
-        "frontend_url": f"http://localhost:{frontend_port}" if frontend_port != 'unknown' else 'unknown'
-    }
+async def _broadcast_loop() -> None:
+    while True:
+        state = bridge.get_state()
+        await _mgr.broadcast(json.dumps(state))
+        await asyncio.sleep(0.1)
 
-# Configuration Management
-@app.get("/api/config/list")
-async def list_configs():
-    """Get list of available configuration files"""
-    return config_manager.list_configs()
 
-@app.get("/api/config/{filename}")
-async def get_config(filename: str):
-    """Get specific configuration file content"""
-    try:
-        content = config_manager.get_config(filename)
-        return {"filename": filename, "content": content}
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Configuration file not found")
+# ── WebSocket endpoint ────────────────────────────────────────────────────────
 
-@app.post("/api/config/{filename}")
-async def save_config(filename: str, config_update: ConfigUpdate):
-    """Save configuration file"""
-    try:
-        config_manager.save_config(filename, config_update.content)
-        return {"message": f"Configuration {filename} saved successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/config/upload")
-async def upload_config(file: UploadFile = File(...)):
-    """Upload new configuration file"""
-    try:
-        content = await file.read()
-        filename = file.filename
-        config_manager.save_config(filename, content.decode('utf-8'))
-        return {"message": f"Configuration {filename} uploaded successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/config/{filename}")
-async def delete_config(filename: str):
-    """Delete configuration file"""
-    try:
-        config_manager.delete_config(filename)
-        return {"message": f"Configuration {filename} deleted successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Data Analysis
-@app.get("/api/data/experiments")
-async def get_experiments(filter_params: Optional[ExperimentFilter] = None):
-    """Get list of experiments with optional filtering"""
-    return data_analyzer.get_experiments(filter_params)
-
-@app.get("/api/data/experiment/{experiment_id}")
-async def get_experiment_details(experiment_id: str):
-    """Get detailed data for specific experiment"""
-    try:
-        return data_analyzer.get_experiment_details(experiment_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Experiment not found")
-
-@app.get("/api/data/summary")
-async def get_data_summary():
-    """Get overall data summary and statistics"""
-    return data_analyzer.get_summary()
-
-@app.get("/api/data/lap-analysis/{experiment_id}")
-async def get_lap_analysis(experiment_id: str):
-    """Get detailed lap analysis for experiment"""
-    try:
-        return data_analyzer.get_lap_analysis(experiment_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# EVO Integration
-@app.get("/api/evo/metrics/{experiment_id}")
-async def get_evo_metrics(experiment_id: str):
-    """Get EVO trajectory evaluation metrics"""
-    try:
-        return evo_integration.get_metrics(experiment_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/evo/analyze/{experiment_id}")
-async def run_evo_analysis(experiment_id: str):
-    """Run EVO analysis on experiment data"""
-    try:
-        result = await evo_integration.run_analysis(experiment_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/evo/compare")
-async def compare_experiments(exp1: str, exp2: str):
-    """Compare two experiments using EVO"""
-    try:
-        return await evo_integration.compare_experiments(exp1, exp2)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Visualization
-@app.get("/api/viz/trajectory/{experiment_id}")
-async def get_trajectory_plot(experiment_id: str):
-    """Get trajectory visualization data"""
-    try:
-        return data_analyzer.get_trajectory_plot_data(experiment_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/viz/performance/{experiment_id}")
-async def get_performance_plot(experiment_id: str):
-    """Get performance metrics visualization data"""
-    try:
-        return data_analyzer.get_performance_plot_data(experiment_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/viz/comparison")
-async def get_comparison_plot(experiments: str):
-    """Get comparison visualization for multiple experiments"""
-    try:
-        exp_list = experiments.split(',')
-        return data_analyzer.get_comparison_plot_data(exp_list)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Live Monitoring
-@app.websocket("/ws/live")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time monitoring"""
-    await manager.connect(websocket)
+@app.websocket("/ws")
+async def ws_endpoint(ws: WebSocket) -> None:
+    await _mgr.connect(ws)
     try:
         while True:
-            # Send live data updates
-            live_data = await live_monitor.get_live_data()
-            await manager.send_personal_message(json.dumps(live_data), websocket)
-            await asyncio.sleep(0.5)  # 2Hz update rate
+            # Keep the connection alive; client may send pings
+            try:
+                await asyncio.wait_for(ws.receive_text(), timeout=30.0)
+            except asyncio.TimeoutError:
+                pass
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        _mgr.disconnect(ws)
+    except Exception:
+        _mgr.disconnect(ws)
 
-@app.get("/api/live/status")
-async def get_live_status():
-    """Get current live monitoring status"""
-    return live_monitor.get_status()
 
-@app.post("/api/live/start")
-async def start_live_monitoring():
-    """Start live monitoring"""
-    try:
-        result = await live_monitor.start()
-        return {"message": "Live monitoring started", "status": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# ── REST endpoints ────────────────────────────────────────────────────────────
 
-@app.post("/api/live/stop")
-async def stop_live_monitoring():
-    """Stop live monitoring"""
-    try:
-        await live_monitor.stop()
-        return {"message": "Live monitoring stopped"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/api/status")
+async def get_status():
+    return bridge.get_state()
 
-# File operations
-@app.get("/api/files/graphs/{filename}")
-async def get_graph_file(filename: str):
-    """Serve graph files"""
-    file_path = Path("../../race_monitor/evaluation_results/graphs") / filename
-    if file_path.exists():
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail="File not found")
 
-@app.get("/api/files/export/{experiment_id}")
-async def export_experiment_data(experiment_id: str, format: str = "csv"):
-    """Export experiment data in various formats"""
-    try:
-        file_path = data_analyzer.export_experiment(experiment_id, format)
-        return FileResponse(file_path, filename=f"{experiment_id}.{format}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# These are sync (not async) so FastAPI runs them in a thread pool,
+# preventing the subprocess.run() call from blocking the event loop.
+
+@app.post("/api/race/reset")
+def reset_race():
+    return bridge.reset_race()
+
+@app.post("/api/race/force_complete")
+def force_complete():
+    return bridge.force_race_complete()
+
+@app.post("/api/race/pause")
+def pause_race():
+    return bridge.pause_race()
+
+@app.post("/api/race/resume")
+def resume_race():
+    return bridge.resume_race()
+
+@app.post("/api/race/reset_lap")
+def reset_lap():
+    return bridge.reset_lap_time()
+
+@app.get("/api/race/lap_history")
+async def lap_history():
+    """Return lap times from the most recent race_summary.json file."""
+    times = bridge.read_latest_lap_times()
+    return {"lap_times": times, "count": len(times)}
+
+@app.get("/api/health")
+async def health():
+    return {"ok": True}
+
+
+# ── entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8082, reload=True)
+
+    port = int(os.getenv("BACKEND_PORT", "8082"))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
