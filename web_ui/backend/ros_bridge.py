@@ -182,7 +182,22 @@ if ROS_AVAILABLE:
             self.bridge._update({"race_monitor_connected": connected})
 
         def _cb_running(self, msg) -> None:
-            self.bridge._update({"race_running": bool(msg.data)})
+            s = self.bridge.get_state()
+            was_running = s.get("race_running", False)
+            running = bool(msg.data)
+
+            if was_running and not running:
+                # Race just ended. lap_count and lap_time are already updated
+                # (published before race_running). Check if the final lap is missing.
+                times = list(s.get("lap_times", []))
+                last_time = s.get("lap_time", 0.0)
+                lap_count = s.get("lap_count", 0)
+                if last_time > 0 and lap_count > 0 and len(times) < lap_count:
+                    times.append(round(last_time, 3))
+                    self.bridge._update({"race_running": running, "lap_times": times})
+                    return
+
+            self.bridge._update({"race_running": running})
 
         def _cb_status(self, msg) -> None:
             self.bridge._update({"race_status": str(msg.data)})
