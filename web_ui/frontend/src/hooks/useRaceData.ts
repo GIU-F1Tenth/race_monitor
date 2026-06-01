@@ -41,13 +41,14 @@ export function useRaceData() {
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Elapsed time tracking
-  const raceStartRef = useRef<number | null>(null);
-  const lapStartRef  = useRef<number | null>(null);
-  const prevRunning  = useRef(false);
-  const prevLapCount = useRef(0);
+  const raceStartRef   = useRef<number | null>(null);
+  const lapStartRef    = useRef<number | null>(null);
+  const prevRunning    = useRef(false);
+  const prevLapCount   = useRef(0);
+  const isFirstUpdate  = useRef(true); // guard: don't treat first WS message as a transition
 
-  const [elapsed, setElapsed]    = useState(0); // ms since race start
-  const [lapElapsed, setLapElapsed] = useState(0); // ms since current lap start
+  const [elapsed, setElapsed]       = useState(0);
+  const [lapElapsed, setLapElapsed] = useState(0);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -87,10 +88,18 @@ export function useRaceData() {
     };
   }, [connect]);
 
-  // Track start timestamps
+  // Track start timestamps — skip first message so connecting mid-race
+  // doesn't falsely trigger a "race just started" transition.
   useEffect(() => {
     const running = state.race_running;
-    const lap = state.lap_count;
+    const lap     = state.lap_count;
+
+    if (isFirstUpdate.current) {
+      isFirstUpdate.current = false;
+      prevRunning.current   = running;
+      prevLapCount.current  = lap;
+      return;
+    }
 
     if (running && !prevRunning.current) {
       raceStartRef.current = Date.now();

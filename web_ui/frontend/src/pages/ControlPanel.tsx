@@ -45,18 +45,19 @@ function statusColor(s: string): string {
   return T.sub;
 }
 
-// ── StatusPip ─────────────────────────────────────────────────────────────────
-function StatusPip({ live }: { live: boolean }) {
+// ── StatusPip — reflects actual race_monitor connectivity, not just WS ────────
+function StatusPip({ wsConnected, monitorConnected }: { wsConnected: boolean; monitorConnected: boolean }) {
+  const color = !wsConnected ? T.red : !monitorConnected ? T.amber : T.green;
+  const label = !wsConnected ? 'OFFLINE' : !monitorConnected ? 'WAITING' : 'LIVE';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{
         width: 8, height: 8, borderRadius: '50%',
-        background: live ? T.green : T.red,
-        boxShadow: `0 0 8px ${live ? T.green : T.red}`,
-        animation: live ? 'pip 1.8s ease-in-out infinite' : 'none',
+        background: color, boxShadow: `0 0 8px ${color}`,
+        animation: wsConnected ? 'pip 1.8s ease-in-out infinite' : 'none',
       }} />
-      <span style={{ fontFamily: "'Barlow Condensed'", fontWeight: 700, fontSize: 12, letterSpacing: '0.15em', color: live ? T.green : T.red }}>
-        {live ? 'LIVE' : 'OFFLINE'}
+      <span style={{ fontFamily: "'Barlow Condensed'", fontWeight: 700, fontSize: 12, letterSpacing: '0.15em', color }}>
+        {label}
       </span>
     </div>
   );
@@ -195,7 +196,8 @@ export default function ControlPanel() {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const bestLap = state.lap_times.length > 0 ? Math.min(...state.lap_times) : null;
-  const raceStatus = state.race_status || 'WAITING';
+  // Strip the mode suffix e.g. "RACING-MANUAL" → "RACING"
+  const raceStatus = (state.race_status || 'WAITING').split('-')[0].toUpperCase();
   const racing = state.race_running;
 
   return (
@@ -238,7 +240,7 @@ export default function ControlPanel() {
             </div>
           </div>
           <div style={{ width: 1, height: 32, background: T.border }} />
-          <StatusPip live={wsConnected} />
+          <StatusPip wsConnected={wsConnected} monitorConnected={state.race_monitor_connected} />
         </div>
       </header>
 
