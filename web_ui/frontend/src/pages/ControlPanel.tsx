@@ -47,17 +47,22 @@ function StatusPip({ live }: { live: boolean }) {
   );
 }
 
-function InfoRow({ label, value, valueColor }: {
-  label: string; value: string; valueColor?: string;
+function InfoRow({ label, value, valueColor, live }: {
+  label: string; value: string; valueColor?: string; live?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '7px 0', borderBottom: '1px solid #1A1A2E' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #1A1A2E' }}>
       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#4A4A6A' }}>
         {label}
       </span>
-      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: '0.05em', color: valueColor || '#D0D0F0', maxWidth: 200, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {value || '—'}
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {live && (
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#00D96A', boxShadow: '0 0 5px #00D96A', animation: 'pip-pulse 1s ease-in-out infinite', flexShrink: 0 }} />
+        )}
+        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: '0.05em', color: valueColor || '#D0D0F0', maxWidth: 200, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {value || '—'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -362,15 +367,16 @@ export default function ControlPanel() {
           />
           <InfoRow
             label="CONTROLLER"
-            value={(state as any).controller_name || '—'}
+            value={state.controller_name || '—'}
           />
           <InfoRow
             label="SPEED"
             value={`${(state.velocity * 3.6).toFixed(1)} km/h`}
+            live={state.velocity > 0}
           />
           <InfoRow
             label="POSITION"
-            value={state.position ? `${state.position.x.toFixed(1)}, ${state.position.y.toFixed(1)} m` : '—'}
+            value={state.position ? `[${state.position.x.toFixed(2)}, ${state.position.y.toFixed(2)}]` : '—'}
           />
         </div>
       </div>

@@ -8,10 +8,11 @@ export interface RaceState {
   lap_count: number;
   lap_time: number;
   lap_times: number[];
+  controller_name: string;
   position: { x: number; y: number } | null;
   velocity: number;   // m/s
   heading: number;    // radians
-  camera_frame: string | null;  // base64 JPEG or null
+  camera_frame: string | null;
   ts: number;
 }
 
@@ -23,6 +24,7 @@ const DEFAULT_STATE: RaceState = {
   lap_count: 0,
   lap_time: 0,
   lap_times: [],
+  controller_name: '',
   position: null,
   velocity: 0,
   heading: 0,

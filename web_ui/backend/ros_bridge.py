@@ -161,8 +161,9 @@ if ROS_AVAILABLE:
             self.create_subscription(Int32,   "/race_monitor/lap_count",    self._cb_lap_count, 10)
             self.create_subscription(Float32, "/race_monitor/lap_time",     self._cb_lap_time,  10)
 
-            odom_topic = os.getenv("ODOM_TOPIC", "/odom")
-            self.create_subscription(Odometry, odom_topic, self._cb_odom, 10)
+            odom_topics = os.getenv("ODOM_TOPIC", "/odom,/ego_racecar/odom,/car_state/odom").split(",")
+            for odom_topic in odom_topics:
+                self.create_subscription(Odometry, odom_topic.strip(), self._cb_odom, 10)
 
             cam_topic = os.getenv("CAMERA_TOPIC", "")
             if cam_topic and CAMERA_AVAILABLE:
