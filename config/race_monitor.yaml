@@ -5,7 +5,7 @@ race_monitor:
     start_line_p1: [4.30,  1.17]
     start_line_p2: [4.54, -0.42]
 
-    required_laps: 7
+    required_laps: 3
     debounce_time: 2.0   # min seconds between lap detections
     frame_id: "map"
 
@@ -20,7 +20,7 @@ race_monitor:
 
     # --- Race ending: lap_complete | crash | manual ---
     race_ending_mode: "lap_complete"
-    auto_shutdown_on_race_complete: true
+    auto_shutdown_on_race_complete: false
     shutdown_delay_seconds: 5.0
 
     crash_detection:
