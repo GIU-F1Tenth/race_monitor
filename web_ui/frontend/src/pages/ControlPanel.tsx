@@ -371,7 +371,7 @@ export default function ControlPanel() {
           />
           <InfoRow
             label="SPEED"
-            value={`${(state.velocity * 3.6).toFixed(1)} km/h`}
+            value={`${state.velocity.toFixed(2)} m/s`}
             live={state.velocity > 0}
           />
           <InfoRow
