@@ -13,7 +13,7 @@ Features:
     - Reference path management
     - Trajectory format conversion
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
+Author: Mohammed Abdelazim (m.3zab@outlook.com)
 License: MIT License
 """
 

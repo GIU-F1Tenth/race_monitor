@@ -50,7 +50,7 @@ setup(
     ],
     zip_safe=True,
     maintainer='Mohammed Abdeazim',
-    maintainer_email='mohammed@azab.io',
+    maintainer_email='m.3zab@outlook.com',
     description='ROS2 node for tracking laps, lap times, and race statistics in autonomous racing with EVO trajectory analysis',
     license='MIT',
     extras_require={

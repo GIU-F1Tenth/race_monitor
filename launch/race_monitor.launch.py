@@ -26,7 +26,7 @@ Usage Examples:
   # Custom crash detection parameters
   ros2 launch race_monitor race_monitor.launch.py race_mode:=crash max_stationary_time:=10.0 enable_collision_detection:=false
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
+Author: Mohammed Abdelazim (m.3zab@outlook.com)
 License: MIT License
 """
 

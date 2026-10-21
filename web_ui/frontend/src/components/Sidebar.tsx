@@ -239,7 +239,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, rosStatus }) => 
               <p className="font-medium">Developed by:</p>
               <p>Mohammed Azab</p>
               <p>GIU F1Tenth Team</p>
-              <p className="text-blue-600">mohammed@azab.io</p>
+              <p className="text-blue-600">m.3zab@outlook.com</p>
             </div>
           </div>
         </div>

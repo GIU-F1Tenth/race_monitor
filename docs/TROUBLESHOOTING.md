@@ -818,7 +818,7 @@ When opening an issue, provide:
 
 - **GitHub Issues**: https://github.com/GIU-F1Tenth/race_monitor/issues
 - **GitHub Discussions**: https://github.com/GIU-F1Tenth/race_monitor/discussions
-- **Email**: mohammed@azab.io
+- **Email**: m.3zab@outlook.com
 
 ---
 

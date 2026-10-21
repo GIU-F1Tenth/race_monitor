@@ -67,7 +67,7 @@ class MetadataManager:
         race_monitor_data = {
             'maintainer': {
                 'name': 'Mohammed Abdelazim',
-                'email': 'mohammed@azab.io'
+                'email': 'm.3zab@outlook.com'
             },
             'version': {
                 'race_monitor_version': '1.0.0',

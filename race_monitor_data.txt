@@ -3,7 +3,7 @@
 
 [MAINTAINER]
 name=Mohammed Abdeazim - GIU Berlin Roboracer Team
-email=mohammed@azab.io
+email=m.3zab@outlook.com
 
 [VERSION]
 race_monitor_version=1.0.0

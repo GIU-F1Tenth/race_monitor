@@ -14,7 +14,7 @@ Features:
     - Reference trajectory visualization
     - Configurable marker styles and colors
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
+Author: Mohammed Abdelazim (m.3zab@outlook.com)
 License: MIT License
 """
 

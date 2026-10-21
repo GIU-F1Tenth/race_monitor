@@ -12,7 +12,7 @@ Features:
     - Race state management
     - Debounce logic to prevent false triggers
 
-Author: Mohammed Abdelazim (mohammed@azab.io)
+Author: Mohammed Abdelazim (m.3zab@outlook.com)
 License: MIT License
 """
 

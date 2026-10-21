@@ -347,7 +347,7 @@ Please see our contribution guidelines before submitting pull requests.
 
 ## Contact
 
-- **Email**: @Mohammed-Azab - mohamed@azab.io
+- **Email**: @Mohammed-Azab - m.3zab@outlook.com
 - **GitHub**: [github.com/GIU-F1Tenth/race_monitor](https://github.com/GIU-F1Tenth/race_monitor)
 - **Package**: ROS2 race_monitor
 - **Issues**: [GitHub Issue Tracker](https://github.com/GIU-F1Tenth/race_monitor/issues)
